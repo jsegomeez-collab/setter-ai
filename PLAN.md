@@ -1,7 +1,7 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-16
-> Estado general: **Fase 2 casi terminada**: la réplica de ManyChat está EN PRODUCCIÓN desde el 2026-10-16 (ManyChat #59 apagado). Falta vigilar las primeras horas. Siguiente: Fase 3 (setter IA).
+> Estado general: **Fase 2 en producción** (réplica de ManyChat atendiendo a seguidores reales desde el 2026-10-16 14:53 UTC). Vigilando 24-48 h. Siguiente: Fase 3 (setter IA) — necesito oferta/FAQs/objeciones de Jose.
 > ManyChat sigue conectado a Instagram (sin disparador). Para la Fase 3 Jose autoriza desconectarlo.
 
 ## Objetivo
@@ -89,7 +89,11 @@ Progreso:
 - [x] Datos reales recibidos: biblioteca https://biblioteca.codigomaestria.com, grupo https://chat.whatsapp.com/B7CxsuLbf82IyJmT6LJ2BE (ambos responden 200), 5 respuestas públicas de ManyChat, disparador = todos los posts + cualquier comentario.
 - [x] Origen por reel (petición de Jose): tabla `comments` + reel de origen/último en contactos + resumen por reel en /contactos. Se registra en TODOS los comentarios, salte o no un flujo. 132 pruebas.
 - [x] 8c (2026-10-16 ~14:35 UTC): Jose apagó el disparador #59 de ManyChat → réplica **EN PRODUCCIÓN** (todos los reels, cualquier comentario, sin modo prueba, una vez por persona **y por reel** = opción B de Jose, commit e0bd013). Enlaces reales.
-- [ ] 8d: confirmar con el primer comentario real/de prueba en producción y vigilar las primeras horas (errores, límite por hora, pausas 368).
+- [x] 8c-corrección: la activación real fue a las **14:53 UTC** (no 14:35). Entre 13:46 y 14:53 nadie respondió (ManyChat pausado y nuestro flujo en prueba): 16 personas/17 comentarios.
+- [x] Rescate (opción a de Jose): 15 en cola → 14 respuestas públicas, 9 DMs OK, **5 DMs rechazados por Meta** (100/2534025 "comentario no válido para respuesta privada") que recibieron igualmente "mira tus DMs" (fallo de diseño corregido después).
+- [x] 8d: confirmado en producción con @josegomezlife (14:55) y con seguidores reales (15:24 "Oficina": DM → luego respuesta pública).
+- [x] Límites revisados con la doc oficial (commit 16e329d): DMs a comentarios 700/h (Meta 750), respuestas públicas 700/h, seguimientos 3000/h; dos colas; si se llega al límite o hay pausa 368 la cola ESPERA (no descarta); acciones reservadas al encolar y retomadas tras reinicio; **primero el DM y la respuesta pública solo si el DM salió**. 140 pruebas.
+- [ ] 8e: vigilar 24-48 h con tráfico real (errores 2534025, límites, consumo de Neon R6).
 - [x] Renovación de token: funcionó el mismo día (Meta no exigió las 24 h que dice la doc).
 
 **Necesito de Jose (al final de la fase):** cómo es hoy su flujo de ManyChat (textos, botones, condición de seguir, recurso) para replicarlo.
@@ -156,7 +160,7 @@ Progreso:
 |---|---|---|
 | R1 | ✅ RESUELTO 2026-10-16: con la app publicada (Standard Access) llegan comentarios y DMs de cuentas sin rol. | — |
 | R2 | **CONFIRMADO 2026-10-16:** con ManyChat activo, los DMs nos llegan como `standby` (ManyChat es dueño). | Apagar/desconectar ManyChat al terminar la Fase 2, antes del setter IA. Nunca cambiar el reparto sin Jose. |
-| R3 | Ban por comportamiento de spam. Meta no publica sus umbrales. | Protecciones anti-ban de la Fase 2. Solo API oficial. |
+| R3 | Ban/límites. **Doc oficial (2026-10-16):** respuestas privadas 750/h por cuenta; Send API 100/s (otra página dice 300/s); llamadas generales 4800 × impresiones/24 h; >72.000 mensajes enviados+recibidos → Instagram retrasa/bloquea (periodo no indicado). La doc NO describe baneos por usar la API dentro de límites, pero tampoco exime de las normas anti-spam. | Límites por tipo pegados a Meta con margen; la cola espera en vez de descartar; pausa 24 h ante error 368. |
 | R4 | Ley de California (§17941): bot que **engaña** sobre ser bot para vender. Avisar evita la responsabilidad. ([texto](https://california.public.law/codes/ca_bus_and_prof_code_section_17941)) | Decidir en Fase 3 cómo avisar. LATAM: **no verificado**. No es asesoramiento legal. |
 | R5 | El token caduca a los 60 días. | Renovación automática (Fase 2). |
 | R6 | Neon gratis: se apaga tras 5 min sin uso y 100 h de cómputo/mes ([precios](https://neon.com/pricing)). | Revisar consumo antes de producción. |
