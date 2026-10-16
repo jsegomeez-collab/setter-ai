@@ -77,7 +77,10 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 Progreso:
 - [x] 1-6 hechos (2026-10-16, commit 86c1dbf): tipos + motor + formulario + emisor anti-ban + token cifrado/renovable + panel `/flujos`. 97 pruebas (incl. Postgres real con PGlite), 92,6 % líneas. Desplegado; `TOKEN_ENCRYPTION_KEY` creada por el Blueprint.
 - [x] Flujo de prueba creado en producción: "PRUEBA Fase 2 - reel agente n8n" (id PlNFjBYQ), solo @josegomezlife, condición de seguir, recurso de prueba = perfil de Jose.
-- [ ] 7: prueba real (comentario → DM con botón → ¿sigue? → recurso / "sígueme" → "Ya te sigo").
+- [x] 7: prueba real 2026-10-16 13:52-13:53 UTC con @josegomezlife (ManyChat pausado): comentario → respuesta pública ✅ → **DM privado CON botones** ✅ (Meta los acepta; sin respaldo) → botón llega a nuestra app ✅ → `is_user_follow_business=true` ✅ → recurso ✅.
+  - Sin probar: rama "no sigue" y consentimiento con alguien que NUNCA ha escrito (@josegomezlife ya había escrito "Hola").
+  - Observado: con ManyChat activo, los DMs nos llegan como **standby** (R2 confirmado).
+- [ ] 8: replicar el flujo real de ManyChat de Jose (necesito sus textos/botones/recurso) → prueba → quitar modo prueba y apagar ManyChat a la vez.
 - [ ] Renovación de token: primera posible el 2026-10-17 (el token tiene que tener ≥ 24 h).
 
 **Necesito de Jose (al final de la fase):** cómo es hoy su flujo de ManyChat (textos, botones, condición de seguir, recurso) para replicarlo.
@@ -125,12 +128,12 @@ Progreso:
 | # | Riesgo | Qué hacemos |
 |---|---|---|
 | R1 | ✅ RESUELTO 2026-10-16: con la app publicada (Standard Access) llegan comentarios y DMs de cuentas sin rol. | — |
-| R2 | Instagram da cada conversación a **una sola app**. Con ManyChat activo puede quedarse los DMs (standby). | Probar antes de la Fase 3. Nunca cambiar el reparto sin Jose. |
+| R2 | **CONFIRMADO 2026-10-16:** con ManyChat activo, los DMs nos llegan como `standby` (ManyChat es dueño). | Apagar/desconectar ManyChat al terminar la Fase 2, antes del setter IA. Nunca cambiar el reparto sin Jose. |
 | R3 | Ban por comportamiento de spam. Meta no publica sus umbrales. | Protecciones anti-ban de la Fase 2. Solo API oficial. |
 | R4 | Ley de California (§17941): bot que **engaña** sobre ser bot para vender. Avisar evita la responsabilidad. ([texto](https://california.public.law/codes/ca_bus_and_prof_code_section_17941)) | Decidir en Fase 3 cómo avisar. LATAM: **no verificado**. No es asesoramiento legal. |
 | R5 | El token caduca a los 60 días. | Renovación automática (Fase 2). |
 | R6 | Neon gratis: se apaga tras 5 min sin uso y 100 h de cómputo/mes ([precios](https://neon.com/pricing)). | Revisar consumo antes de producción. |
-| R7 | No sabemos si pulsar un botón da "consentimiento" para consultar si te sigue. | Probar en Fase 2. Plan B: entregar el recurso igualmente. |
+| R7 | Consulta "¿te sigue?" funcionó con @josegomezlife, pero ya había escrito antes: no está demostrado que el botón solo dé "consentimiento". | Probar con una cuenta que nunca haya escrito. Plan B ya programado: entregar el recurso igualmente. |
 
 ## Costes aproximados al mes
 
