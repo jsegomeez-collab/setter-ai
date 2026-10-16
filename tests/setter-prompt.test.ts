@@ -25,12 +25,12 @@ describe('prompt del setter', () => {
   it('el marco técnico lleva las decisiones de Jose: 3ª persona, idioma, precios y cuándo pasar a Jose', () => {
     const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
     expect(prompt).toContain('NO Jose. Habla de Jose en tercera persona');
-    expect(prompt).toContain('contesta en el idioma en que escribe la persona');
+    expect(prompt).toContain('contesta siempre en español y tutea');
+    expect(prompt).not.toContain('en el idioma en que escribe la persona');
     expect(prompt).toContain('Nunca digas por chat el precio del grupal ni del VIP');
     expect(prompt).toContain('Una pregunta que el documento no responde NO es motivo');
     expect(prompt).toContain('Nunca partas una frase');
     expect(prompt).toContain('tú no puedes reservar ni confirmar llamadas');
-    expect(prompt).toContain('mantenlo durante toda la conversación');
     expect(prompt).toContain('Explica con naturalidad y seguridad todo lo que el documento SÍ dice');
     expect(prompt).toContain('la llamada ES con una persona del equipo, así que pásale el enlace de agenda y sigue');
     expect(prompt).not.toContain('pide expresamente hablar con Jose o con una persona');

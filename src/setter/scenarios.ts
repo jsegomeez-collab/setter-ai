@@ -141,7 +141,7 @@ export const SCENARIOS: readonly Scenario[] = [
     group: 'Fuera de tema',
     title: 'Escribe en inglés',
     persona: 'Only speak English. You saw the reel and want info about selling AI services in the US.',
-    check: 'Se entiende con la persona (en español o adaptándose) y no se rompe.',
+    check: 'Contesta en español con amabilidad y le dice que la atención es en español (decisión de Jose: solo español).',
   },
   {
     id: 'audio',
