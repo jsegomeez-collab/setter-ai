@@ -76,7 +76,9 @@ describe('planComment', () => {
     const plan = planComment([flow], comment(), () => 0.5);
     expect(plan.actions[0]).toEqual({ type: 'reply_comment', dedupKey: 'reply:c-1', commentId: 'c-1', text: 'B' });
     expect(plan.actions[1]).toMatchObject({ type: 'private_reply', commentId: 'c-1', message: { text: 'Hola, pulsa el botón', flowId: 'flow1' } });
-    expect(plan.onceKey).toBe(`once:flow1:${STRANGER_ID}`);
+    expect(plan.onceKey).toBe(`once:flow1:${STRANGER_ID}:${TEST_MEDIA_ID}`);
+    const perFlow = planComment([followFlow({ onceScope: 'flow' })], comment());
+    expect(perFlow.onceKey).toBe(`once:flow1:${STRANGER_ID}`);
   });
 
   it('sin respuestas públicas solo manda el DM; sin "una vez" no hay clave', () => {

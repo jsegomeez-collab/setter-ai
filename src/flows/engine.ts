@@ -103,6 +103,12 @@ function toOutMessage(flow: Flow, node: Extract<FlowNode, { type: 'message' }>, 
   return { text: node.text, buttons: node.buttons, flowId: flow.id, nodeId: node.id, recipientId };
 }
 
+/** Clave de "una vez por persona": por persona y reel (por defecto) o por persona en todo el flujo. */
+export function onceKeyFor(flow: Flow, event: CommentEvent): string {
+  const base = `once:${flow.id}:${event.fromId}`;
+  return flow.onceScope === 'flow' ? base : `${base}:${event.mediaId ?? 'sin-reel'}`;
+}
+
 export function planComment(flows: readonly Flow[], event: CommentEvent, random: () => number = Math.random): Plan {
   if (event.fromId === event.accountId) return none('Ignorado: comentario de tu propia cuenta.');
   if (event.parentId) return none('Solo registro: es una respuesta a otro comentario.');
@@ -125,7 +131,7 @@ export function planComment(flows: readonly Flow[], event: CommentEvent, random:
   return {
     actions,
     note: `Flujo "${flow.name}": respuesta pública + DM.`,
-    onceKey: flow.oncePerUser ? `once:${flow.id}:${event.fromId}` : undefined,
+    onceKey: flow.oncePerUser ? onceKeyFor(flow, event) : undefined,
     flowId: flow.id,
   };
 }

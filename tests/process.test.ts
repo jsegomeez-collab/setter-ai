@@ -38,6 +38,14 @@ describe('processWebhook con flujos', () => {
     expect(store.events.some((e) => e.note.includes('ya recibió este flujo'))).toBe(true);
   });
 
+  it('opción B: la misma persona en OTRO reel sí recibe el DM; en el mismo reel no', async () => {
+    const { client, deps } = setup([followFlow({ trigger: { mediaIds: 'all', keywords: [] } })]);
+    await processWebhook(commentPayload(), deps);
+    await processWebhook(commentPayload({ id: 'c-2' }), deps);
+    await processWebhook(commentPayload({ id: 'c-3', media: { id: '18000000000000002' } }), deps);
+    expect(client.sendPrivateReply).toHaveBeenCalledTimes(2);
+  });
+
   it('pulsar "Lo quiero" → comprueba si sigue → manda el recurso', async () => {
     const { client, deps, sender } = setup();
     await processWebhook(postbackPayload(encodePayload('flow1', 'gate')), deps);

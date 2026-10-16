@@ -98,6 +98,11 @@ export const flowSchema = z
     /** Si tiene usuarios, el flujo SOLO responde a ellos (modo prueba). */
     testUsernames: z.array(z.string().trim().min(1).max(30)).max(20),
     oncePerUser: z.boolean(),
+    /**
+     * Alcance de "una vez por persona": "media" = una vez por persona y por reel (si comenta en 3 reels, recibe 3 DMs);
+     * "flow" = una sola vez por persona en todo el flujo.
+     */
+    onceScope: z.enum(['media', 'flow']).default('media'),
     /** "basic" = creado con el formulario del panel; otro valor = creado por el constructor o en JSON. */
     template: z.string().max(30).optional(),
   })

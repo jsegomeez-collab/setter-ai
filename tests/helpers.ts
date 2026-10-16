@@ -185,6 +185,7 @@ export function followFlow(overrides: Partial<Flow> = {}): Flow {
     ],
     testUsernames: [],
     oncePerUser: true,
+    onceScope: 'media',
     template: 'basic',
     ...overrides,
   };
