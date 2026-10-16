@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: setter-ai
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: IG_API_VERSION
+        value: v25.0
+      - key: WEBHOOK_VERIFY_TOKEN
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: IG_ACCESS_TOKEN
+        sync: false
+      - key: ALLOWED_SENDER_IDS
+        sync: false
