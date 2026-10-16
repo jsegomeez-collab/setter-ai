@@ -14,6 +14,20 @@ export interface Store {
   pendingActions(): Promise<unknown[]>;
   /** Contactos: alta o actualización (username, última vez visto y, si viene de un comentario, el reel). */
   touchContact(igId: string, username: string | null, mediaId?: string | null): Promise<void>;
+  /** Conversaciones (Fase 3). */
+  addMessage(message: NewMessage): Promise<void>;
+  setMessageStatus(dedupKey: string, status: MessageStatus, mid?: string | null): Promise<void>;
+  listMessages(igId: string, limit: number): Promise<MessageRow[]>;
+  listConversations(limit: number): Promise<ConversationRow[]>;
+  getContact(igId: string): Promise<ContactRow | null>;
+  setAiPaused(igId: string, paused: boolean, reason: string | null): Promise<void>;
+  saveLead(igId: string, lead: unknown): Promise<void>;
+  /** Acción que produjo un mensaje enviado (por su message_id de Meta), para distinguir ecos propios de mensajes a mano. */
+  findActionByMessageId(mid: string): Promise<{ readonly dedupKey: string; readonly request: unknown } | null>;
+  /** Base de conocimiento del setter, con historial de versiones. */
+  saveKnowledge(text: string): Promise<number>;
+  getKnowledge(): Promise<KnowledgeRow | null>;
+  listKnowledgeVersions(limit: number): Promise<KnowledgeRow[]>;
   /** Comentarios registrados desde una fecha que NO recibieron respuesta privada (para rescatarlos). */
   unansweredCommentEvents(since: Date): Promise<unknown[]>;
   /** Guarda cada comentario (de qué reel viene cada persona). Repetidos se ignoran. */
@@ -65,6 +79,48 @@ export interface ContactRow {
   /** Reel del primer comentario (de dónde vino) y del último. */
   readonly sourceMediaId: string | null;
   readonly lastMediaId: string | null;
+  /** Setter IA parado en esta conversación (p. ej. porque Jose escribió a mano) y por qué. */
+  readonly aiPaused?: boolean;
+  readonly aiPausedReason?: string | null;
+  /** Ficha del lead extraída por la IA. */
+  readonly lead?: unknown;
+}
+
+export type MessageDirection = 'in' | 'out';
+export type MessageSource = 'user' | 'flow' | 'ai' | 'human';
+/** sent = enviado · queued = en cola · held = retenido para revisión de Jose (no enviado). */
+export type MessageStatus = 'sent' | 'queued' | 'held' | 'failed';
+
+export interface NewMessage {
+  readonly igId: string;
+  readonly direction: MessageDirection;
+  readonly source: MessageSource;
+  readonly text: string;
+  readonly mid: string | null;
+  readonly status: MessageStatus;
+  readonly dedupKey: string | null;
+  readonly note?: string | null;
+}
+
+export interface MessageRow extends NewMessage {
+  readonly id: number;
+  readonly createdAt: Date;
+}
+
+export interface ConversationRow {
+  readonly igId: string;
+  readonly username: string | null;
+  readonly lastText: string;
+  readonly lastAt: Date;
+  readonly lastDirection: MessageDirection;
+  readonly aiPaused: boolean;
+  readonly lead: unknown;
+}
+
+export interface KnowledgeRow {
+  readonly id: number;
+  readonly text: string;
+  readonly createdAt: Date;
 }
 
 export interface CommentRecord {
@@ -161,6 +217,29 @@ CREATE TABLE IF NOT EXISTS comments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS comments_media_idx ON comments (media_id);
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ai_paused BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ai_paused_reason TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead JSONB;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead_updated_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS messages (
+  id BIGSERIAL PRIMARY KEY,
+  ig_id TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  source TEXT NOT NULL,
+  text TEXT NOT NULL,
+  mid TEXT UNIQUE,
+  status TEXT NOT NULL,
+  dedup_key TEXT,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS messages_contact_idx ON messages (ig_id, id);
+CREATE INDEX IF NOT EXISTS messages_dedup_idx ON messages (dedup_key);
+CREATE TABLE IF NOT EXISTS knowledge_versions (
+  id BIGSERIAL PRIMARY KEY,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
   id BIGSERIAL PRIMARY KEY,
   dedup_key TEXT NOT NULL UNIQUE,
@@ -233,6 +312,91 @@ export async function createPostgresStore(
           source_media_id = COALESCE(contacts.source_media_id, EXCLUDED.source_media_id),
           last_media_id = COALESCE(EXCLUDED.last_media_id, contacts.last_media_id),
           last_seen = now()`;
+    },
+    async addMessage(m) {
+      await sql`
+        INSERT INTO messages (ig_id, direction, source, text, mid, status, dedup_key, note)
+        VALUES (${m.igId}, ${m.direction}, ${m.source}, ${m.text}, ${m.mid}, ${m.status}, ${m.dedupKey}, ${m.note ?? null})
+        ON CONFLICT (mid) DO NOTHING`;
+    },
+    async setMessageStatus(dedupKey, status, mid = null) {
+      await sql`UPDATE messages SET status = ${status}, mid = COALESCE(${mid}, mid) WHERE dedup_key = ${dedupKey}`;
+    },
+    async listMessages(igId, limit) {
+      const rows = await sql<
+        { id: string; ig_id: string; direction: MessageDirection; source: MessageSource; text: string; mid: string | null; status: MessageStatus; dedup_key: string | null; note: string | null; created_at: Date }[]
+      >`SELECT * FROM (SELECT * FROM messages WHERE ig_id = ${igId} ORDER BY id DESC LIMIT ${limit}) m ORDER BY id`;
+      return rows.map((r) => ({
+        id: Number(r.id),
+        igId: r.ig_id,
+        direction: r.direction,
+        source: r.source,
+        text: r.text,
+        mid: r.mid,
+        status: r.status,
+        dedupKey: r.dedup_key,
+        note: r.note,
+        createdAt: r.created_at,
+      }));
+    },
+    async listConversations(limit) {
+      const rows = await sql<
+        { ig_id: string; username: string | null; text: string; created_at: Date; direction: MessageDirection; ai_paused: boolean | null; lead: unknown }[]
+      >`SELECT DISTINCT ON (m.ig_id) m.ig_id, c.username, m.text, m.created_at, m.direction, c.ai_paused, c.lead
+        FROM messages m LEFT JOIN contacts c ON c.ig_id = m.ig_id
+        ORDER BY m.ig_id, m.id DESC`;
+      return rows
+        .map((r) => ({ igId: r.ig_id, username: r.username, lastText: r.text, lastAt: r.created_at, lastDirection: r.direction, aiPaused: r.ai_paused ?? false, lead: r.lead }))
+        .sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime())
+        .slice(0, limit);
+    },
+    async getContact(igId) {
+      const rows = await sql<
+        { ig_id: string; username: string | null; tags: string[]; first_seen: Date; last_seen: Date; source_media_id: string | null; last_media_id: string | null; ai_paused: boolean; ai_paused_reason: string | null; lead: unknown }[]
+      >`SELECT * FROM contacts WHERE ig_id = ${igId}`;
+      const r = rows[0];
+      return r
+        ? {
+            igId: r.ig_id,
+            username: r.username,
+            tags: r.tags,
+            firstSeen: r.first_seen,
+            lastSeen: r.last_seen,
+            sourceMediaId: r.source_media_id,
+            lastMediaId: r.last_media_id,
+            aiPaused: r.ai_paused,
+            aiPausedReason: r.ai_paused_reason,
+            lead: r.lead,
+          }
+        : null;
+    },
+    async setAiPaused(igId, paused, reason) {
+      await sql`
+        INSERT INTO contacts (ig_id, ai_paused, ai_paused_reason) VALUES (${igId}, ${paused}, ${reason})
+        ON CONFLICT (ig_id) DO UPDATE SET ai_paused = EXCLUDED.ai_paused, ai_paused_reason = EXCLUDED.ai_paused_reason`;
+    },
+    async saveLead(igId, lead) {
+      await sql`
+        INSERT INTO contacts (ig_id, lead, lead_updated_at) VALUES (${igId}, ${toJson(sql, lead)}, now())
+        ON CONFLICT (ig_id) DO UPDATE SET lead = EXCLUDED.lead, lead_updated_at = now()`;
+    },
+    async findActionByMessageId(mid) {
+      const rows = await sql<{ dedup_key: string; request: unknown }[]>`
+        SELECT dedup_key, request FROM actions WHERE response->>'messageId' = ${mid}
+           OR response->'result'->>'messageId' = ${mid} LIMIT 1`;
+      return rows[0] ? { dedupKey: rows[0].dedup_key, request: rows[0].request } : null;
+    },
+    async saveKnowledge(text) {
+      const rows = await sql<{ id: string }[]>`INSERT INTO knowledge_versions (text) VALUES (${text}) RETURNING id`;
+      return Number(rows[0]?.id);
+    },
+    async getKnowledge() {
+      const rows = await sql<{ id: string; text: string; created_at: Date }[]>`SELECT id, text, created_at FROM knowledge_versions ORDER BY id DESC LIMIT 1`;
+      return rows[0] ? { id: Number(rows[0].id), text: rows[0].text, createdAt: rows[0].created_at } : null;
+    },
+    async listKnowledgeVersions(limit) {
+      const rows = await sql<{ id: string; text: string; created_at: Date }[]>`SELECT id, text, created_at FROM knowledge_versions ORDER BY id DESC LIMIT ${limit}`;
+      return rows.map((r) => ({ id: Number(r.id), text: r.text, createdAt: r.created_at }));
     },
     async unansweredCommentEvents(since) {
       const rows = await sql<{ data: unknown }[]>`
