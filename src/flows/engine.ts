@@ -3,13 +3,16 @@ import { findNode, type Button, type Flow, type FlowNode } from './types.js';
 
 /**
  * Motor de flujos. Funciones puras: reciben eventos y flujos y devuelven acciones.
- * El envío real (cola, esperas, límites) lo hace el emisor.
+ * El envío real (cola, esperas, límites, pausas programadas) lo hacen el emisor y el programador.
  */
 
 export interface OutMessage {
   readonly text: string;
   readonly buttons: readonly Button[];
   readonly flowId: string;
+  readonly nodeId: string;
+  /** A quién va (para los enlaces con seguimiento). En la respuesta privada es quien comentó. */
+  readonly recipientId: string;
 }
 
 export type Action =
@@ -23,6 +26,16 @@ export type Action =
       readonly flowId: string;
       readonly nodeId: string;
       readonly depth: number;
+    }
+  | {
+      /** Pausa: dentro de `delaySeconds`, ejecutar el nodo `nodeId` para esta persona. */
+      readonly type: 'schedule';
+      readonly dedupKey: string;
+      readonly recipientId: string;
+      readonly flowId: string;
+      readonly nodeId: string;
+      readonly delaySeconds: number;
+      readonly depth: number;
     };
 
 export interface Plan {
@@ -35,8 +48,8 @@ export interface Plan {
 
 export type FollowStatus = 'yes' | 'no' | 'unknown';
 
-/** Máximo de condiciones encadenadas, para evitar bucles infinitos en flujos mal hechos. */
-const MAX_DEPTH = 5;
+/** Máximo de pasos encadenados de una vez, para cortar flujos mal hechos. */
+const MAX_DEPTH = 12;
 const PAYLOAD_PREFIX = 'F';
 
 const none = (note: string): Plan => ({ actions: [], note });
@@ -86,8 +99,8 @@ export function findFlowForComment(flows: readonly Flow[], event: CommentEvent):
   return candidates[0] ?? null;
 }
 
-function toOutMessage(flow: Flow, node: Extract<FlowNode, { type: 'message' }>): OutMessage {
-  return { text: node.text, buttons: node.buttons, flowId: flow.id };
+function toOutMessage(flow: Flow, node: Extract<FlowNode, { type: 'message' }>, recipientId: string): OutMessage {
+  return { text: node.text, buttons: node.buttons, flowId: flow.id, nodeId: node.id, recipientId };
 }
 
 export function planComment(flows: readonly Flow[], event: CommentEvent, random: () => number = Math.random): Plan {
@@ -103,7 +116,12 @@ export function planComment(flows: readonly Flow[], event: CommentEvent, random:
     const index = Math.min(flow.publicReplies.length - 1, Math.floor(random() * flow.publicReplies.length));
     actions.push({ type: 'reply_comment', dedupKey: `reply:${event.commentId}`, commentId: event.commentId, text: flow.publicReplies[index] as string });
   }
-  actions.push({ type: 'private_reply', dedupKey: `private:${event.commentId}`, commentId: event.commentId, message: toOutMessage(flow, start) });
+  actions.push({
+    type: 'private_reply',
+    dedupKey: `private:${event.commentId}`,
+    commentId: event.commentId,
+    message: toOutMessage(flow, start, event.fromId),
+  });
   return {
     actions,
     note: `Flujo "${flow.name}": respuesta pública + DM.`,
@@ -112,15 +130,21 @@ export function planComment(flows: readonly Flow[], event: CommentEvent, random:
   };
 }
 
-/** Acciones para ejecutar un nodo concreto a una persona (tras un botón o una condición). */
+/** Acciones para ejecutar un nodo (y sus "siguientes pasos" automáticos) a una persona. */
 export function planNode(flow: Flow, nodeId: string, recipientId: string, dedupBase: string, depth = 0): Action[] {
   const node = findNode(flow, nodeId);
-  if (!node) return [];
-  if (node.type === 'message') {
-    return [{ type: 'send_message', dedupKey: `${dedupBase}:${node.id}`, recipientId, message: toOutMessage(flow, node) }];
+  if (!node || depth >= MAX_DEPTH) return [];
+  const dedupKey = `${dedupBase}:${node.id}`;
+  switch (node.type) {
+    case 'message': {
+      const send: Action = { type: 'send_message', dedupKey, recipientId, message: toOutMessage(flow, node, recipientId) };
+      return node.next ? [send, ...planNode(flow, node.next, recipientId, dedupKey, depth + 1)] : [send];
+    }
+    case 'follow_gate':
+      return [{ type: 'check_follow', dedupKey, recipientId, flowId: flow.id, nodeId: node.id, depth }];
+    case 'delay':
+      return [{ type: 'schedule', dedupKey, recipientId, flowId: flow.id, nodeId: node.next, delaySeconds: node.seconds, depth: depth + 1 }];
   }
-  if (depth >= MAX_DEPTH) return [];
-  return [{ type: 'check_follow', dedupKey: `${dedupBase}:${node.id}`, recipientId, flowId: flow.id, nodeId: node.id, depth }];
 }
 
 type PostbackEvent = Extract<InstagramEvent, { kind: 'postback' }>;

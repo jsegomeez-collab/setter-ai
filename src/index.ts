@@ -1,9 +1,11 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { deriveLinkSecret } from './links.js';
 import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
 import { processInBackground } from './process.js';
+import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { createPostgresStore } from './store.js';
 
@@ -17,23 +19,36 @@ async function main(): Promise<void> {
   const hasToken = (await tokens.get()) !== null;
   const client = hasToken ? new InstagramClient(() => tokens.get(), config.igApiVersion) : null;
 
-  const sender = new Sender(
+  // Enlaces con seguimiento: necesitan URL pública + clave. Si falta algo, los botones llevan la URL real.
+  const linkSecret = config.tokenEncryptionKey ? deriveLinkSecret(config.tokenEncryptionKey) : null;
+  const linkSigner = linkSecret && config.publicBaseUrl ? { baseUrl: config.publicBaseUrl, secret: linkSecret } : null;
+
+  // El programador avisa al emisor cuando vence una pausa; el emisor programa pausas en el programador.
+  let sender: Sender | null = null;
+  const scheduler = new Scheduler({ store, onDue: (payload) => (sender ? sender.continueFlow(payload) : Promise.resolve({ skipped: 'sin emisor' })) });
+  sender = new Sender(
     {
       store,
       client,
       limitPerHour: config.sendLimitPerHour,
       minDelayMs: config.sendDelayMinMs,
       maxDelayMs: config.sendDelayMaxMs,
+      linkSigner,
+      schedule: (payload, delaySeconds) => scheduler.add(payload, delaySeconds),
     },
     async (flowId) => (await store.listFlows()).find((flow) => flow.id === flowId),
   );
+  const activeSender = sender;
+  const recovered = await scheduler.start();
+  if (recovered > 0) await store.logEvent('pausas', `Recuperadas ${recovered} pausas pendientes tras el arranque.`, null);
 
   const app = createApp({
     config,
     store,
     client,
     tokens,
-    processPayload: (payload) => processInBackground(payload, { store, sender }),
+    linkSecret: linkSigner ? linkSecret : null,
+    processPayload: (payload) => processInBackground(payload, { store, sender: activeSender }),
   });
 
   const checkToken = () => {
@@ -52,8 +67,9 @@ async function main(): Promise<void> {
   const shutdown = () => {
     clearTimeout(firstCheck);
     clearInterval(periodicCheck);
+    scheduler.stop();
     server.close();
-    sender
+    activeSender
       .idle()
       .then(() => store.close())
       .finally(() => process.exit(0));

@@ -33,7 +33,7 @@ export function flowsListPage(flows: readonly Flow[], media: readonly Media[], f
 ${flash ? `<div class="card">${escapeHtml(flash)}</div>` : ''}
 <p>Cada flujo dice qué hacer cuando alguien comenta: respuesta pública + DM con botones (y, si quieres, condición de seguir).
 Si dos flujos coinciden, gana el más específico (reel concreto y con palabras clave).</p>
-<p><a href="/flujos/nuevo"><button>+ Nuevo flujo</button></a></p>
+<p><a href="/flujos/nuevo"><button>+ Nuevo flujo (formulario)</button></a> <a href="/flujos/nuevo-json"><button>+ Nuevo flujo avanzado (JSON)</button></a></p>
 <table><tr><th>Nombre</th><th>Estado</th><th>Cuándo salta</th><th>A quién</th><th></th></tr>${rows || '<tr><td colspan="5">Todavía no hay flujos.</td></tr>'}</table>`;
   return layout('Flujos', body);
 }
@@ -112,9 +112,32 @@ ${data.preview ? `<h2>Cómo queda guardado (formato de nodos)</h2><pre>${jsonPre
   return layout(data.isNew ? 'Nuevo flujo' : 'Editar flujo', body);
 }
 
-export function flowReadOnlyPage(flow: Flow): string {
-  return layout(
-    `Flujo ${flow.name}`,
-    `<h1>Flujo: ${escapeHtml(flow.name)}</h1><p class="warn">Este flujo no se creó con el formulario básico; se editará con el constructor visual (Fase 6).</p><pre>${jsonPreview(flow)}</pre>`,
-  );
+export interface FlowJsonPageData {
+  readonly json: string;
+  readonly errors: readonly string[];
+  /** null = flujo nuevo */
+  readonly flowId: string | null;
+  readonly media: readonly Media[];
+}
+
+/** Editor JSON para flujos avanzados (pausas, etiquetas, varios pasos) hasta que exista el constructor visual (Fase 6). */
+export function flowJsonPage(data: FlowJsonPageData): string {
+  const action = data.flowId ? `/flujos/${encodeURIComponent(data.flowId)}/json` : '/flujos/nuevo-json';
+  const reels = data.media
+    .map((item) => `<li><code>${escapeHtml(item.id)}</code> · ${escapeHtml(item.timestamp?.slice(0, 10) ?? '')} · ${escapeHtml((item.caption ?? '').slice(0, 70))}</li>`)
+    .join('');
+  const body = `<h1>${data.flowId ? 'Editar flujo avanzado' : 'Nuevo flujo avanzado'} (JSON)</h1>
+<p>Para flujos con pausas, etiquetas o varios pasos. El constructor visual (Fase 6) editará este mismo formato.</p>
+${data.errors.length ? `<div class="errors"><strong>Revisa esto:</strong><ul>${data.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join('')}</ul></div>` : ''}
+<form method="post" action="${action}">
+  <textarea name="json" style="min-height:480px;font-family:monospace;font-size:.8rem">${escapeHtml(data.json)}</textarea>
+  <p><button type="submit">Validar y guardar</button> <a href="/flujos">Cancelar</a></p>
+</form>
+<details><summary>IDs de tus reels recientes</summary><ul>${reels}</ul></details>
+<details><summary>Tipos de paso</summary><pre>${escapeHtml(`message:     { id, type:"message", text, buttons:[...], next?: "otro_paso" }
+  botón enlace: { type:"url", title, url, tags?: ["etiqueta"] }   ← añade etiquetas al pulsar
+  botón acción: { type:"postback", title, next: "otro_paso" }
+follow_gate: { id, type:"follow_gate", ifFollowing, ifNotFollowing, ifUnknown }
+delay:       { id, type:"delay", seconds: 120, next: "otro_paso" }   ← máx. 23 h`)}</pre></details>`;
+  return layout(data.flowId ? 'Editar flujo avanzado' : 'Nuevo flujo avanzado', body);
 }

@@ -8,6 +8,16 @@ export interface Store {
   deleteFlow(id: string): Promise<void>;
   /** Envíos a Instagram (acciones terminadas o en curso) desde una fecha. Para el límite por hora. */
   countSendsSince(since: Date): Promise<number>;
+  /** Contactos: alta o actualización (username y última vez visto). */
+  touchContact(igId: string, username: string | null): Promise<void>;
+  addContactTags(igId: string, tags: readonly string[]): Promise<void>;
+  listContacts(limit: number): Promise<ContactRow[]>;
+  /** Pausas programadas. Devuelve null si ya existía (misma clave). */
+  scheduleJob(dedupKey: string, runAt: Date, payload: unknown): Promise<number | null>;
+  pendingJobs(): Promise<JobRow[]>;
+  /** Marca la tarea como en marcha. Devuelve false si otro ya la cogió. */
+  claimJob(id: number): Promise<boolean>;
+  finishJob(id: number, status: 'done' | 'failed', result: unknown): Promise<void>;
   recordRequest(signatureOk: boolean, payload: unknown): Promise<void>;
   logEvent(kind: string, note: string, data: unknown): Promise<void>;
   /** Reserva una acción. Devuelve false si ya existía (evita enviar dos veces lo mismo). */
@@ -34,6 +44,20 @@ export interface ActionRow {
   readonly dedupKey: string;
   readonly ok: boolean | null;
   readonly response: unknown;
+}
+
+export interface ContactRow {
+  readonly igId: string;
+  readonly username: string | null;
+  readonly tags: readonly string[];
+  readonly firstSeen: Date;
+  readonly lastSeen: Date;
+}
+
+export interface JobRow {
+  readonly id: number;
+  readonly runAt: Date;
+  readonly payload: unknown;
 }
 
 export const SETTINGS = {
@@ -90,6 +114,23 @@ CREATE TABLE IF NOT EXISTS flows (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS actions_created_at_idx ON actions (created_at);
+CREATE TABLE IF NOT EXISTS contacts (
+  ig_id TEXT PRIMARY KEY,
+  username TEXT,
+  tags TEXT[] NOT NULL DEFAULT '{}',
+  first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS scheduled_jobs (
+  id BIGSERIAL PRIMARY KEY,
+  dedup_key TEXT NOT NULL UNIQUE,
+  run_at TIMESTAMPTZ NOT NULL,
+  payload JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  result JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS scheduled_jobs_pending_idx ON scheduled_jobs (status, run_at);
 `;
 
 type Sql = ReturnType<typeof postgres>;
@@ -134,6 +175,42 @@ export async function createPostgresStore(
         SELECT count(*)::int AS n FROM actions
         WHERE created_at >= ${since} AND type IN ${sql([...SEND_ACTION_TYPES])} AND ok IS DISTINCT FROM false`;
       return rows[0]?.n ?? 0;
+    },
+    async touchContact(igId, username) {
+      await sql`
+        INSERT INTO contacts (ig_id, username) VALUES (${igId}, ${username})
+        ON CONFLICT (ig_id) DO UPDATE SET username = COALESCE(EXCLUDED.username, contacts.username), last_seen = now()`;
+    },
+    async addContactTags(igId, tags) {
+      if (tags.length === 0) return;
+      await sql`
+        INSERT INTO contacts (ig_id, tags) VALUES (${igId}, ${sql.array([...tags])})
+        ON CONFLICT (ig_id) DO UPDATE SET
+          tags = ARRAY(SELECT DISTINCT unnest(contacts.tags || EXCLUDED.tags) ORDER BY 1),
+          last_seen = now()`;
+    },
+    async listContacts(limit) {
+      const rows = await sql<{ ig_id: string; username: string | null; tags: string[]; first_seen: Date; last_seen: Date }[]>`
+        SELECT ig_id, username, tags, first_seen, last_seen FROM contacts ORDER BY last_seen DESC LIMIT ${limit}`;
+      return rows.map((row) => ({ igId: row.ig_id, username: row.username, tags: row.tags, firstSeen: row.first_seen, lastSeen: row.last_seen }));
+    },
+    async scheduleJob(dedupKey, runAt, payload) {
+      const rows = await sql<{ id: string }[]>`
+        INSERT INTO scheduled_jobs (dedup_key, run_at, payload) VALUES (${dedupKey}, ${runAt}, ${toJson(sql, payload)})
+        ON CONFLICT (dedup_key) DO NOTHING RETURNING id`;
+      return rows[0] ? Number(rows[0].id) : null;
+    },
+    async pendingJobs() {
+      const rows = await sql<{ id: string; run_at: Date; payload: unknown }[]>`
+        SELECT id, run_at, payload FROM scheduled_jobs WHERE status = 'pending' ORDER BY run_at`;
+      return rows.map((row) => ({ id: Number(row.id), runAt: row.run_at, payload: row.payload }));
+    },
+    async claimJob(id) {
+      const rows = await sql`UPDATE scheduled_jobs SET status = 'running' WHERE id = ${id} AND status = 'pending' RETURNING id`;
+      return rows.length > 0;
+    },
+    async finishJob(id, status, result) {
+      await sql`UPDATE scheduled_jobs SET status = ${status}, result = ${toJson(sql, result)} WHERE id = ${id}`;
     },
     async recordRequest(signatureOk, payload) {
       await sql`INSERT INTO webhook_requests (signature_ok, payload) VALUES (${signatureOk}, ${toJson(sql, payload)})`;

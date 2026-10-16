@@ -2,25 +2,52 @@ import { Hono, type Context } from 'hono';
 import { basicAuth } from 'hono/basic-auth';
 import { csrf } from 'hono/csrf';
 import type { Config } from './config.js';
-import { EMPTY_FORM, flowToForm, formToFlow, readForm } from './flows/form.js';
+import { EMPTY_FORM, flowToForm, formToFlow, newFlowId, readForm } from './flows/form.js';
 import { validateFlow } from './flows/types.js';
 import { InstagramClient, MetaApiError, type Account, type Media } from './meta/client.js';
 import { isValidSignature } from './meta/signature.js';
 import type { TokenManager } from './meta/token.js';
-import { flowFormPage, flowReadOnlyPage, flowsListPage } from './pages-flows.js';
-import { dashboardPage, legalPage } from './pages.js';
+import { readLinkToken } from './links.js';
+import { flowFormPage, flowJsonPage, flowsListPage } from './pages-flows.js';
+import { contactsPage, dashboardPage, legalPage } from './pages.js';
 import { SETTINGS, type Store } from './store.js';
 
 const ADMIN_USER = 'jose';
 const DASHBOARD_ROWS = 60;
 const MEDIA_FOR_FORM = 25;
 const HOUR_MS = 60 * 60 * 1000;
+const CONTACTS_ROWS = 200;
+
+/** Ejemplo que aparece al crear un flujo avanzado: mensaje con botón → mensaje con enlace con etiqueta → pausa → mensaje. */
+const EXAMPLE_JSON_FLOW = {
+  name: 'Mi flujo avanzado',
+  enabled: false,
+  trigger: { mediaIds: 'all', keywords: [] },
+  publicReplies: ['¡Te escribí por DM! 📩'],
+  startNodeId: 'inicio',
+  nodes: [
+    { id: 'inicio', type: 'message', text: '¡Hola! ¿Te mando el recurso?', buttons: [{ type: 'postback', title: 'Sí, mándamelo', next: 'recurso' }] },
+    {
+      id: 'recurso',
+      type: 'message',
+      text: 'Aquí lo tienes 👇',
+      buttons: [{ type: 'url', title: 'Abrir', url: 'https://example.com', tags: ['recurso'] }],
+      next: 'espera',
+    },
+    { id: 'espera', type: 'delay', seconds: 120, next: 'extra' },
+    { id: 'extra', type: 'message', text: 'Por cierto…', buttons: [] },
+  ],
+  testUsernames: [],
+  oncePerUser: true,
+};
 
 export interface AppDeps {
   readonly config: Config;
   readonly store: Store;
   readonly client: InstagramClient | null;
   readonly tokens: TokenManager;
+  /** Clave para verificar los enlaces con seguimiento. null = desactivados. */
+  readonly linkSecret: string | null;
   /** Procesa un aviso de Meta en segundo plano. */
   readonly processPayload: (payload: unknown) => void;
 }
@@ -69,6 +96,22 @@ function registerWebhook(app: Hono, deps: AppDeps): void {
   });
 }
 
+/** Enlaces con seguimiento: registra el clic, añade etiquetas y redirige al destino real. */
+function registerLinks(app: Hono, deps: AppDeps): void {
+  app.get('/l/:token', async (c) => {
+    const data = deps.linkSecret ? readLinkToken(deps.linkSecret, c.req.param('token')) : null;
+    if (!data) return c.text('Enlace no válido', 404);
+    try {
+      await deps.store.logEvent('click', `Clic en enlace del flujo ${data.f} (paso ${data.n}).`, data);
+      await deps.store.addContactTags(data.r, data.t);
+    } catch (error) {
+      // Si falla el registro, la persona igualmente llega a su destino.
+      process.stderr.write(`[setter-ai] No se pudo registrar el clic: ${String(error)}\n`);
+    }
+    return c.redirect(data.u, 302);
+  });
+}
+
 function registerDashboard(app: Hono, deps: AppDeps): void {
   const { config, store, client, tokens } = deps;
 
@@ -104,6 +147,7 @@ function registerDashboard(app: Hono, deps: AppDeps): void {
         limitPerHour: config.sendLimitPerHour,
         activeFlows: flows.filter((flow) => flow.enabled).length,
         totalFlows: flows.length,
+        linkTracking: deps.linkSecret !== null,
         events,
         actions,
         flash: c.req.query('msg') ?? null,
@@ -158,11 +202,37 @@ function registerFlows(app: Hono, deps: AppDeps): void {
 
   app.post('/flujos/nuevo', (c) => save(c, true));
 
+  const renderJson = async (c: Context, json: string, errors: string[], flowId: string | null) =>
+    c.html(flowJsonPage({ json, errors, flowId, media: await loadMedia(client, MEDIA_FOR_FORM) }), errors.length ? 400 : 200);
+
+  const saveJson = async (c: Context, flowId: string | null) => {
+    const body = await c.req.parseBody();
+    const json = typeof body.json === 'string' ? body.json : '';
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch (error) {
+      return renderJson(c, json, [`El JSON no es válido: ${error instanceof Error ? error.message : String(error)}`], flowId);
+    }
+    // El id lo manda la URL al editar; al crear, si no trae uno, se genera.
+    const candidate = { ...(parsed as Record<string, unknown>), id: flowId ?? ((parsed as { id?: unknown })?.id || newFlowId()) };
+    const result = validateFlow({ template: 'json', ...candidate });
+    if (!result.ok) return renderJson(c, json, result.errors, flowId);
+    if (!flowId && (await findFlow(result.flow.id))) return renderJson(c, json, [`Ya existe un flujo con id "${result.flow.id}".`], flowId);
+    await store.saveFlow(result.flow);
+    await store.logEvent('flujo', `Flujo avanzado "${result.flow.name}" guardado (${result.flow.enabled ? 'activo' : 'inactivo'}).`, result.flow);
+    return c.redirect(withMsg('/flujos', `Flujo "${result.flow.name}" guardado.`), 303);
+  };
+
+  app.get('/flujos/nuevo-json', (c) => renderJson(c, JSON.stringify(EXAMPLE_JSON_FLOW, null, 2), [], null));
+  app.post('/flujos/nuevo-json', (c) => saveJson(c, null));
+  app.post('/flujos/:id/json', (c) => saveJson(c, c.req.param('id')));
+
   app.get('/flujos/:id', async (c) => {
     const flow = await findFlow(c.req.param('id'));
     if (!flow) return c.redirect(withMsg('/flujos', 'Ese flujo no existe.'), 303);
     const form = flowToForm(flow);
-    return form ? renderFlowForm(c, deps, form, [], false) : c.html(flowReadOnlyPage(flow));
+    return form ? renderFlowForm(c, deps, form, [], false) : renderJson(c, JSON.stringify(flow, null, 2), [], flow.id);
   });
 
   app.post('/flujos/:id', (c) => save(c, false));
@@ -197,14 +267,16 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/data-deletion', (c) => c.html(legalPage('data-deletion')));
 
   registerWebhook(app, deps);
+  registerLinks(app, deps);
 
   // Panel privado: contraseña + protección contra formularios enviados desde otras webs.
   const auth = basicAuth({ username: ADMIN_USER, password: deps.config.adminPassword });
-  for (const path of ['/eventos', '/eventos/*', '/flujos', '/flujos/*']) app.use(path, auth);
+  for (const path of ['/eventos', '/eventos/*', '/flujos', '/flujos/*', '/contactos']) app.use(path, auth);
   app.use('/eventos/*', csrf());
   app.use('/flujos/*', csrf());
 
   registerDashboard(app, deps);
   registerFlows(app, deps);
+  app.get('/contactos', async (c) => c.html(contactsPage(await deps.store.listContacts(CONTACTS_ROWS))));
   return app;
 }

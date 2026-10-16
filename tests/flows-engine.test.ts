@@ -124,7 +124,7 @@ describe('botones y condición de seguir', () => {
   });
 
   it('corta cadenas de condiciones demasiado largas (anti-bucle)', () => {
-    expect(planNode(followFlow(), 'gate', STRANGER_ID, 'x', 5)).toEqual([]);
+    expect(planNode(followFlow(), 'gate', STRANGER_ID, 'x', 12)).toEqual([]);
     expect(planAfterFollowCheck(followFlow(), 'resource', 'yes', STRANGER_ID, 'x', 0)).toEqual([]);
   });
 });

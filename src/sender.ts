@@ -1,6 +1,8 @@
-import { planAfterFollowCheck, encodePayload, type Action, type OutMessage } from './flows/engine.js';
+import { planAfterFollowCheck, planNode, encodePayload, type Action, type OutMessage } from './flows/engine.js';
 import type { Flow } from './flows/types.js';
+import { buttonUrl, type LinkSigner } from './links.js';
 import { MetaApiError, type ApiMessage, type InstagramClient } from './meta/client.js';
+import type { JobPayload } from './scheduler.js';
 import { SETTINGS, type Store } from './store.js';
 
 /**
@@ -16,6 +18,7 @@ const POLICY_BLOCK_CODE = 368;
 const PAUSE_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const SEND_TYPES = new Set<Action['type']>(['reply_comment', 'private_reply', 'send_message']);
+// "schedule" y "check_follow" no envían nada a la persona: no cuentan para el límite ni esperan.
 
 export interface SenderOptions {
   readonly store: Store;
@@ -23,12 +26,16 @@ export interface SenderOptions {
   readonly limitPerHour: number;
   readonly minDelayMs: number;
   readonly maxDelayMs: number;
+  /** Firma de enlaces con seguimiento. null = los botones llevan la URL real (sin registrar clics ni etiquetas). */
+  readonly linkSigner?: LinkSigner | null;
+  /** Programa una pausa (Scheduler.add). */
+  readonly schedule?: (payload: JobPayload, delaySeconds: number) => Promise<boolean>;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly random?: () => number;
   readonly now?: () => Date;
 }
 
-export function toApiMessage(message: OutMessage): ApiMessage {
+export function toApiMessage(message: OutMessage, signer: LinkSigner | null = null): ApiMessage {
   if (message.buttons.length === 0) return { text: message.text };
   return {
     attachment: {
@@ -36,9 +43,9 @@ export function toApiMessage(message: OutMessage): ApiMessage {
       payload: {
         template_type: 'button',
         text: message.text,
-        buttons: message.buttons.map((button) =>
+        buttons: message.buttons.map((button, index) =>
           button.type === 'url'
-            ? { type: 'web_url' as const, url: button.url, title: button.title }
+            ? { type: 'web_url' as const, url: buttonUrl(signer, message, index), title: button.title }
             : { type: 'postback' as const, payload: encodePayload(message.flowId, button.next), title: button.title },
         ),
       },
@@ -47,8 +54,8 @@ export function toApiMessage(message: OutMessage): ApiMessage {
 }
 
 /** Versión solo texto (por si Meta no acepta botones en la respuesta privada): los enlaces van en el texto. */
-export function toPlainFallback(message: OutMessage): string {
-  const links = message.buttons.flatMap((button) => (button.type === 'url' ? [`${button.title}: ${button.url}`] : []));
+export function toPlainFallback(message: OutMessage, signer: LinkSigner | null = null): string {
+  const links = message.buttons.flatMap((button, index) => (button.type === 'url' ? [`${button.title}: ${buttonUrl(signer, message, index)}`] : []));
   return links.length > 0 ? `${message.text}\n\n${links.join('\n')}` : message.text;
 }
 
@@ -79,6 +86,16 @@ export class Sender {
     });
     this.chain = run.catch(() => undefined);
     return run;
+  }
+
+  /** Cuando vence una pausa: ejecuta el siguiente paso del flujo para esa persona. */
+  async continueFlow(payload: JobPayload): Promise<unknown> {
+    const flow = await this.getFlow(payload.flowId);
+    if (!flow) return { skipped: 'El flujo ya no existe' };
+    if (!flow.enabled) return { skipped: 'El flujo está desactivado' };
+    const actions = planNode(flow, payload.nodeId, payload.recipientId, payload.dedupKey, payload.depth);
+    void this.enqueue(actions);
+    return { next: actions.map((action) => action.dedupKey) };
   }
 
   /** Espera a que la cola quede vacía (para pruebas y apagado ordenado). */
@@ -148,17 +165,30 @@ export class Sender {
       case 'reply_comment':
         return client.replyToComment(action.commentId, action.text);
       case 'send_message':
-        return client.sendMessage(action.recipientId, toApiMessage(action.message));
+        return client.sendMessage(action.recipientId, toApiMessage(action.message, this.signer));
       case 'private_reply':
         return this.privateReply(action, client);
       case 'check_follow':
         return this.checkFollow(action, client);
+      case 'schedule':
+        return this.schedule(action);
     }
+  }
+
+  private get signer(): LinkSigner | null {
+    return this.options.linkSigner ?? null;
+  }
+
+  private async schedule(action: Extract<Action, { type: 'schedule' }>): Promise<unknown> {
+    if (!this.options.schedule) throw new Error('No hay programador de pausas configurado');
+    const { flowId, nodeId, recipientId, dedupKey, depth, delaySeconds } = action;
+    const added = await this.options.schedule({ flowId, nodeId, recipientId, dedupKey, depth }, delaySeconds);
+    return { scheduled: added, delaySeconds, next: nodeId };
   }
 
   private async privateReply(action: Extract<Action, { type: 'private_reply' }>, client: InstagramClient): Promise<unknown> {
     try {
-      return await client.sendPrivateReply(action.commentId, toApiMessage(action.message));
+      return await client.sendPrivateReply(action.commentId, toApiMessage(action.message, this.signer));
     } catch (error) {
       const canFallBack =
         action.message.buttons.length > 0 &&
@@ -168,7 +198,7 @@ export class Sender {
         error.code !== POLICY_BLOCK_CODE;
       if (!canFallBack) throw error;
       // Meta no aceptó los botones en la respuesta privada: se manda solo texto (con los enlaces) y se deja constancia.
-      const result = await client.sendPrivateReply(action.commentId, toPlainFallback(action.message));
+      const result = await client.sendPrivateReply(action.commentId, toPlainFallback(action.message, this.signer));
       return { fallback: 'solo texto (Meta rechazó los botones)', firstError: describeError(error), result };
     }
   }

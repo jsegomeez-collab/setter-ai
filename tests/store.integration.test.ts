@@ -67,6 +67,31 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getSetting('no-existe')).toBeNull();
   });
 
+  it('contactos: alta, username que no se pierde y etiquetas sin repetir', async () => {
+    await store.touchContact('777', 'josegomezlife');
+    await store.touchContact('777', null);
+    await store.addContactTags('777', ['biblioteca']);
+    await store.addContactTags('777', ['Grupo WhatsApp', 'biblioteca']);
+    await store.addContactTags('888', ['solo-etiqueta']);
+    await store.addContactTags('777', []);
+    const contacts = await store.listContacts(10);
+    expect(contacts.find((c) => c.igId === '777')).toMatchObject({ username: 'josegomezlife', tags: ['Grupo WhatsApp', 'biblioteca'] });
+    expect(contacts.find((c) => c.igId === '888')?.tags).toEqual(['solo-etiqueta']);
+  });
+
+  it('pausas programadas: guardar, no duplicar, coger una sola vez y terminar', async () => {
+    const runAt = new Date('2026-10-16T12:02:00.000Z');
+    const id = await store.scheduleJob('job:a', runAt, { flowId: 'f', nodeId: 'n', recipientId: '1', dedupKey: 'a', depth: 1 });
+    expect(id).toEqual(expect.any(Number));
+    expect(await store.scheduleJob('job:a', runAt, {})).toBeNull();
+    const pending = await store.pendingJobs();
+    expect(pending).toEqual([{ id, runAt, payload: { flowId: 'f', nodeId: 'n', recipientId: '1', dedupKey: 'a', depth: 1 } }]);
+    expect(await store.claimJob(id as number)).toBe(true);
+    expect(await store.claimJob(id as number)).toBe(false);
+    await store.finishJob(id as number, 'done', { ok: true });
+    expect(await store.pendingJobs()).toEqual([]);
+  });
+
   it('eventos, peticiones y remitentes', async () => {
     await store.recordRequest(true, { object: 'instagram' });
     await store.logEvent('comment', 'nota', { text: 'hola 👋' });

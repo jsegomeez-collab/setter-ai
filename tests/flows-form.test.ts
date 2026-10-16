@@ -27,7 +27,7 @@ describe('formulario → flujo', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.flow.nodes).toEqual([
-      { id: 'start', type: 'message', text: EMPTY_FORM.startText, buttons: [{ type: 'url', title: 'Ver recurso', url: 'https://example.com/x' }] },
+      { id: 'start', type: 'message', text: EMPTY_FORM.startText, buttons: [{ type: 'url', title: 'Ver recurso', url: 'https://example.com/x', tags: [] }] },
     ]);
     expect(result.flow.trigger.keywords).toEqual(['info', 'guía']);
   });

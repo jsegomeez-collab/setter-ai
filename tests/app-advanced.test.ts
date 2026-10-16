@@ -1,0 +1,125 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createApp } from '../src/app.js';
+import type { Config } from '../src/config.js';
+import { createLinkToken, deriveLinkSecret } from '../src/links.js';
+import { TokenManager } from '../src/meta/token.js';
+import { JOSE_FLOW } from './fixtures.js';
+import { createMemoryStore } from './helpers.js';
+
+const config: Config = {
+  port: 3000,
+  databaseUrl: 'postgres://no-se-usa',
+  adminPassword: 'contraseña-larga-123',
+  webhookVerifyToken: 'token-verificacion',
+  appSecrets: ['secreto-ig'],
+  igAccessToken: null,
+  igApiVersion: 'v25.0',
+  tokenEncryptionKey: 'clave-de-cifrado-larga-123',
+  sendLimitPerHour: 120,
+  sendDelayMinMs: 2000,
+  sendDelayMaxMs: 5000,
+  publicBaseUrl: 'https://setter.example.com',
+};
+const SECRET = deriveLinkSecret(config.tokenEncryptionKey as string);
+const auth = `Basic ${Buffer.from(`jose:${config.adminPassword}`).toString('base64')}`;
+const HOST = 'http://localhost';
+
+function setup(linkSecret: string | null = SECRET) {
+  const store = createMemoryStore();
+  const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
+  const app = createApp({ config, store, client: null, tokens, linkSecret, processPayload: vi.fn() });
+  return { app, store };
+}
+
+const jsonPost = (path: string, json: string, origin = HOST) =>
+  new Request(`${HOST}${path}`, {
+    method: 'POST',
+    headers: { authorization: auth, origin, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ json }).toString(),
+  });
+
+describe('enlaces con seguimiento /l/:token', () => {
+  it('registra el clic, añade las etiquetas al contacto y redirige al destino real', async () => {
+    const { app, store } = setup();
+    const token = createLinkToken(SECRET, { f: 'manychat1', n: 'biblioteca', b: 0, r: '9', u: 'https://biblioteca.example.com', t: ['biblioteca'] });
+    const res = await app.request(`/l/${token}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://biblioteca.example.com');
+    expect(store.contacts.get('9')?.tags).toEqual(['biblioteca']);
+    expect(store.events[0]?.kind).toBe('click');
+  });
+
+  it('enlace falso o seguimiento desactivado → 404 (nunca redirige a sitios no firmados)', async () => {
+    expect((await setup().app.request('/l/falso.falso')).status).toBe(404);
+    const token = createLinkToken(SECRET, { f: 'f', n: 'n', b: 0, r: '9', u: 'https://a.com', t: [] });
+    expect((await setup(null).app.request(`/l/${token}`)).status).toBe(404);
+  });
+
+  it('si falla el registro, la persona igualmente llega a su destino', async () => {
+    const { app, store } = setup();
+    store.logEvent = vi.fn().mockRejectedValue(new Error('BD caída'));
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const token = createLinkToken(SECRET, { f: 'f', n: 'n', b: 0, r: '9', u: 'https://a.com', t: [] });
+    expect((await app.request(`/l/${token}`)).status).toBe(302);
+    stderr.mockRestore();
+  });
+});
+
+describe('editor JSON de flujos avanzados', () => {
+  it('muestra un ejemplo al crear y guarda un flujo válido', async () => {
+    const { app, store } = setup();
+    const page = await (await app.request('/flujos/nuevo-json', { headers: { authorization: auth } })).text();
+    expect(page).toContain('Mi flujo avanzado');
+    const res = await app.request(jsonPost('/flujos/nuevo-json', JSON.stringify(JOSE_FLOW)));
+    expect(res.status).toBe(303);
+    expect(store.flows.get('manychat1')).toMatchObject({ name: 'Réplica ManyChat', template: 'json' });
+  });
+
+  it('JSON roto, flujo inválido o id repetido → 400 con explicación', async () => {
+    const { app, store } = setup();
+    expect(await (await app.request(jsonPost('/flujos/nuevo-json', '{roto'))).text()).toContain('no es válido');
+    const bad = { ...JOSE_FLOW, startNodeId: 'nada' };
+    const res = await app.request(jsonPost('/flujos/nuevo-json', JSON.stringify(bad)));
+    expect(res.status).toBe(400);
+    await app.request(jsonPost('/flujos/nuevo-json', JSON.stringify(JOSE_FLOW)));
+    expect(await (await app.request(jsonPost('/flujos/nuevo-json', JSON.stringify(JOSE_FLOW)))).text()).toContain('Ya existe');
+    expect(store.flows.size).toBe(1);
+  });
+
+  it('editar: la URL manda el id; un flujo avanzado se abre en el editor JSON', async () => {
+    const { app, store } = setup();
+    await app.request(jsonPost('/flujos/nuevo-json', JSON.stringify(JOSE_FLOW)));
+    await app.request(jsonPost('/flujos/manychat1/json', JSON.stringify({ ...JOSE_FLOW, id: 'otro', name: 'Cambiado' })));
+    expect([...store.flows.keys()]).toEqual(['manychat1']);
+    expect(store.flows.get('manychat1')?.name).toBe('Cambiado');
+    const page = await (await app.request('/flujos/manychat1', { headers: { authorization: auth } })).text();
+    expect(page).toContain('Editar flujo avanzado');
+  });
+
+  it('crear sin id genera uno; CSRF bloquea envíos desde otra web', async () => {
+    const { app, store } = setup();
+    const { id: _ignored, ...withoutId } = JOSE_FLOW;
+    await app.request(jsonPost('/flujos/nuevo-json', JSON.stringify(withoutId)));
+    expect([...store.flows.keys()][0]).toMatch(/^[A-Za-z0-9]{8}$/);
+    expect((await app.request(jsonPost('/flujos/nuevo-json', JSON.stringify(JOSE_FLOW), 'https://malicioso.com'))).status).toBe(403);
+  });
+});
+
+describe('contactos y estado', () => {
+  it('lista contactos con sus etiquetas (pide contraseña)', async () => {
+    const { app, store } = setup();
+    expect((await app.request('/contactos')).status).toBe(401);
+    await store.touchContact('9', 'josegomezlife');
+    await store.addContactTags('9', ['biblioteca']);
+    const html = await (await app.request('/contactos', { headers: { authorization: auth } })).text();
+    expect(html).toContain('@josegomezlife');
+    expect(html).toContain('biblioteca');
+  });
+
+  it('el estado indica si los enlaces con seguimiento están activos', async () => {
+    const on = await (await setup().app.request('/eventos', { headers: { authorization: auth } })).text();
+    expect(on).toContain('✔ activos');
+    const off = await (await setup(null).app.request('/eventos', { headers: { authorization: auth } })).text();
+    expect(off).toContain('desactivados');
+  });
+});

@@ -21,6 +21,8 @@ export interface Config {
   readonly sendLimitPerHour: number;
   readonly sendDelayMinMs: number;
   readonly sendDelayMaxMs: number;
+  /** URL pública del servidor (para los enlaces con seguimiento). Render la da en RENDER_EXTERNAL_URL. */
+  readonly publicBaseUrl: string | null;
 }
 
 type Env = Record<string, string | undefined>;
@@ -81,5 +83,6 @@ export function loadConfig(env: Env = process.env): Config {
     sendLimitPerHour: positiveInt(env, 'SEND_LIMIT_PER_HOUR', DEFAULT_SEND_LIMIT_PER_HOUR),
     sendDelayMinMs,
     sendDelayMaxMs,
+    publicBaseUrl: clean(env.PUBLIC_BASE_URL) ?? clean(env.RENDER_EXTERNAL_URL),
   };
 }

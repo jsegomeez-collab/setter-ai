@@ -1,6 +1,6 @@
 import type { Account } from './meta/client.js';
 import type { TokenStatus } from './meta/token.js';
-import type { ActionRow, EventRow } from './store.js';
+import type { ActionRow, ContactRow, EventRow } from './store.js';
 
 const MAX_JSON_PREVIEW = 1500;
 
@@ -22,7 +22,7 @@ export function status(ok: boolean, yes: string, no: string): string {
   return ok ? `<span class="ok">✔ ${escapeHtml(yes)}</span>` : `<span class="bad">✘ ${escapeHtml(no)}</span>`;
 }
 
-const NAV = `<nav><a href="/eventos">Estado y eventos</a> · <a href="/flujos">Flujos</a></nav>`;
+const NAV = `<nav><a href="/eventos">Estado y eventos</a> · <a href="/flujos">Flujos</a> · <a href="/contactos">Contactos</a></nav>`;
 
 export function layout(title: string, body: string): string {
   return `<!doctype html>
@@ -69,6 +69,21 @@ export function legalPage(kind: 'privacy' | 'terms' | 'data-deletion'): string {
   return layout(page.title, `<h1>${page.title}</h1>${page.body}`);
 }
 
+export function contactsPage(contacts: readonly ContactRow[]): string {
+  const rows = contacts
+    .map(
+      (contact) => `<tr><td>${contact.username ? `@${escapeHtml(contact.username)}` : '<small>(sin usuario)</small>'}<br><small>${escapeHtml(contact.igId)}</small></td>
+<td>${contact.tags.map((tag) => `<span class="ok">${escapeHtml(tag)}</span>`).join(', ')}</td>
+<td>${escapeHtml(contact.firstSeen.toISOString())}</td><td>${escapeHtml(contact.lastSeen.toISOString())}</td></tr>`,
+    )
+    .join('');
+  return layout(
+    'Contactos',
+    `<h1>Contactos</h1><p>Personas que han comentado, pulsado un botón o escrito. Las etiquetas se añaden al pulsar enlaces con etiquetas.</p>
+<table><tr><th>Persona</th><th>Etiquetas</th><th>Primera vez (UTC)</th><th>Última vez (UTC)</th></tr>${rows || '<tr><td colspan="4">Todavía no hay contactos.</td></tr>'}</table>`,
+  );
+}
+
 export interface DashboardData {
   readonly account: Account | null;
   readonly accountError: string | null;
@@ -80,6 +95,7 @@ export interface DashboardData {
   readonly limitPerHour: number;
   readonly activeFlows: number;
   readonly totalFlows: number;
+  readonly linkTracking: boolean;
   readonly events: readonly EventRow[];
   readonly actions: readonly ActionRow[];
   readonly flash: string | null;
@@ -127,6 +143,7 @@ ${data.flash ? `<div class="card">${escapeHtml(data.flash)}</div>` : ''}
   <div>App Secret (firma de avisos): ${status(data.secretConfigured, 'configurado', 'falta META_APP_SECRET')}</div>
   <div>Anti-ban: ${pauseBlock(data)} · envíos última hora: <strong>${data.sendsLastHour}</strong> / ${data.limitPerHour}</div>
   <div>Flujos: <strong>${data.activeFlows}</strong> activos de ${data.totalFlows} · <a href="/flujos">gestionar flujos</a></div>
+  <div>Enlaces con seguimiento (clics + etiquetas): ${status(data.linkTracking, 'activos', 'desactivados (falta URL pública o TOKEN_ENCRYPTION_KEY)')}</div>
   <p><form class="inline" method="post" action="/eventos/suscribir"><button>Activar suscripción de la cuenta (comments + messages)</button></form>
   <form class="inline" method="post" action="/eventos/renovar-token"><button>Renovar token ahora</button></form>
   <a href="/eventos">↻ Recargar</a></p>

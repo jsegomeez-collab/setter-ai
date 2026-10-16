@@ -108,7 +108,7 @@ function buildNodes(form: FlowForm): Flow['nodes'] {
         id: NODE.start,
         type: 'message',
         text: form.startText,
-        buttons: form.linkUrl ? [{ type: 'url', title: form.linkTitle, url: form.linkUrl }] : [],
+        buttons: form.linkUrl ? [{ type: 'url', title: form.linkTitle, url: form.linkUrl, tags: [] }] : [],
       },
     ];
   }
@@ -119,7 +119,7 @@ function buildNodes(form: FlowForm): Flow['nodes'] {
       id: NODE.resource,
       type: 'message',
       text: form.resourceText,
-      buttons: form.resourceUrl ? [{ type: 'url', title: form.resourceButtonTitle, url: form.resourceUrl }] : [],
+      buttons: form.resourceUrl ? [{ type: 'url', title: form.resourceButtonTitle, url: form.resourceUrl, tags: [] }] : [],
     },
     { id: NODE.notFollowing, type: 'message', text: form.notFollowingText, buttons: [{ type: 'postback', title: form.retryButtonTitle, next: NODE.gate }] },
   ];

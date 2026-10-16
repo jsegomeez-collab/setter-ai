@@ -1,5 +1,5 @@
 import type { Flow } from '../src/flows/types.js';
-import { SEND_ACTION_TYPES, type ActionRow, type EventRow, type Store } from '../src/store.js';
+import { SEND_ACTION_TYPES, type ActionRow, type ContactRow, type EventRow, type JobRow, type Store } from '../src/store.js';
 
 /** Base de datos falsa en memoria con el mismo comportamiento que la de Postgres. */
 export function createMemoryStore(): Store & {
@@ -9,7 +9,12 @@ export function createMemoryStore(): Store & {
   settings: Map<string, string | null>;
   allowed: string[];
   flows: Map<string, Flow>;
+  contacts: Map<string, ContactRow>;
+  jobs: Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>;
 } {
+  const contacts = new Map<string, ContactRow>();
+  const jobs = new Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>();
+  let nextJobId = 1;
   const requests: { signatureOk: boolean; payload: unknown }[] = [];
   const events: EventRow[] = [];
   const actions = new Map<string, ActionRow & { request: unknown }>();
@@ -25,6 +30,41 @@ export function createMemoryStore(): Store & {
     settings,
     allowed,
     flows,
+    contacts,
+    jobs,
+    async touchContact(igId, username) {
+      const now = new Date();
+      const current = contacts.get(igId);
+      contacts.set(igId, current ? { ...current, username: username ?? current.username, lastSeen: now } : { igId, username, tags: [], firstSeen: now, lastSeen: now });
+    },
+    async addContactTags(igId, tags) {
+      if (tags.length === 0) return;
+      const now = new Date();
+      const current = contacts.get(igId) ?? { igId, username: null, tags: [], firstSeen: now, lastSeen: now };
+      contacts.set(igId, { ...current, tags: [...new Set([...current.tags, ...tags])].sort(), lastSeen: now });
+    },
+    async listContacts(limit) {
+      return [...contacts.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime()).slice(0, limit);
+    },
+    async scheduleJob(dedupKey, runAt, payload) {
+      if ([...jobs.values()].some((job) => job.dedupKey === dedupKey)) return null;
+      const id = nextJobId++;
+      jobs.set(id, { id, runAt, payload, dedupKey, status: 'pending', result: null });
+      return id;
+    },
+    async pendingJobs() {
+      return [...jobs.values()].filter((job) => job.status === 'pending').map(({ id, runAt, payload }) => ({ id, runAt, payload }));
+    },
+    async claimJob(id) {
+      const job = jobs.get(id);
+      if (!job || job.status !== 'pending') return false;
+      jobs.set(id, { ...job, status: 'running' });
+      return true;
+    },
+    async finishJob(id, status, result) {
+      const job = jobs.get(id);
+      if (job) jobs.set(id, { ...job, status, result });
+    },
     async listFlows() {
       return [...flows.values()];
     },
@@ -113,7 +153,7 @@ export function followFlow(overrides: Partial<Flow> = {}): Flow {
     nodes: [
       { id: 'start', type: 'message', text: 'Hola, pulsa el botón', buttons: [{ type: 'postback', title: 'Lo quiero', next: 'gate' }] },
       { id: 'gate', type: 'follow_gate', ifFollowing: 'resource', ifNotFollowing: 'notfollow', ifUnknown: 'resource' },
-      { id: 'resource', type: 'message', text: 'Aquí lo tienes', buttons: [{ type: 'url', title: 'Abrir', url: 'https://example.com/recurso' }] },
+      { id: 'resource', type: 'message', text: 'Aquí lo tienes', buttons: [{ type: 'url', title: 'Abrir', url: 'https://example.com/recurso', tags: ['biblioteca'] }] },
       { id: 'notfollow', type: 'message', text: 'Sígueme primero', buttons: [{ type: 'postback', title: 'Ya te sigo', next: 'gate' }] },
     ],
     testUsernames: [],
