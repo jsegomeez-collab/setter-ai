@@ -64,6 +64,13 @@ describe('processWebhook con flujos', () => {
     expect(notes).toContain('leído');
   });
 
+  it('apunta de qué reel viene cada persona aunque ningún flujo salte', async () => {
+    const { deps, store } = setup([]);
+    await processWebhook(commentPayload(), deps);
+    expect(store.contacts.get(STRANGER_ID)).toMatchObject({ username: 'cuenta_prueba', sourceMediaId: '18000000000000001' });
+    expect(await store.reelStats()).toEqual([{ mediaId: '18000000000000001', comments: 1, people: 1, tagged: {} }]);
+  });
+
   it('aviso vacío → "vacio"', async () => {
     const { deps, store } = setup();
     await processWebhook({ object: 'instagram', entry: [] }, deps);

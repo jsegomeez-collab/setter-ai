@@ -1,5 +1,5 @@
 import type { Flow } from '../src/flows/types.js';
-import { SEND_ACTION_TYPES, type ActionRow, type ContactRow, type EventRow, type JobRow, type Store } from '../src/store.js';
+import { SEND_ACTION_TYPES, type ActionRow, type CommentRecord, type ContactRow, type EventRow, type JobRow, type Store } from '../src/store.js';
 
 /** Base de datos falsa en memoria con el mismo comportamiento que la de Postgres. */
 export function createMemoryStore(): Store & {
@@ -13,6 +13,7 @@ export function createMemoryStore(): Store & {
   jobs: Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>;
 } {
   const contacts = new Map<string, ContactRow>();
+  const comments: CommentRecord[] = [];
   const jobs = new Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>();
   let nextJobId = 1;
   const requests: { signatureOk: boolean; payload: unknown }[] = [];
@@ -32,15 +33,41 @@ export function createMemoryStore(): Store & {
     flows,
     contacts,
     jobs,
-    async touchContact(igId, username) {
+    async touchContact(igId, username, mediaId = null) {
       const now = new Date();
       const current = contacts.get(igId);
-      contacts.set(igId, current ? { ...current, username: username ?? current.username, lastSeen: now } : { igId, username, tags: [], firstSeen: now, lastSeen: now });
+      contacts.set(
+        igId,
+        current
+          ? {
+              ...current,
+              username: username ?? current.username,
+              sourceMediaId: current.sourceMediaId ?? mediaId,
+              lastMediaId: mediaId ?? current.lastMediaId,
+              lastSeen: now,
+            }
+          : { igId, username, tags: [], firstSeen: now, lastSeen: now, sourceMediaId: mediaId, lastMediaId: mediaId },
+      );
+    },
+    async recordComment(comment) {
+      if (!comments.some((c) => c.commentId === comment.commentId)) comments.push(comment);
+    },
+    async reelStats() {
+      const byMedia = new Map<string, CommentRecord[]>();
+      for (const c of comments) if (c.mediaId) byMedia.set(c.mediaId, [...(byMedia.get(c.mediaId) ?? []), c]);
+      return [...byMedia.entries()].map(([mediaId, list]) => {
+        const tagged: Record<string, number> = {};
+        for (const contact of contacts.values()) {
+          if (contact.sourceMediaId !== mediaId) continue;
+          for (const tag of contact.tags) tagged[tag] = (tagged[tag] ?? 0) + 1;
+        }
+        return { mediaId, comments: list.length, people: new Set(list.map((c) => c.igId)).size, tagged };
+      });
     },
     async addContactTags(igId, tags) {
       if (tags.length === 0) return;
       const now = new Date();
-      const current = contacts.get(igId) ?? { igId, username: null, tags: [], firstSeen: now, lastSeen: now };
+      const current = contacts.get(igId) ?? { igId, username: null, tags: [], firstSeen: now, lastSeen: now, sourceMediaId: null, lastMediaId: null };
       contacts.set(igId, { ...current, tags: [...new Set([...current.tags, ...tags])].sort(), lastSeen: now });
     },
     async listContacts(limit) {

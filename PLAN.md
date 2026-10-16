@@ -1,8 +1,8 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-16
-> Estado general: **Fase 2 en curso** (motor de flujos de comentarios). Fase 1 terminada ✅.
-> Modo seguro activo en producción: DMs desactivados y reel de prueba = "00000" (no responde a nada).
+> Estado general: **Fase 2 en curso** (réplica de ManyChat probada; falta pasarla a producción). Fase 1 terminada ✅.
+> En producción solo hay flujos en **modo prueba** (@josegomezlife). ManyChat sigue atendiendo al público.
 
 ## Objetivo
 
@@ -10,8 +10,8 @@ Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para
 
 1. **Automatización de comentarios:** responde en público a los comentarios de los reels y manda un DM con el recurso, con **botones** (enlaces o acciones) y **condiciones** (p. ej. "¿me sigue?").
 2. **Setter con IA (corazón del proyecto):** con la información del negocio de Jose (oferta, FAQs, objeciones), habla con quien **responde** por DM como lo haría un setter: crea rapport, cualifica (¿tiene negocio?, tipo, facturación…) y más adelante ofrece llamada.
-3. **Inteligencia comercial:** guarda todo para saber qué objeciones hay, qué tipo de personas escriben y qué reel trae mejores leads.
-4. **Constructor visual de flujos (fase final):** una web para crear flujos sin tocar código: condiciones de seguimiento, botones a enlaces, mensajes, pasos hacia el setter IA, etc.
+3. **Inteligencia comercial y de contenido, 100 % medida:** todas las conversaciones se analizan **masivamente** con IA para extraer objeciones nuevas, datos de mercado y **ángulos de contenido**; y todo se mide (por reel, por etiqueta, por etapa del embudo).
+4. **Software de gestión completo (fase final):** un frontend con **todas** las funciones: constructor visual de flujos (condiciones, botones a enlaces…), conversaciones, contactos, setter IA, análisis, métricas y configuración. Desde ahí se gestiona absolutamente todo.
 
 ## Decisiones tomadas (no reabrir sin preguntar a Jose)
 
@@ -23,7 +23,8 @@ Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para
 | 2026-10-16 | Código propio. Referencias MIT: **OpenSetter** (setter), **OpenReply** y **open-autodm** (comentarios). |
 | 2026-10-16 | ManyChat se apaga cuando la Fase 2 iguale su flujo actual en un reel real. Hasta entonces sigue en vivo. |
 | 2026-10-16 | Audiencia: **USA y LATAM**. |
-| 2026-10-16 | **Fase final = frontend constructor visual de flujos.** Los flujos se guardan desde la Fase 2 en un formato de nodos genérico para que el constructor solo tenga que editarlos. |
+| 2026-10-16 | **Fase final = frontend completo (software de gestión de todo)**, incluido el constructor visual de flujos. Los flujos se guardan desde la Fase 2 en un formato de nodos genérico para que el constructor solo tenga que editarlos. |
+| 2026-10-16 | **Todo medido:** cada comentario guarda su reel de origen; cada clic, etiqueta y paso del flujo queda registrado. Las conversaciones se analizan en masa (objeciones, mercado, ángulos de contenido). |
 
 Datos de Jose: cuenta Creator pública @josenews.ai (Meta Verified), cuenta de pruebas @josegomezlife, LLC en USA con EIN, ManyChat Pro, GitHub + Render + Neon, API key de Anthropic, oferta/FAQs/objeciones por escrito.
 
@@ -84,7 +85,10 @@ Progreso:
 - [x] Renovación automática del token **comprobada en producción** (13:40 UTC: origen BD, caduca 2026-12-15).
 - [x] Réplica del flujo de ManyChat creada en producción (id `manychat`, modo prueba @josegomezlife, reel de prueba). URLs de biblioteca y WhatsApp = **provisionales** (faltan las reales).
 - [ ] 8b: prueba real de la réplica (incl. rama "no sigue", clic en enlaces → etiquetas, pausa de 2 min → mensaje del grupo).
-- [ ] 8c: con las URLs/respuestas reales de Jose → quitar modo prueba, pasar a "todos los reels" y apagar ManyChat a la vez (decide Jose).
+- [x] 8b: prueba real 14:15-14:17 UTC: rama "no sigue" ✅ (×2), "Ya te seguí" → sí ✅, biblioteca ✅, clic → etiqueta "biblioteca" ✅, pausa 2 min → mensaje del grupo ✅. Sin registrar: clic en "UNIRME AL GRUPO" (¿no se pulsó?).
+- [x] Datos reales recibidos: biblioteca https://biblioteca.codigomaestria.com, grupo https://chat.whatsapp.com/B7CxsuLbf82IyJmT6LJ2BE (ambos responden 200), 5 respuestas públicas de ManyChat, disparador = todos los posts + cualquier comentario.
+- [x] Origen por reel (petición de Jose): tabla `comments` + reel de origen/último en contactos + resumen por reel en /contactos. Se registra en TODOS los comentarios, salte o no un flujo. 132 pruebas.
+- [ ] 8c: pasar la réplica a producción (todos los reels, sin modo prueba) y apagar ManyChat a la vez (decide Jose cuándo).
 - [x] Renovación de token: funcionó el mismo día (Meta no exigió las 24 h que dice la doc).
 
 **Necesito de Jose (al final de la fase):** cómo es hoy su flujo de ManyChat (textos, botones, condición de seguir, recurso) para replicarlo.
@@ -101,20 +105,38 @@ Progreso:
 
 **Hecha cuando:** 10-20 conversaciones de prueba salen bien según Jose.
 
-### Fase 4 — Fichas de leads e inteligencia comercial ⏳
+### Fase 4 — Fichas de leads, análisis masivo y medición ⏳
 
-- Ficha por lead: tiene negocio, tipo/nicho, facturación aproximada, problema principal, objeciones, interés, etapa, resumen, reel de origen.
-- Panel: conversaciones, fichas, ranking de objeciones, estadísticas por reel, pausar la IA por conversación, aprobar borradores.
+**Para qué:** que cada conversación se convierta en datos útiles para vender y para crear contenido, y que todo esté medido.
+
+- **Ficha por lead** (extraída por IA de cada conversación): tiene negocio, tipo/nicho, facturación aproximada, problema principal, objeciones, interés, etapa, resumen, reel de origen.
+- **Análisis masivo de conversaciones** (por lotes, sobre todas las conversaciones):
+  - **Objeciones**: catálogo vivo, objeciones nuevas detectadas, frecuencia y tendencia.
+  - **Datos de mercado**: nichos, tamaño de negocio, dolores, deseos, lenguaje literal que usa la gente.
+  - **Ángulos de contenido**: ideas de reels/ganchos sacadas de lo que pregunta y objeta la gente, con ejemplos reales.
+  - Cada hallazgo enlazado a las conversaciones de las que sale (trazable, nada inventado).
+- **Medición 100 %:**
+  - Embudo: comentario → DM → botón → sigue → clic en recurso → responde → cualificado → llamada.
+  - Por reel, por flujo, por etiqueta y por día. (Base ya creada en Fase 2: reel de origen, comentarios, clics, etiquetas.)
+  - Rendimiento del setter IA: respuestas, tiempos, conversaciones que avanzan de etapa.
+- Panel (provisional hasta la Fase 6): conversaciones, fichas, objeciones, ángulos, estadísticas, pausar la IA por conversación, aprobar borradores.
 
 ### Fase 5 — Ofrecer llamadas ⏳
 
-- Enlace de agenda solo a cualificados. Se detalla al llegar.
+- Enlace de agenda solo a cualificados, medido (ofrecidas → reservadas). Se detalla al llegar.
 
-### Fase 6 (FINAL) — Frontend constructor visual de flujos ⏳
+### Fase 6 (FINAL) — Software de gestión completo (frontend) ⏳
 
-- Web para crear y editar flujos sin código: disparadores, mensajes, **botones a enlaces**, **condiciones de seguimiento**, esperas, pasar al setter IA, etiquetas…
-- Edita el mismo formato de nodos creado en la Fase 2.
-- Une en una sola web todo lo de las fases 2-5 (flujos, conversaciones, fichas, estadísticas).
+**Para qué:** una sola web, como un software profesional, desde la que se gestiona **absolutamente todo**.
+
+- **Constructor visual de flujos**: disparadores, mensajes, **botones a enlaces**, **condiciones de seguimiento**, pausas, etiquetas, pasar al setter IA… (edita el formato de nodos de la Fase 2).
+- **Bandeja de conversaciones**: ver, filtrar, responder a mano, pausar/activar la IA, aprobar borradores.
+- **Contactos / CRM**: fichas, etiquetas, reel de origen, historial completo.
+- **Setter IA**: base de conocimiento (oferta, FAQs, objeciones), instrucciones, modo borrador/automático.
+- **Inteligencia**: objeciones, datos de mercado, ángulos de contenido, con su evidencia.
+- **Métricas y embudo**: todo lo medido en la Fase 4, con gráficos y filtros.
+- **Configuración**: cuenta de Instagram, token, anti-ban, límites, estado del sistema.
+- Acceso seguro (login) desde cualquier dispositivo.
 
 ---
 
@@ -160,3 +182,4 @@ Progreso:
 - 2026-10-16 — Plan creado. Fase 0 terminada.
 - 2026-10-16 — Fase 1: código subido (48c4377), app de Meta publicada y conectada, prueba punta a punta OK.
 - 2026-10-16 — Plan reorganizado: el setter IA es el corazón; nueva Fase 6 final = constructor visual de flujos. Empieza la Fase 2.
+- 2026-10-16 — Plan ampliado (Jose): Fase 4 = análisis masivo de conversaciones (objeciones, mercado, ángulos de contenido) + medición 100 %; Fase 6 = software de gestión completo. Origen por reel implementado.

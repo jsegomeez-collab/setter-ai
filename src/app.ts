@@ -17,6 +17,8 @@ const DASHBOARD_ROWS = 60;
 const MEDIA_FOR_FORM = 25;
 const HOUR_MS = 60 * 60 * 1000;
 const CONTACTS_ROWS = 200;
+/** Reels recientes que se cargan para poner nombre a los IDs en Contactos (los más antiguos salen por ID). */
+const MEDIA_FOR_STATS = 50;
 
 /** Ejemplo que aparece al crear un flujo avanzado: mensaje con botón → mensaje con enlace con etiqueta → pausa → mensaje. */
 const EXAMPLE_JSON_FLOW = {
@@ -277,6 +279,13 @@ export function createApp(deps: AppDeps): Hono {
 
   registerDashboard(app, deps);
   registerFlows(app, deps);
-  app.get('/contactos', async (c) => c.html(contactsPage(await deps.store.listContacts(CONTACTS_ROWS))));
+  app.get('/contactos', async (c) => {
+    const [contacts, stats, media] = await Promise.all([
+      deps.store.listContacts(CONTACTS_ROWS),
+      deps.store.reelStats(),
+      loadMedia(deps.client, MEDIA_FOR_STATS),
+    ]);
+    return c.html(contactsPage(contacts, stats, media));
+  });
   return app;
 }

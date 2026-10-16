@@ -42,7 +42,15 @@ async function planFor(event: InstagramEvent, deps: ProcessDeps): Promise<Plan |
 /** Guarda o actualiza a la persona en contactos (base de la Fase 4). Nunca la propia cuenta. */
 async function touchContact(event: InstagramEvent, store: Store): Promise<void> {
   if (event.kind === 'comment' && event.fromId !== event.accountId) {
-    await store.touchContact(event.fromId, event.fromUsername);
+    // Se apunta de qué reel viene cada persona, aunque ningún flujo salte.
+    await store.touchContact(event.fromId, event.fromUsername, event.mediaId);
+    await store.recordComment({
+      commentId: event.commentId,
+      igId: event.fromId,
+      username: event.fromUsername,
+      mediaId: event.mediaId,
+      text: event.text,
+    });
   } else if ((event.kind === 'postback' || (event.kind === 'message' && !event.isEcho)) && event.senderId !== event.accountId) {
     await store.touchContact(event.senderId, null);
   }

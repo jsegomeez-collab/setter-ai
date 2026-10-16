@@ -1,6 +1,6 @@
-import type { Account } from './meta/client.js';
+import type { Account, Media } from './meta/client.js';
 import type { TokenStatus } from './meta/token.js';
-import type { ActionRow, ContactRow, EventRow } from './store.js';
+import type { ActionRow, ContactRow, EventRow, ReelStatsRow } from './store.js';
 
 const MAX_JSON_PREVIEW = 1500;
 
@@ -69,18 +69,37 @@ export function legalPage(kind: 'privacy' | 'terms' | 'data-deletion'): string {
   return layout(page.title, `<h1>${page.title}</h1>${page.body}`);
 }
 
-export function contactsPage(contacts: readonly ContactRow[]): string {
+function reelName(media: readonly Media[], mediaId: string | null): string {
+  if (!mediaId) return '<small>—</small>';
+  const item = media.find((candidate) => candidate.id === mediaId);
+  const label = item ? `${item.timestamp?.slice(0, 10) ?? ''} · ${(item.caption ?? '').slice(0, 45)}` : mediaId;
+  return item?.permalink
+    ? `<a href="${escapeHtml(item.permalink)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`
+    : escapeHtml(label);
+}
+
+export function contactsPage(contacts: readonly ContactRow[], stats: readonly ReelStatsRow[], media: readonly Media[]): string {
+  const statRows = stats
+    .map(
+      (row) => `<tr><td>${reelName(media, row.mediaId)}</td><td>${row.comments}</td><td>${row.people}</td>
+<td>${Object.entries(row.tagged).map(([tag, n]) => `${escapeHtml(tag)}: <strong>${n}</strong>`).join(' · ') || '—'}</td></tr>`,
+    )
+    .join('');
   const rows = contacts
     .map(
       (contact) => `<tr><td>${contact.username ? `@${escapeHtml(contact.username)}` : '<small>(sin usuario)</small>'}<br><small>${escapeHtml(contact.igId)}</small></td>
 <td>${contact.tags.map((tag) => `<span class="ok">${escapeHtml(tag)}</span>`).join(', ')}</td>
+<td>${reelName(media, contact.sourceMediaId)}</td><td>${reelName(media, contact.lastMediaId)}</td>
 <td>${escapeHtml(contact.firstSeen.toISOString())}</td><td>${escapeHtml(contact.lastSeen.toISOString())}</td></tr>`,
     )
     .join('');
   return layout(
     'Contactos',
-    `<h1>Contactos</h1><p>Personas que han comentado, pulsado un botón o escrito. Las etiquetas se añaden al pulsar enlaces con etiquetas.</p>
-<table><tr><th>Persona</th><th>Etiquetas</th><th>Primera vez (UTC)</th><th>Última vez (UTC)</th></tr>${rows || '<tr><td colspan="4">Todavía no hay contactos.</td></tr>'}</table>`,
+    `<h1>Contactos</h1>
+<h2>Por reel</h2><p><small>Comentarios recibidos, personas distintas y cuántas de las que llegaron por ese reel tienen cada etiqueta.</small></p>
+<table><tr><th>Reel</th><th>Comentarios</th><th>Personas</th><th>Etiquetas (de quien vino por este reel)</th></tr>${statRows || '<tr><td colspan="4">Todavía no hay comentarios registrados.</td></tr>'}</table>
+<h2>Personas</h2><p><small>Quien ha comentado, pulsado un botón o escrito. Las etiquetas se añaden al pulsar enlaces con etiquetas.</small></p>
+<table><tr><th>Persona</th><th>Etiquetas</th><th>Reel de origen</th><th>Último reel</th><th>Primera vez (UTC)</th><th>Última vez (UTC)</th></tr>${rows || '<tr><td colspan="6">Todavía no hay contactos.</td></tr>'}</table>`,
   );
 }
 

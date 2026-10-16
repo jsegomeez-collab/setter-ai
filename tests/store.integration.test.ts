@@ -79,6 +79,23 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(contacts.find((c) => c.igId === '888')?.tags).toEqual(['solo-etiqueta']);
   });
 
+  it('origen por reel: el primero se conserva, el último cambia, y el resumen por reel cuenta bien', async () => {
+    await store.touchContact('500', 'ana', '1111111');
+    await store.recordComment({ commentId: 'k1', igId: '500', username: 'ana', mediaId: '1111111', text: 'hola' });
+    await store.recordComment({ commentId: 'k1', igId: '500', username: 'ana', mediaId: '1111111', text: 'hola' });
+    await store.touchContact('500', 'ana', '2222222');
+    await store.recordComment({ commentId: 'k2', igId: '500', username: 'ana', mediaId: '2222222', text: 'otra' });
+    await store.touchContact('500', null);
+    await store.touchContact('600', 'luis', '1111111');
+    await store.recordComment({ commentId: 'k3', igId: '600', username: 'luis', mediaId: '1111111', text: '🔥' });
+    await store.addContactTags('500', ['biblioteca']);
+    const ana = (await store.listContacts(50)).find((c) => c.igId === '500');
+    expect(ana).toMatchObject({ sourceMediaId: '1111111', lastMediaId: '2222222', username: 'ana' });
+    const stats = await store.reelStats();
+    expect(stats.find((s) => s.mediaId === '1111111')).toEqual({ mediaId: '1111111', comments: 2, people: 2, tagged: { biblioteca: 1 } });
+    expect(stats.find((s) => s.mediaId === '2222222')).toMatchObject({ comments: 1, people: 1, tagged: {} });
+  });
+
   it('pausas programadas: guardar, no duplicar, coger una sola vez y terminar', async () => {
     const runAt = new Date('2026-10-16T12:02:00.000Z');
     const id = await store.scheduleJob('job:a', runAt, { flowId: 'f', nodeId: 'n', recipientId: '1', dedupKey: 'a', depth: 1 });

@@ -116,6 +116,17 @@ describe('contactos y estado', () => {
     expect(html).toContain('biblioteca');
   });
 
+  it('contactos muestra el reel de origen y el resumen por reel', async () => {
+    const { app, store } = setup();
+    await store.touchContact('9', 'josegomezlife', '18094491215151712');
+    await store.recordComment({ commentId: 'c1', igId: '9', username: 'josegomezlife', mediaId: '18094491215151712', text: '🔥' });
+    await store.addContactTags('9', ['biblioteca']);
+    const html = await (await app.request('/contactos', { headers: { authorization: auth } })).text();
+    expect(html).toContain('Por reel');
+    expect(html).toContain('18094491215151712');
+    expect(html).toContain('biblioteca: <strong>1</strong>');
+  });
+
   it('el estado indica si los enlaces con seguimiento están activos', async () => {
     const on = await (await setup().app.request('/eventos', { headers: { authorization: auth } })).text();
     expect(on).toContain('✔ activos');

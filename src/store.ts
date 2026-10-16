@@ -8,8 +8,12 @@ export interface Store {
   deleteFlow(id: string): Promise<void>;
   /** Envíos a Instagram (acciones terminadas o en curso) desde una fecha. Para el límite por hora. */
   countSendsSince(since: Date): Promise<number>;
-  /** Contactos: alta o actualización (username y última vez visto). */
-  touchContact(igId: string, username: string | null): Promise<void>;
+  /** Contactos: alta o actualización (username, última vez visto y, si viene de un comentario, el reel). */
+  touchContact(igId: string, username: string | null, mediaId?: string | null): Promise<void>;
+  /** Guarda cada comentario (de qué reel viene cada persona). Repetidos se ignoran. */
+  recordComment(comment: CommentRecord): Promise<void>;
+  /** Resumen por reel: comentarios, personas distintas y personas con cada etiqueta. */
+  reelStats(): Promise<ReelStatsRow[]>;
   addContactTags(igId: string, tags: readonly string[]): Promise<void>;
   listContacts(limit: number): Promise<ContactRow[]>;
   /** Pausas programadas. Devuelve null si ya existía (misma clave). */
@@ -52,6 +56,25 @@ export interface ContactRow {
   readonly tags: readonly string[];
   readonly firstSeen: Date;
   readonly lastSeen: Date;
+  /** Reel del primer comentario (de dónde vino) y del último. */
+  readonly sourceMediaId: string | null;
+  readonly lastMediaId: string | null;
+}
+
+export interface CommentRecord {
+  readonly commentId: string;
+  readonly igId: string;
+  readonly username: string | null;
+  readonly mediaId: string | null;
+  readonly text: string;
+}
+
+export interface ReelStatsRow {
+  readonly mediaId: string;
+  readonly comments: number;
+  readonly people: number;
+  /** Personas que vinieron de este reel (origen) y tienen cada etiqueta. */
+  readonly tagged: Readonly<Record<string, number>>;
 }
 
 export interface JobRow {
@@ -121,6 +144,17 @@ CREATE TABLE IF NOT EXISTS contacts (
   first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS source_media_id TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS last_media_id TEXT;
+CREATE TABLE IF NOT EXISTS comments (
+  comment_id TEXT PRIMARY KEY,
+  ig_id TEXT NOT NULL,
+  username TEXT,
+  media_id TEXT,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS comments_media_idx ON comments (media_id);
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
   id BIGSERIAL PRIMARY KEY,
   dedup_key TEXT NOT NULL UNIQUE,
@@ -176,10 +210,34 @@ export async function createPostgresStore(
         WHERE created_at >= ${since} AND type IN ${sql([...SEND_ACTION_TYPES])} AND ok IS DISTINCT FROM false`;
       return rows[0]?.n ?? 0;
     },
-    async touchContact(igId, username) {
+    async touchContact(igId, username, mediaId = null) {
       await sql`
-        INSERT INTO contacts (ig_id, username) VALUES (${igId}, ${username})
-        ON CONFLICT (ig_id) DO UPDATE SET username = COALESCE(EXCLUDED.username, contacts.username), last_seen = now()`;
+        INSERT INTO contacts (ig_id, username, source_media_id, last_media_id) VALUES (${igId}, ${username}, ${mediaId}, ${mediaId})
+        ON CONFLICT (ig_id) DO UPDATE SET
+          username = COALESCE(EXCLUDED.username, contacts.username),
+          source_media_id = COALESCE(contacts.source_media_id, EXCLUDED.source_media_id),
+          last_media_id = COALESCE(EXCLUDED.last_media_id, contacts.last_media_id),
+          last_seen = now()`;
+    },
+    async recordComment(comment) {
+      await sql`
+        INSERT INTO comments (comment_id, ig_id, username, media_id, text)
+        VALUES (${comment.commentId}, ${comment.igId}, ${comment.username}, ${comment.mediaId}, ${comment.text})
+        ON CONFLICT (comment_id) DO NOTHING`;
+    },
+    async reelStats() {
+      const counts = await sql<{ media_id: string; comments: number; people: number }[]>`
+        SELECT media_id, count(*)::int AS comments, count(DISTINCT ig_id)::int AS people
+        FROM comments WHERE media_id IS NOT NULL GROUP BY media_id ORDER BY comments DESC`;
+      const tags = await sql<{ media_id: string; tag: string; n: number }[]>`
+        SELECT source_media_id AS media_id, tag, count(*)::int AS n
+        FROM contacts, unnest(tags) AS tag WHERE source_media_id IS NOT NULL GROUP BY source_media_id, tag`;
+      return counts.map((row) => ({
+        mediaId: row.media_id,
+        comments: row.comments,
+        people: row.people,
+        tagged: Object.fromEntries(tags.filter((t) => t.media_id === row.media_id).map((t) => [t.tag, t.n])),
+      }));
     },
     async addContactTags(igId, tags) {
       if (tags.length === 0) return;
@@ -190,9 +248,18 @@ export async function createPostgresStore(
           last_seen = now()`;
     },
     async listContacts(limit) {
-      const rows = await sql<{ ig_id: string; username: string | null; tags: string[]; first_seen: Date; last_seen: Date }[]>`
-        SELECT ig_id, username, tags, first_seen, last_seen FROM contacts ORDER BY last_seen DESC LIMIT ${limit}`;
-      return rows.map((row) => ({ igId: row.ig_id, username: row.username, tags: row.tags, firstSeen: row.first_seen, lastSeen: row.last_seen }));
+      const rows = await sql<
+        { ig_id: string; username: string | null; tags: string[]; first_seen: Date; last_seen: Date; source_media_id: string | null; last_media_id: string | null }[]
+      >`SELECT ig_id, username, tags, first_seen, last_seen, source_media_id, last_media_id FROM contacts ORDER BY last_seen DESC LIMIT ${limit}`;
+      return rows.map((row) => ({
+        igId: row.ig_id,
+        username: row.username,
+        tags: row.tags,
+        firstSeen: row.first_seen,
+        lastSeen: row.last_seen,
+        sourceMediaId: row.source_media_id,
+        lastMediaId: row.last_media_id,
+      }));
     },
     async scheduleJob(dedupKey, runAt, payload) {
       const rows = await sql<{ id: string }[]>`
