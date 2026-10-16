@@ -11,6 +11,8 @@ import { readLinkToken } from './links.js';
 import { flowFormPage, flowJsonPage, flowsListPage } from './pages-flows.js';
 import { contactsPage, dashboardPage, legalPage } from './pages.js';
 import { registerSetter } from './routes-setter.js';
+import type { SetterBrain } from './setter/brain.js';
+import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
 
 const ADMIN_USER = 'jose';
@@ -55,6 +57,8 @@ export interface AppDeps {
   readonly processPayload: (payload: unknown) => void;
   /** Rescata comentarios sin respuesta desde una fecha (pone en cola sus DMs). */
   readonly rescue?: (since: Date) => Promise<{ queued: number; skipped: number; since: string }>;
+  /** Simulador del setter (null = sin ANTHROPIC_API_KEY). */
+  readonly simulator?: { readonly brain: SetterBrain; readonly lead: LeadPlayer } | null;
 }
 
 function errorMessage(error: unknown): string {

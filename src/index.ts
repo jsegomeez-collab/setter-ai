@@ -9,6 +9,7 @@ import { processInBackground, rescueComments } from './process.js';
 import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { ClaudeBrain } from './setter/brain.js';
+import { ClaudeLeadPlayer } from './setter/simulator.js';
 import { EchoWatcher } from './setter/echoes.js';
 import { SetterService } from './setter/service.js';
 import { createPostgresStore } from './store.js';
@@ -49,7 +50,10 @@ async function main(): Promise<void> {
 
   // Setter IA (Fase 3). Sin ANTHROPIC_API_KEY los DMs se guardan pero no se responde. Arranca apagado (modo en /setter).
   const { anthropicApiKey, model, links } = config.setter;
-  const brain = anthropicApiKey ? new ClaudeBrain(new Anthropic({ apiKey: anthropicApiKey }), model) : null;
+  const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey }) : null;
+  const brain = anthropic ? new ClaudeBrain(anthropic, model) : null;
+  // Simulador del panel: el lead lo hace Haiku (barato), con el mismo modelo configurado para el setter.
+  const simulator = anthropic && brain ? { brain, lead: new ClaudeLeadPlayer(anthropic, model) } : null;
   const setter = new SetterService({
     store,
     brain,
@@ -68,6 +72,7 @@ async function main(): Promise<void> {
     linkSecret: linkSigner ? linkSecret : null,
     processPayload: (payload) => processInBackground(payload, { store, sender: activeSender, setter, echoes }),
     rescue: (since) => rescueComments(since, { store, sender: activeSender }),
+    simulator,
   });
 
   const checkToken = () => {

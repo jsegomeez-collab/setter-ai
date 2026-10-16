@@ -1,6 +1,8 @@
 import type { Context, Hono } from 'hono';
 import type { AppDeps } from './app.js';
-import { conversationPage, conversationsPage, setterPage } from './pages-setter.js';
+import { conversationPage, conversationsPage, setterPage, simulationResultPage, simulatorPage } from './pages-setter.js';
+import { SCENARIOS, findScenario } from './setter/scenarios.js';
+import { runSimulation } from './setter/simulator.js';
 import { parseUsernames, readSetterMode, type SetterMode } from './setter/service.js';
 import { SETTINGS } from './store.js';
 
@@ -98,7 +100,38 @@ function registerConversations(app: Hono, deps: AppDeps): void {
   app.post('/conversaciones/:igId/reanudar', setPaused(false));
 }
 
+const MAX_PERSONA_CHARS = 2000;
+
+function registerSimulator(app: Hono, deps: AppDeps): void {
+  const { store, config } = deps;
+  const unavailable = async (): Promise<string | null> => {
+    if (!deps.simulator) return 'Falta ANTHROPIC_API_KEY en Render: el simulador no puede llamar a Claude.';
+    return (await store.getKnowledge()) ? null : 'No hay documento del setter cargado: cárgalo en /setter antes de simular.';
+  };
+
+  app.get('/setter/simulador', async (c) => c.html(simulatorPage(SCENARIOS, await unavailable())));
+
+  app.post('/setter/simulador/:id', async (c) => {
+    const id = c.req.param('id');
+    const persona = field(await c.req.parseBody(), 'persona').trim().slice(0, MAX_PERSONA_CHARS);
+    const scenario = id === 'personalizado' ? (persona ? { title: 'Perfil personalizado', persona, check: 'Lo que tú decidas al leerlo.' } : undefined) : findScenario(id);
+    if (!scenario) return c.redirect('/setter/simulador', 303);
+    const knowledge = await store.getKnowledge();
+    if (!deps.simulator || !knowledge) return c.html(simulatorPage(SCENARIOS, await unavailable()), 400);
+    try {
+      const result = await runSimulation({ ...deps.simulator, knowledge: knowledge.text, links: config.setter.links }, scenario);
+      await store.logEvent('simulacion', `Simulación "${scenario.title}": ${result.endReason}.`, { scenario: id, turns: result.turns.length, usage: result.usage });
+      return c.html(simulationResultPage(scenario, result));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await store.logEvent('error', `Fallo en la simulación "${scenario.title}".`, { error: message });
+      return c.html(simulatorPage(SCENARIOS, `La simulación falló: ${message}`), 500);
+    }
+  });
+}
+
 export function registerSetter(app: Hono, deps: AppDeps): void {
+  registerSimulator(app, deps);
   registerSettings(app, deps);
   registerKnowledge(app, deps);
   registerConversations(app, deps);

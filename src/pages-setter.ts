@@ -1,5 +1,7 @@
 import { escapeHtml, jsonPreview, layout } from './pages.js';
+import type { Scenario } from './setter/scenarios.js';
 import { LeadSchema } from './setter/schema.js';
+import { estimateCostUsd, verdict, type SimulationResult } from './setter/simulator.js';
 import type { SetterMode } from './setter/service.js';
 import type { ContactRow, ConversationRow, KnowledgeRow, MessageRow } from './store.js';
 
@@ -69,10 +71,47 @@ function versionsTable(versions: readonly KnowledgeRow[], currentId: number | nu
   return `<table><tr><th>Versión</th><th>Fecha</th><th>Tamaño</th><th></th></tr>${rows || '<tr><td colspan="4">Sin versiones.</td></tr>'}</table>`;
 }
 
+const simButton = (id: string, label: string) =>
+  `<form class="inline" method="post" action="/setter/simulador/${encodeURIComponent(id)}" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Simulando… (hasta 1 min)'"><button>${escapeHtml(label)}</button></form>`;
+
+export function simulatorPage(scenarios: readonly Scenario[], available: string | null): string {
+  const rows = scenarios
+    .map((s) => `<tr><td>${escapeHtml(s.group)}</td><td><strong>${escapeHtml(s.title)}</strong><br><small>${escapeHtml(s.persona)}</small></td><td><small>${escapeHtml(s.check)}</small></td><td>${simButton(s.id, 'Simular')}</td></tr>`)
+    .join('');
+  const custom = `<form method="post" action="/setter/simulador/personalizado" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Simulando… (hasta 1 min)'">
+<label>Perfil a tu gusto <small>(quién es, qué quiere, qué objeciones pone)</small></label><textarea name="persona" maxlength="2000"></textarea>
+<p><button type="submit">Simular este perfil</button></p></form>`;
+  const body = `<h1>Simulador del setter</h1>
+<div class="card">Otra IA hace de lead con el perfil y el setter responde con <strong>tu documento y las reglas reales</strong>. No se envía nada a Instagram ni se guarda como conversación. Hasta 6 turnos (≈0,005 $ por simulación).</div>
+${available ? `<div class="errors">${escapeHtml(available)}</div>` : ''}
+${custom}<h2>Escenarios</h2><table><tr><th>Grupo</th><th>Perfil</th><th>Qué debería pasar</th><th></th></tr>${rows}</table>`;
+  return layout('Simulador', body);
+}
+
+export function simulationResultPage(scenario: Pick<Scenario, 'title' | 'persona' | 'check' | 'expectStep' | 'expectStop'>, result: SimulationResult): string {
+  const auto = verdict(scenario, result);
+  const thread = result.turns
+    .map((t) => {
+      const who = t.who === 'lead' ? '⬅ Lead (simulado)' : '➡ Setter IA';
+      const texts = t.texts.length ? t.texts.map((x) => `<div>${escapeHtml(x)}</div>`).join('') : '<em>(sin mensaje)</em>';
+      return `<tr><td>${who}</td><td>${texts}${t.note ? `<small class="bad">${escapeHtml(t.note)}</small>` : ''}</td></tr>`;
+    })
+    .join('');
+  const body = `<p><a href="/setter/simulador">← Simulador</a></p><h1>${escapeHtml(scenario.title)}</h1>
+<div class="card"><small>${escapeHtml(scenario.persona)}</small></div>
+<div class="card"><strong>Qué debería pasar:</strong> ${escapeHtml(scenario.check)}<br>
+${auto ? `<strong>Comprobación automática:</strong> <span class="${auto.ok ? 'ok' : 'bad'}">${escapeHtml(auto.detail)}</span><br>` : ''}
+<strong>Final:</strong> ${escapeHtml(result.endReason)} · <strong>Coste estimado del setter:</strong> ${estimateCostUsd(result.usage).toFixed(4)} $</div>
+<h2>Conversación</h2><table>${thread}</table>
+<h2>Ficha final</h2>${leadTable(result.lead)}`;
+  return layout(`Simulación: ${scenario.title}`, body);
+}
+
 export function setterPage(data: SetterPageData): string {
   const key = data.apiKeyConfigured ? '<span class="ok">✔ ANTHROPIC_API_KEY configurada</span>' : '<span class="bad">✘ Falta ANTHROPIC_API_KEY en Render: la IA no responde</span>';
   const body = `<h1>Setter IA</h1>${flashBox(data.flash)}
 <div class="card">${key} · Modelo: <strong>${escapeHtml(data.model)}</strong> · Modo: <strong>${escapeHtml(MODE_LABELS[data.mode])}</strong>${data.draft ? ' · <span class="warn">BORRADOR</span>' : ''}</div>
+<p><a href="/setter/simulador"><button>🧪 Simulador de conversaciones</button></a></p>
 <h2>Ajustes</h2>${settingsForm(data)}
 <h2>Documento del setter</h2>${knowledgeForm(data)}
 <h2>Versiones anteriores</h2>${versionsTable(data.versions, data.knowledge?.id ?? null)}`;
