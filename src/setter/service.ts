@@ -1,10 +1,9 @@
 import type { Action } from '../flows/engine.js';
 import type { InstagramEvent } from '../meta/parse.js';
 import { SETTINGS, type Store } from '../store.js';
-import type { BrainUsage, SetterBrain } from './brain.js';
-import { checkMessages, normalizeMessages } from './guards.js';
+import type { SetterBrain } from './brain.js';
+import { decideChecked, type CheckedReply } from './reply.js';
 import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks } from './prompt.js';
-import type { SetterOutput } from './schema.js';
 
 /**
  * El setter IA de cada conversación:
@@ -138,12 +137,13 @@ export class SetterService {
     if (!last || last.direction !== 'in') return;
     const dedupKey = `ai:${last.mid ?? last.id}`;
     const turns = toClaudeTurns(history);
-    const result = await brain.decide(buildSystemPrompt(knowledge.text, links, turns.earlyAccountMessages), turns.messages);
+    const system = buildSystemPrompt(knowledge.text, links, turns.earlyAccountMessages);
+    const result = await decideChecked(brain, system, turns.messages, { urls: [links.agenda, links.membership], emails: [links.contactEmail] });
     if (result.kind !== 'ok') {
       return this.stop(igId, `${result.kind === 'refusal' ? 'Claude rechazó responder' : 'Fallo al llamar a Claude'}: ${result.detail}`);
     }
     await store.saveLead(igId, result.output.lead);
-    await this.deliver(igId, dedupKey, result.output, result.usage);
+    await this.deliver(igId, dedupKey, result);
   }
 
   /** Motivo por el que NO se responde (null = se puede). 'off' = apagado, sin registrar nada. */
@@ -166,14 +166,13 @@ export class SetterService {
     return username;
   }
 
-  private async deliver(igId: string, dedupKey: string, output: SetterOutput, usage: BrainUsage): Promise<void> {
-    const { store, links } = this.options;
-    const messages = normalizeMessages(output.messages);
-    const facts = { igId, usage, messages: messages.length, siguientePaso: output.lead.siguiente_paso, needsHuman: output.needs_human };
+  private async deliver(igId: string, dedupKey: string, reply: Extract<CheckedReply, { kind: 'ok' }>): Promise<void> {
+    const { store } = this.options;
+    const { output, usage, messages, guard, retried } = reply;
+    const facts = { igId, usage, messages: messages.length, retried, siguientePaso: output.lead.siguiente_paso, needsHuman: output.needs_human };
     if (messages.length === 0) {
       await this.log('La IA decidió no responder.', facts);
     } else {
-      const guard = checkMessages(messages, { urls: [links.agenda, links.membership], emails: [links.contactEmail] });
       if (!guard.ok) {
         const note = guard.reasons.join(' · ');
         await store.addMessage({ igId, direction: 'out', source: 'ai', text: messages.join('\n'), mid: null, status: 'held', dedupKey, note });

@@ -153,6 +153,16 @@ describe('SetterService', () => {
     expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: true, aiPausedReason: expect.stringContaining('Respuesta retenida') });
   });
 
+  it('si la primera respuesta lleva un enlace prohibido pero el segundo intento es bueno, sale el bueno y la IA sigue activa', async () => {
+    const { store, decide, enqueue, service, flush } = await setup();
+    decide.mockResolvedValueOnce(ok(sampleOutput({ messages: ['paga en https://otro.com'] }))).mockResolvedValueOnce(ok(sampleOutput({ messages: ['te paso la agenda y lo vemos'] })));
+    await service.onIncoming(dm('quiero pagar', 'm-1'));
+    await flush();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(store.messages.at(-1)).toMatchObject({ text: 'te paso la agenda y lo vemos', status: 'sent' });
+    expect((await store.getContact(STRANGER_ID))?.aiPaused).toBeFalsy();
+  });
+
   it('el enlace de agenda permitido sí sale', async () => {
     const { enqueue, service, decide, flush } = await setup();
     decide.mockResolvedValue(ok(sampleOutput({ messages: [`Agenda tu llamada aquí: ${TEST_SETTER_LINKS.agenda}`] })));

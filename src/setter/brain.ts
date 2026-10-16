@@ -20,6 +20,14 @@ export interface BrainUsage {
   readonly cacheCreationTokens: number;
 }
 
+export const ZERO_USAGE: BrainUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
+export const addUsage = (a: BrainUsage, b: BrainUsage): BrainUsage => ({
+  inputTokens: a.inputTokens + b.inputTokens,
+  outputTokens: a.outputTokens + b.outputTokens,
+  cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
+  cacheCreationTokens: a.cacheCreationTokens + b.cacheCreationTokens,
+});
+
 export type BrainResult =
   | { readonly kind: 'ok'; readonly output: SetterOutput; readonly usage: BrainUsage }
   | { readonly kind: 'refusal'; readonly detail: string }

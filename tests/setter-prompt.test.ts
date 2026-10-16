@@ -29,6 +29,9 @@ describe('prompt del setter', () => {
     expect(prompt).toContain('Nunca digas por chat el precio del grupal ni del VIP');
     expect(prompt).toContain('Una pregunta que el documento no responde NO es motivo');
     expect(prompt).toContain('Nunca partas una frase');
+    expect(prompt).toContain('tú no puedes reservar ni confirmar llamadas');
+    expect(prompt).toContain('mantenlo durante toda la conversación');
+    expect(prompt).toContain('No afirmes nada que el documento no diga');
   });
 
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {

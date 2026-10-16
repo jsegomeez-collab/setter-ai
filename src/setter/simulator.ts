@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import type { BrainUsage, SetterBrain } from './brain.js';
-import { checkMessages, normalizeMessages } from './guards.js';
+import { ZERO_USAGE, addUsage, type BrainUsage, type SetterBrain } from './brain.js';
+import { decideChecked } from './reply.js';
 import { buildSystemPrompt, type SetterLinks } from './prompt.js';
 import type { Scenario } from './scenarios.js';
 import type { Lead } from './schema.js';
@@ -43,13 +43,6 @@ export interface SimulatorDeps {
   readonly maxTurns?: number;
 }
 
-const ZERO_USAGE: BrainUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
-const addUsage = (a: BrainUsage, b: BrainUsage): BrainUsage => ({
-  inputTokens: a.inputTokens + b.inputTokens,
-  outputTokens: a.outputTokens + b.outputTokens,
-  cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
-  cacheCreationTokens: a.cacheCreationTokens + b.cacheCreationTokens,
-});
 
 /** Turnos del simulador → mensajes para el setter (lead = user, setter = assistant). */
 function setterView(turns: readonly SimTurn[]): Anthropic.MessageParam[] {
@@ -80,17 +73,16 @@ export async function runSimulation(deps: SimulatorDeps, scenario: Pick<Scenario
   for (let turn = 0; turn < (deps.maxTurns ?? MAX_SIM_TURNS); turn += 1) {
     if (incoming === null) return { turns, lead, endReason: 'El lead dio la conversación por terminada', stopped: false, usage };
     turns.push({ who: 'lead', texts: [incoming] });
-    const result = await deps.brain.decide(system, setterView(turns));
+    const result = await decideChecked(deps.brain, system, setterView(turns), { urls: [deps.links.agenda, deps.links.membership], emails: [deps.links.contactEmail] });
     if (result.kind !== 'ok') {
       turns.push({ who: 'setter', texts: [], note: result.detail });
       return { turns, lead, endReason: `${result.kind === 'refusal' ? 'Claude rechazó' : 'Fallo de Claude'} → la IA se para`, stopped: true, usage };
     }
     usage = addUsage(usage, result.usage);
     lead = result.output.lead;
-    const messages = normalizeMessages(result.output.messages);
-    // Igual que service.ts: sin mensajitos no se pasa el filtro (la IA decidió no responder).
-    const guard = messages.length === 0 ? ({ ok: true } as const) : checkMessages(messages, { urls: [deps.links.agenda, deps.links.membership], emails: [deps.links.contactEmail] });
-    turns.push({ who: 'setter', texts: messages, note: guard.ok ? undefined : `RETENIDO: ${guard.reasons.join(' · ')}` });
+    const { messages, guard } = result;
+    const notes = [result.retried ? 'Segundo intento (el primero no pasó el filtro)' : '', guard.ok ? '' : `RETENIDO: ${guard.reasons.join(' · ')}`].filter(Boolean);
+    turns.push({ who: 'setter', texts: messages, note: notes.length ? notes.join(' · ') : undefined });
     const end = endOfTurn(messages, guard.ok ? null : guard.reasons, result.output);
     if (end) return { turns, lead, endReason: end.reason, stopped: end.stopped, usage };
     incoming = await deps.lead.next(scenario.persona, turns);
