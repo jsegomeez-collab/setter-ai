@@ -1,5 +1,6 @@
 import type { InstagramEvent } from '../meta/parse.js';
 import type { Store } from '../store.js';
+import { readSetterMode } from './service.js';
 
 /**
  * "Si Jose escribe a mano, la IA se calla" (decisión de Jose: hasta que la reanude en el panel).
@@ -68,6 +69,9 @@ export class EchoWatcher {
     }
     if (attempt + 1 < this.checksMs.length) return this.later(event, attempt + 1);
     await store.addMessage({ igId, direction: 'out', source: 'human', text: event.text ?? NO_TEXT_HUMAN, mid: event.mid, status: 'sent', dedupKey: null });
+    // Con el setter apagado no se para nada: mientras ManyChat siga conectado, sus mensajes también
+    // llegan como ecos ajenos y dejarían paradas conversaciones que la IA nunca tocó (decisión de Jose).
+    if ((await readSetterMode(store)) === 'off') return;
     await store.setAiPaused(igId, true, HUMAN_PAUSE_REASON);
     await store.logEvent('setter', `IA parada en esta conversación: ${HUMAN_PAUSE_REASON}.`, { igId, mid: event.mid });
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InstagramEvent } from '../src/meta/parse.js';
 import { EchoWatcher, HUMAN_PAUSE_REASON } from '../src/setter/echoes.js';
+import { SETTINGS } from '../src/store.js';
 import { ACCOUNT_ID, STRANGER_ID, createMemoryStore } from './helpers.js';
 
 type MessageEvent = Extract<InstagramEvent, { kind: 'message' }>;
@@ -9,8 +10,9 @@ function echo(mid: string, text: string | null = 'hola, soy Jose'): MessageEvent
   return { kind: 'message', accountId: ACCOUNT_ID, senderId: ACCOUNT_ID, recipientId: STRANGER_ID, mid, text, isEcho: true };
 }
 
-function setup() {
+function setup(mode: string | null = 'test') {
   const store = createMemoryStore();
+  if (mode) store.settings.set(SETTINGS.setterMode, mode);
   const timers: { fn: () => void; ms: number }[] = [];
   const watcher = new EchoWatcher({ store, checksMs: [5000, 10000, 15000], setTimer: (fn, ms) => timers.push({ fn, ms }) });
   /** Ejecuta la siguiente comprobación pendiente y espera a que termine. */
@@ -65,6 +67,16 @@ describe('EchoWatcher', () => {
     await tick();
     expect(store.messages).toEqual([expect.objectContaining({ direction: 'out', source: 'human', text: 'Hola, te escribo yo', mid: 'm-jose-1' })]);
     expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: true, aiPausedReason: HUMAN_PAUSE_REASON });
+  });
+
+  it('con el setter apagado, un eco ajeno (p. ej. de ManyChat) se guarda pero NO para la IA', async () => {
+    const { store, watcher, tick } = setup(null);
+    watcher.onEcho(echo('m-manychat-1', 'Mensaje de ManyChat'));
+    await tick();
+    await tick();
+    await tick();
+    expect(store.messages).toEqual([expect.objectContaining({ source: 'human', mid: 'm-manychat-1' })]);
+    expect((await store.getContact(STRANGER_ID))?.aiPaused).toBeUndefined();
   });
 
   it('un eco sin destinatario se ignora', async () => {
