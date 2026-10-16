@@ -8,7 +8,7 @@ import { ACCOUNT_ID, STRANGER_ID, createMemoryStore, messagePayload, postbackPay
 function setup() {
   const store = createMemoryStore();
   const sender = { enqueue: vi.fn().mockResolvedValue(undefined) } as unknown as Sender;
-  const setter = { onIncoming: vi.fn().mockResolvedValue(undefined) };
+  const setter = { onIncoming: vi.fn().mockResolvedValue(undefined), record: vi.fn().mockResolvedValue(undefined) };
   const echoes = { onEcho: vi.fn() };
   return { store, setter, echoes, deps: { store, sender, setter, echoes } };
 }

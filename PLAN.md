@@ -2,7 +2,7 @@
 
 > Última actualización: 2026-10-17
 > Estado general: **Fase 2 y Fase 3 en producción.** Flujos de comentarios atendiendo a seguidores reales; setter IA en modo **PRUEBA** (solo @josegomezlife). ManyChat desconectado.
-> **Siguiente: Fase 4.** Decisión de Jose (2026-10-17): terminar primero el programa (Fases 4-6); el marketing del setter lo pule él después. Antes de empezar la Fase 4, repasarla con Jose (qué entra y en qué orden).
+> **En curso: Fase 4** (repasada con Jose el 2026-10-17; orden: embudo → historial de ficha → análisis masivo → pendientes técnicos). Decisión de Jose: terminar primero el programa (Fases 4-6); el marketing del setter lo pule él después.
 
 ## Objetivo
 
@@ -135,11 +135,32 @@ Progreso:
 - Para cuando Jose pula el marketing (vistos en el simulador): con leads escépticos que piden "todo por escrito" manda al correo en vez de defender la llamada; a veces contesta algo fuera de tema (receta de pasta); alguna errata ("ola").
 - Técnicos (ver Pendientes/apuntes): espera de 8 s en memoria, aprobar borradores desde el panel, reanudar no contesta lo pendiente, `listConversations` sin LIMIT en SQL, caché de 1 h opcional.
 
-### Fase 4 — Fichas de leads, análisis masivo y medición ⏳
+### Fase 4 — Fichas de leads, análisis masivo y medición 🔄 (rama `fase4-wip`)
 
 **Para qué:** que cada conversación se convierta en datos útiles para vender y para crear contenido, y que todo esté medido.
 
-- **Ficha por lead** (extraída por IA de cada conversación): tiene negocio, tipo/nicho, facturación aproximada, problema principal, objeciones, interés, etapa, resumen, reel de origen.
+**Decisiones de Jose (2026-10-17, no reabrir):**
+- Orden: **1) embudo medido** (`/metricas`, sin IA, con datos reales que ya existen) → **2) historial de la ficha** (hoy `contacts.lead` se sobrescribe; sin historial no se puede medir el avance de etapa) → **3) análisis masivo** con Sonnet 5.5 → **4) pendientes técnicos** (borrado automático con "BORRAR", aprobar borradores, `listConversations` con LIMIT).
+- Ficha: **la actual** (las 5 preguntas del documento de Jose: `src/setter/schema.ts`), no la lista antigua de abajo.
+- Análisis masivo: **botón manual** en el panel (Jose controla el gasto).
+- Permiso de Jose para **leer producción (solo lectura)** para ver el volumen real y cerrar el 8e.
+
+Lectura de producción (2026-10-17, solo lectura, panel): 99 comentarios en 16 reels, ~30 conversaciones, clics "biblioteca" 11 y "Grupo WhatsApp" 2. Anti-ban 2/700, sin 368 visible, token hasta 2026-12-15. Neon **sin revisar**.
+
+Hallazgos fuera del plan (decisión de Jose 2026-10-17: arreglar **antes** del paso 1):
+- [ ] A. Si la persona contesta con **texto** ("si") al mensaje del flujo en vez de pulsar el botón, se queda colgada (caso real @mg_grela, 3 × "si"). Arreglar.
+  - [x] Código (2026-10-17, `src/flows/text-reply.ts`): si lo último que recibió es un mensaje del flujo con **un** botón de acción y contesta un "sí" corto (lista de Jose: si, dale, ok, vale, listo, ya, quiero, porfa, mándamelo, ya te seguí/sigo + el texto del botón; ≤5 palabras), cuenta como pulsarlo. Varios "sí" al mismo mensaje = **una** vez. El DM se guarda en la conversación y el setter no contesta. Cualquier otro texto → setter, como antes. 271 pruebas.
+  - [ ] Desplegar (con OK de Jose) y probar con @josegomezlife: comentar → escribir "si" en vez de pulsar.
+- [ ] B. **Error 2534025**: 9 de 16 DMs a comentarios rechazados por Meta entre 21:23 y 23:04 UTC del 16-10 (56 %). Investigar la causa con la doc oficial (solo lectura) y traerla a Jose antes de cambiar nada.
+
+Progreso:
+- [ ] 1. Embudo `/metricas`.
+- [ ] 2. Historial de la ficha.
+- [ ] 3. Análisis masivo (botón manual).
+- [ ] 4. Pendientes técnicos.
+
+Lista original (referencia):
+- **Ficha por lead** (extraída por IA de cada conversación): ~~tiene negocio, tipo/nicho, facturación aproximada, problema principal,~~ objeciones, interés, etapa, resumen, reel de origen. (Sustituida por la ficha actual, decisión 2026-10-17.)
 - **Análisis masivo de conversaciones** (por lotes, sobre todas las conversaciones):
   - **Objeciones**: catálogo vivo, objeciones nuevas detectadas, frecuencia y tendencia.
   - **Datos de mercado**: nichos, tamaño de negocio, dolores, deseos, lenguaje literal que usa la gente.
@@ -200,6 +221,8 @@ Progreso:
 
 ## Pendientes / apuntes
 
+- [ ] (2026-10-17, Jose: "apuntar y seguir") 3 personas reales escribieron por DM y no recibieron respuesta (setter en modo prueba): @mg_grela ("si" ×3), @helmuth_hg ("No he recibido nasa", sin DM del flujo en su hilo), @zymmer12 ("El Instagram me.pidio un montos de cuidado con tu cuenta" → **posible aviso de spam de Instagram**, sin verificar).
+
 - [ ] Fase 2: ¿respuestas públicas de una lista fija o generadas con IA? (de momento lista fija)
 - [x] Fase 3: modelo de Claude (Haiku 5.5), arranque en modo prueba, sin aviso proactivo de IA. Resuelto 2026-10-16.
 - [ ] Fase 3: si Jose vive u opera desde la UE, revisar si le aplica la Ley de IA europea (art. 50). **No verificado.**
@@ -222,3 +245,4 @@ Progreso:
 - 2026-10-16 — Réplica de ManyChat en producción (opción B: una vez por persona y por reel). Jose autoriza desconectar ManyChat en la Fase 3.
 - 2026-10-16 — Fase 3 en producción (modo prueba): setter IA con Haiku, panel `/setter` + `/conversaciones` + simulador. ManyChat desconectado. Prueba real con @josegomezlife OK; 4 vueltas de 18 escenarios simulados. Documento del setter v4 (= v2).
 - 2026-10-17 — Decisión de Jose: terminar el programa (Fases 4-6) antes de pulir el marketing del setter. Siguiente: Fase 4.
+- 2026-10-17 — Fase 4 repasada con Jose: embudo primero, ficha actual, análisis con botón manual. Rama `fase4-wip`.

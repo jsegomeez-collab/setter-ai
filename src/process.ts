@@ -1,4 +1,5 @@
 import { planComment, planPostback, type Plan } from './flows/engine.js';
+import { planTextReply } from './flows/text-reply.js';
 import { MetaApiError } from './meta/client.js';
 import { parseWebhook, type InstagramEvent } from './meta/parse.js';
 import type { Sender } from './sender.js';
@@ -10,8 +11,8 @@ export interface ProcessDeps {
   readonly store: Store;
   readonly sender: Sender;
   readonly random?: () => number;
-  /** Setter IA: recibe los DMs de las personas (Fase 3). */
-  readonly setter?: Pick<SetterService, 'onIncoming'>;
+  /** Setter IA: recibe los DMs de las personas (Fase 3). `record` solo los guarda (cuando responde el flujo). */
+  readonly setter?: Pick<SetterService, 'onIncoming' | 'record'>;
   /** Ecos de lo que sale de la cuenta: si no es nuestro, Jose escribió a mano y la IA se para. */
   readonly echoes?: Pick<EchoWatcher, 'onEcho'>;
 }
@@ -42,6 +43,8 @@ function logOnly(event: InstagramEvent): string {
 async function planFor(event: InstagramEvent, deps: ProcessDeps): Promise<Plan | null> {
   if (event.kind === 'comment') return planComment(await deps.store.listFlows(), event, deps.random);
   if (event.kind === 'postback') return planPostback(await deps.store.listFlows(), event);
+  // Un "sí" escrito al mensaje del flujo cuenta como pulsar su botón; cualquier otro texto es para el setter.
+  if (event.kind === 'message' && !event.isEcho && event.senderId !== event.accountId) return planTextReply(event, deps.store);
   return null;
 }
 
@@ -82,6 +85,8 @@ async function handleEvent(event: InstagramEvent, deps: ProcessDeps): Promise<vo
     return;
   }
   await deps.store.logEvent(event.kind, plan.note, event);
+  // Respondió el flujo: el DM se guarda en la conversación, pero el setter no contesta.
+  if (event.kind === 'message') await deps.setter?.record(event);
   if (plan.actions.length === 0) return;
   const commentId = event.kind === 'comment' ? event.commentId : null;
   if (!(await claimOnce(plan, deps.store, commentId))) return;

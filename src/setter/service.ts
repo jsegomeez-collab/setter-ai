@@ -85,6 +85,12 @@ export class SetterService {
 
   /** DM de una persona (no eco). Se guarda siempre; la respuesta espera por si escribe más. */
   async onIncoming(event: MessageEvent): Promise<void> {
+    await this.record(event);
+    this.scheduleReply(event.senderId);
+  }
+
+  /** Solo guarda el DM en la conversación, sin responder (p. ej. cuando el "sí" lo contesta el flujo). */
+  async record(event: MessageEvent): Promise<void> {
     await this.options.store.addMessage({
       igId: event.senderId,
       direction: 'in',
@@ -94,7 +100,6 @@ export class SetterService {
       status: 'sent',
       dedupKey: null,
     });
-    this.scheduleReply(event.senderId);
   }
 
   /** Responde ya. Va en fila por persona: nunca dos respuestas a la vez en la misma conversación. */
