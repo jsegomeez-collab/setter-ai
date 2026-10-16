@@ -52,6 +52,8 @@ export interface AppDeps {
   readonly linkSecret: string | null;
   /** Procesa un aviso de Meta en segundo plano. */
   readonly processPayload: (payload: unknown) => void;
+  /** Rescata comentarios sin respuesta desde una fecha (pone en cola sus DMs). */
+  readonly rescue?: (since: Date) => Promise<{ queued: number; skipped: number; since: string }>;
 }
 
 function errorMessage(error: unknown): string {
@@ -167,6 +169,16 @@ function registerDashboard(app: Hono, deps: AppDeps): void {
   });
 
   app.post('/eventos/renovar-token', async (c) => c.redirect(withMsg('/eventos', await tokens.refreshIfDue(true)), 303));
+
+  app.post('/eventos/rescatar', async (c) => {
+    if (!deps.rescue) return c.redirect(withMsg('/eventos', 'El rescate no está disponible.'), 303);
+    const form = await c.req.parseBody();
+    const since = new Date(typeof form.desde === 'string' ? form.desde : '');
+    if (Number.isNaN(since.getTime())) return c.redirect(withMsg('/eventos', 'Fecha "desde" no válida.'), 303);
+    const result = await deps.rescue(since);
+    await store.logEvent('rescate', `Jose lanzó el rescate desde ${result.since}: ${result.queued} en cola, ${result.skipped} omitidos.`, result);
+    return c.redirect(withMsg('/eventos', `Rescate: ${result.queued} comentarios en cola (${result.skipped} omitidos) desde ${result.since}.`), 303);
+  });
 
   app.post('/eventos/reanudar', async (c) => {
     await store.setSetting(SETTINGS.pausedUntil, null);

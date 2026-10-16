@@ -105,6 +105,28 @@ describe('editor JSON de flujos avanzados', () => {
   });
 });
 
+describe('rescate desde el panel', () => {
+  it('lanza el rescate con la fecha indicada y rechaza fechas inválidas', async () => {
+    const store = createMemoryStore();
+    const rescue = vi.fn().mockResolvedValue({ queued: 3, skipped: 1, since: '2026-10-16T13:46:00.000Z' });
+    const app = createApp({ config, store, client: null, tokens: new TokenManager({ store, envToken: null, encryptionKey: null }), linkSecret: null, processPayload: vi.fn(), rescue });
+    const post = (desde: string) =>
+      app.request(
+        new Request(`${HOST}/eventos/rescatar`, {
+          method: 'POST',
+          headers: { authorization: auth, origin: HOST, 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ desde }).toString(),
+        }),
+      );
+    const ok = await post('2026-10-16T13:46:00Z');
+    expect(rescue).toHaveBeenCalledWith(new Date('2026-10-16T13:46:00Z'));
+    expect(decodeURIComponent(ok.headers.get('location') ?? '')).toContain('3 comentarios en cola');
+    const bad = await post('ayer');
+    expect(decodeURIComponent(bad.headers.get('location') ?? '')).toContain('no válida');
+    expect(rescue).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('contactos y estado', () => {
   it('lista contactos con sus etiquetas (pide contraseña)', async () => {
     const { app, store } = setup();

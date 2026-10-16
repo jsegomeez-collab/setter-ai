@@ -96,6 +96,16 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(stats.find((s) => s.mediaId === '2222222')).toMatchObject({ comments: 1, people: 1, tagged: {} });
   });
 
+  it('comentarios sin respuesta privada (para el rescate)', async () => {
+    const since = new Date(Date.now() - 60_000);
+    await store.logEvent('comment', 'sin flujo', { kind: 'comment', commentId: 'r1', fromId: '1', accountId: '0' });
+    await store.logEvent('comment', 'sin flujo', { kind: 'comment', commentId: 'r2', fromId: '2', accountId: '0' });
+    await store.logEvent('postback', 'otra cosa', { kind: 'postback' });
+    await store.claimAction('private:r2', 'private_reply', {});
+    const pending = (await store.unansweredCommentEvents(since)) as { commentId: string }[];
+    expect(pending.map((e) => e.commentId)).toEqual(['r1']);
+  });
+
   it('pausas programadas: guardar, no duplicar, coger una sola vez y terminar', async () => {
     const runAt = new Date('2026-10-16T12:02:00.000Z');
     const id = await store.scheduleJob('job:a', runAt, { flowId: 'f', nodeId: 'n', recipientId: '1', dedupKey: 'a', depth: 1 });

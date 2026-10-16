@@ -164,7 +164,10 @@ ${data.flash ? `<div class="card">${escapeHtml(data.flash)}</div>` : ''}
   <div>Flujos: <strong>${data.activeFlows}</strong> activos de ${data.totalFlows} · <a href="/flujos">gestionar flujos</a></div>
   <div>Enlaces con seguimiento (clics + etiquetas): ${status(data.linkTracking, 'activos', 'desactivados (falta URL pública o TOKEN_ENCRYPTION_KEY)')}</div>
   <p><form class="inline" method="post" action="/eventos/suscribir"><button>Activar suscripción de la cuenta (comments + messages)</button></form>
-  <form class="inline" method="post" action="/eventos/renovar-token"><button>Renovar token ahora</button></form>
+  <form class="inline" method="post" action="/eventos/renovar-token"><button>Renovar token ahora</button></form></p>
+  <p><form class="inline" method="post" action="/eventos/rescatar" onsubmit="return confirm('Se enviará el flujo a los comentarios sin respuesta desde esa fecha (máx. 7 días). ¿Seguro?')">
+  Rescatar comentarios sin respuesta desde (UTC, ISO): <input type="text" name="desde" placeholder="2026-10-16T13:46:00Z" size="22">
+  <button>Rescatar</button></form>
   <a href="/eventos">↻ Recargar</a></p>
 </div>
 <h2>Acciones (envíos a Instagram)</h2>

@@ -65,11 +65,63 @@ async function handleEvent(event: InstagramEvent, deps: ProcessDeps): Promise<vo
   }
   await deps.store.logEvent(event.kind, plan.note, event);
   if (plan.actions.length === 0) return;
-  if (plan.onceKey && !(await deps.store.claimAction(plan.onceKey, 'once', { flowId: plan.flowId }))) {
-    await deps.store.logEvent('duplicado', 'Esta persona ya recibió este flujo: no se repite (una vez por persona).', { onceKey: plan.onceKey });
-    return;
-  }
+  if (!(await claimOnce(plan, deps.store))) return;
   await deps.sender.enqueue(plan.actions);
+}
+
+/** "Una vez por persona": reserva la clave. Devuelve false si la persona ya recibió este flujo. */
+async function claimOnce(plan: Plan, store: Store): Promise<boolean> {
+  if (!plan.onceKey) return true;
+  if (!(await store.claimAction(plan.onceKey, 'once', { flowId: plan.flowId }))) {
+    await store.logEvent('duplicado', 'Esta persona ya recibió este flujo: no se repite (una vez por persona).', { onceKey: plan.onceKey });
+    return false;
+  }
+  // Se marca como hecha para que no aparezca "en curso" en el panel.
+  await store.finishAction(plan.onceKey, true, { flowId: plan.flowId });
+  return true;
+}
+
+/** Meta permite la respuesta privada hasta 7 días después del comentario. Margen de 1 hora. */
+const RESCUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 - 60 * 60 * 1000;
+
+type CommentEvent = Extract<InstagramEvent, { kind: 'comment' }>;
+
+function isCommentEvent(value: unknown): value is CommentEvent {
+  const v = value as Partial<CommentEvent> | null;
+  return !!v && v.kind === 'comment' && typeof v.commentId === 'string' && typeof v.fromId === 'string' && typeof v.accountId === 'string';
+}
+
+export interface RescueResult {
+  readonly queued: number;
+  readonly skipped: number;
+  readonly since: string;
+}
+
+/**
+ * Rescate: a los comentarios desde `since` que no recibieron respuesta privada, se les aplica el flujo
+ * que corresponda ahora (respuesta pública + DM), con la cola y las protecciones anti-ban de siempre.
+ */
+export async function rescueComments(since: Date, deps: ProcessDeps, now: Date = new Date()): Promise<RescueResult> {
+  const oldest = new Date(now.getTime() - RESCUE_MAX_AGE_MS);
+  const from = since < oldest ? oldest : since;
+  const [rows, flows] = await Promise.all([deps.store.unansweredCommentEvents(from), deps.store.listFlows()]);
+  let queued = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    if (!isCommentEvent(row)) {
+      skipped += 1;
+      continue;
+    }
+    const plan = planComment(flows, row, deps.random);
+    if (plan.actions.length === 0 || !(await claimOnce(plan, deps.store))) {
+      skipped += 1;
+      continue;
+    }
+    await deps.store.logEvent('rescate', `Rescate: ${plan.note}`, { commentId: row.commentId, from: row.fromUsername });
+    void deps.sender.enqueue(plan.actions);
+    queued += 1;
+  }
+  return { queued, skipped, since: from.toISOString() };
 }
 
 export async function processWebhook(payload: unknown, deps: ProcessDeps): Promise<void> {

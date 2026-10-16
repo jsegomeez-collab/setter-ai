@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { encodePayload } from '../src/flows/engine.js';
 import type { InstagramClient } from '../src/meta/client.js';
-import { processInBackground, processWebhook } from '../src/process.js';
+import { processInBackground, processWebhook, rescueComments } from '../src/process.js';
 import { Sender } from '../src/sender.js';
 import { STRANGER_ID, commentPayload, createMemoryStore, followFlow, messagePayload, postbackPayload } from './helpers.js';
 
@@ -77,6 +77,35 @@ describe('processWebhook con flujos', () => {
     await processWebhook(commentPayload(), deps);
     expect(store.contacts.get(STRANGER_ID)).toMatchObject({ username: 'cuenta_prueba', sourceMediaId: '18000000000000001' });
     expect(await store.reelStats()).toEqual([{ mediaId: '18000000000000001', comments: 1, people: 1, tagged: {} }]);
+  });
+
+  it('rescate: responde a los comentarios sin DM y nunca repite a quien ya lo recibió', async () => {
+    const { client, deps, store, sender } = setup([]);
+    // Llegan 2 comentarios cuando no había flujo activo (como el hueco del 16/10).
+    await processWebhook(commentPayload({ id: 'h1' }), deps);
+    await processWebhook(commentPayload({ id: 'h2', from: { id: '777', username: 'otra' } }), deps);
+    // Comentario propio: nunca se rescata.
+    await processWebhook(commentPayload({ id: 'h3', from: { id: '17841400000000001', username: 'josenews.ai' } }), deps);
+    expect(client.sendPrivateReply).not.toHaveBeenCalled();
+    // Se activa el flujo y se rescata.
+    store.flows.set('flow1', followFlow({ trigger: { mediaIds: 'all', keywords: [] } }));
+    const first = await rescueComments(new Date(Date.now() - 3600_000), deps);
+    await sender.idle();
+    expect(first).toMatchObject({ queued: 2, skipped: 1 });
+    expect(client.sendPrivateReply).toHaveBeenCalledTimes(2);
+    expect(client.replyToComment).toHaveBeenCalledTimes(2);
+    // Lanzarlo otra vez no manda nada nuevo.
+    const second = await rescueComments(new Date(Date.now() - 3600_000), deps);
+    await sender.idle();
+    expect(second.queued).toBe(0);
+    expect(client.sendPrivateReply).toHaveBeenCalledTimes(2);
+  });
+
+  it('rescate: nunca más allá de 7 días (regla de Meta)', async () => {
+    const { deps } = setup([]);
+    const now = new Date('2026-10-20T12:00:00Z');
+    const result = await rescueComments(new Date('2026-01-01T00:00:00Z'), deps, now);
+    expect(result.since).toBe('2026-10-13T13:00:00.000Z');
   });
 
   it('aviso vacío → "vacio"', async () => {

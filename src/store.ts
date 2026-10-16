@@ -10,6 +10,8 @@ export interface Store {
   countSendsSince(since: Date): Promise<number>;
   /** Contactos: alta o actualización (username, última vez visto y, si viene de un comentario, el reel). */
   touchContact(igId: string, username: string | null, mediaId?: string | null): Promise<void>;
+  /** Comentarios registrados desde una fecha que NO recibieron respuesta privada (para rescatarlos). */
+  unansweredCommentEvents(since: Date): Promise<unknown[]>;
   /** Guarda cada comentario (de qué reel viene cada persona). Repetidos se ignoran. */
   recordComment(comment: CommentRecord): Promise<void>;
   /** Resumen por reel: comentarios, personas distintas y personas con cada etiqueta. */
@@ -218,6 +220,14 @@ export async function createPostgresStore(
           source_media_id = COALESCE(contacts.source_media_id, EXCLUDED.source_media_id),
           last_media_id = COALESCE(EXCLUDED.last_media_id, contacts.last_media_id),
           last_seen = now()`;
+    },
+    async unansweredCommentEvents(since) {
+      const rows = await sql<{ data: unknown }[]>`
+        SELECT e.data FROM event_log e
+        WHERE e.kind = 'comment' AND e.created_at >= ${since}
+          AND NOT EXISTS (SELECT 1 FROM actions a WHERE a.dedup_key = 'private:' || (e.data->>'commentId'))
+        ORDER BY e.id`;
+      return rows.map((row) => row.data);
     },
     async recordComment(comment) {
       await sql`

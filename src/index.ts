@@ -4,7 +4,7 @@ import { loadConfig } from './config.js';
 import { deriveLinkSecret } from './links.js';
 import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
-import { processInBackground } from './process.js';
+import { processInBackground, rescueComments } from './process.js';
 import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { createPostgresStore } from './store.js';
@@ -49,6 +49,7 @@ async function main(): Promise<void> {
     tokens,
     linkSecret: linkSigner ? linkSecret : null,
     processPayload: (payload) => processInBackground(payload, { store, sender: activeSender }),
+    rescue: (since) => rescueComments(since, { store, sender: activeSender }),
   });
 
   const checkToken = () => {

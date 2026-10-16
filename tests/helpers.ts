@@ -49,6 +49,12 @@ export function createMemoryStore(): Store & {
           : { igId, username, tags: [], firstSeen: now, lastSeen: now, sourceMediaId: mediaId, lastMediaId: mediaId },
       );
     },
+    async unansweredCommentEvents(since) {
+      return events
+        .filter((e) => e.kind === 'comment' && e.createdAt >= since)
+        .map((e) => e.data as { commentId?: string })
+        .filter((data) => !actions.has(`private:${data.commentId}`));
+    },
     async recordComment(comment) {
       if (!comments.some((c) => c.commentId === comment.commentId)) comments.push(comment);
     },
