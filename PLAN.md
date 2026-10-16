@@ -1,7 +1,7 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-16
-> Estado general: **Fase 1 en curso.** Código hecho y subido (pasos 1-2). Siguiente: despliegue en Render (paso 3).
+> Estado general: **Fase 1 en curso.** App de Meta publicada y conectada. Siguiente: prueba real con la cuenta de pruebas (pasos 9-12).
 
 ## Objetivo
 
@@ -57,9 +57,10 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 
 Progreso:
 - [x] Pasos 1-2: código hecho (2026-10-16). 60 pruebas automáticas OK, cobertura 85,5 % de líneas. `store.ts` (Postgres) sin prueba automática: se valida en el primer arranque con Neon.
-- [ ] Paso 3: despliegue en Render + Neon.
-- [ ] Pasos 4-8: app de Meta (Jose).
-- [ ] Pasos 9-12: prueba real.
+- [x] Paso 3: despliegue en Render + Neon (https://setter-ai-vfle.onrender.com). Panel lee la BD → `store.ts` validado con datos reales.
+- [x] Pasos 4-8 (2026-10-16, hecho con Playwright): app "AI Setter" (ID 1416642890618916, app de Instagram "AI Setter-IG"), @josenews.ai tester, permisos basic/comments/messages, 2 secretos + token en Render, webhook verificado (comments, messages, standby…), suscripción `{"success":true}`, URLs legales + categoría, **app PUBLICADA sin App Review ni verificación**.
+- [x] Primer aviso real tras publicar: `read` de un DM real de @josenews.ai (13:13 UTC).
+- [ ] Pasos 9-12: prueba real con @josegomezlife (cuenta de pruebas, sin rol) en un reel de poco tráfico.
 
 Seguros del código (ManyChat sigue en vivo): solo actúa en el reel elegido en `/eventos`; solo contesta DMs si están activados en el panel y a remitentes autorizados (quien comentó en el reel de prueba); los `standby` solo se registran.
 
@@ -167,6 +168,8 @@ Seguros del código (ManyChat sigue en vivo): solo actúa en el reel elegido en 
 - [ ] Antes de producción: base de datos definitiva (Neon de pago o Render Postgres).
 - [ ] La página `/data-deletion` dice que se borran los datos si escriben "BORRAR" por DM: hoy eso es **manual** (lo haría Jose). Automatizarlo en la Fase 2 o 4.
 - [ ] Añadir prueba automática de `store.ts` contra una base de datos real.
+- [ ] Reconocer avisos `read` / `reaction` (hoy salen como "vacio"; solo es registro).
+- [ ] El token de Meta caduca (~60 días, no verificado): automatizar renovación (Fase 2).
 
 ## Registro de cambios
 
