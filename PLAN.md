@@ -61,7 +61,7 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 - App de Meta creada, conectada y **publicada** (hecho con Playwright).
 - Prueba real: @josegomezlife (sin rol) comentó → respuesta pública ✅ → DM privado ✅ → respondió "Hola" → llegó como `messages` (no standby) ✅ → contestación ✅. ManyChat estaba pausado.
 
-### Fase 2 — Motor de flujos de comentarios (sustituir a ManyChat) 🔄
+### Fase 2 — Motor de flujos de comentarios (sustituir a ManyChat) ✅ (2026-10-16: en producción y ManyChat desconectado por Jose)
 
 **Para qué:** que un reel real funcione igual (o mejor) que con ManyChat, con el formato de flujos que luego usará el constructor visual.
 
