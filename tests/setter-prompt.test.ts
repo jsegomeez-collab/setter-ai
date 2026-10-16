@@ -31,7 +31,9 @@ describe('prompt del setter', () => {
     expect(prompt).toContain('Nunca partas una frase');
     expect(prompt).toContain('tú no puedes reservar ni confirmar llamadas');
     expect(prompt).toContain('mantenlo durante toda la conversación');
-    expect(prompt).toContain('No afirmes nada que el documento no diga');
+    expect(prompt).toContain('Explica con naturalidad y seguridad todo lo que el documento SÍ dice');
+    expect(prompt).toContain('la llamada ES con una persona del equipo, así que pásale el enlace de agenda y sigue');
+    expect(prompt).not.toContain('pide expresamente hablar con Jose o con una persona');
   });
 
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {
