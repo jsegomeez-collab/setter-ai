@@ -5,6 +5,9 @@
  */
 
 export const MAX_REPLY_CHARS = 1000;
+/** Mensajitos por turno y longitud de cada uno: que se lea como un chat, no como un texto de web (petición de Jose). */
+export const MAX_MESSAGES = 4;
+export const MAX_MESSAGE_CHARS = 300;
 
 export interface AllowedContacts {
   readonly urls: readonly string[];
@@ -43,4 +46,16 @@ export function checkReply(text: string, allowed: AllowedContacts): GuardResult 
   const link = withoutEmails.match(LINK_PATTERN);
   if (link) reasons.push(`Enlace no permitido: ${link[0]}`);
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
+}
+
+/** Comprueba la tanda de mensajitos: cuántos, que ninguno esté vacío ni sea largo, y el conjunto con checkReply. */
+export function checkMessages(messages: readonly string[], allowed: AllowedContacts): GuardResult {
+  const reasons: string[] = [];
+  if (messages.length > MAX_MESSAGES) reasons.push(`Demasiados mensajes (${messages.length}, máximo ${MAX_MESSAGES})`);
+  if (messages.some((m) => m.trim().length === 0)) reasons.push('Hay un mensaje vacío');
+  const longest = Math.max(0, ...messages.map((m) => m.trim().length));
+  if (longest > MAX_MESSAGE_CHARS) reasons.push(`Un mensaje es demasiado largo (${longest} caracteres, máximo ${MAX_MESSAGE_CHARS})`);
+  const whole = checkReply(messages.join('\n'), allowed);
+  const all = [...reasons, ...(whole.ok ? [] : whole.reasons)];
+  return all.length === 0 ? { ok: true } : { ok: false, reasons: all };
 }

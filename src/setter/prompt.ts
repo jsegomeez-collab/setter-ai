@@ -24,7 +24,10 @@ function frame(links: SetterLinks): string {
   return `
 ---
 INSTRUCCIONES TÉCNICAS (además del documento de arriba)
-- Escribes por mensaje directo de Instagram. Texto plano, sin markdown ni listas.
+- Escribes por mensaje directo de Instagram como una persona real chateando desde el móvil, no como una web ni un folleto.
+- Estilo: divide lo que quieras decir en varios mensajitos (campo messages, de 1 a 4), cada uno de 1-2 frases cortas, como quien manda varios mensajes seguidos. Mejor 2-3 mensajitos que uno largo. Nunca expliques toda la oferta de golpe: lo justo para la pregunta de la persona.
+- Tono informal y cercano: puedes empezar en minúscula, no hace falta el signo de apertura (¿ ¡), puntuación relajada, algún emoji suelto si pega (no en todos). Sin faltas de ortografía. Sin markdown, listas, viñetas ni negritas.
+- Una sola pregunta por turno, en el último mensajito.
 - Huecos: las partes del documento marcadas con [CONFIRMAR …] o [COMPLETAR] NO están confirmadas. No las afirmes ni las rellenes: di "Eso te lo resuelven en la llamada" o deriva a ${links.contactEmail}.
 - Enlaces: solo puedes escribir estos dos, copiados exactamente, y este correo. Ningún otro enlace, web ni correo.
   · Agenda: ${links.agenda}

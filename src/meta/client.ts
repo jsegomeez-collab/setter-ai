@@ -163,6 +163,14 @@ export class InstagramClient {
     return this.send({ id: recipientId }, message);
   }
 
+  /**
+   * Muestra "escribiendo…" a la persona (doc: Messaging API › Sender Actions, typing_on).
+   * La petición solo lleva recipient y sender_action; el mensaje va aparte.
+   */
+  async sendTypingOn(recipientId: string): Promise<void> {
+    await this.call('POST', 'me/messages', { recipient: { id: recipientId }, sender_action: 'typing_on' });
+  }
+
   /** Compatibilidad con la Fase 1. */
   async sendText(recipientId: string, text: string): Promise<SendResult> {
     return this.sendMessage(recipientId, text);

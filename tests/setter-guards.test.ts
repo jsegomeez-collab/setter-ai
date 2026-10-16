@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_REPLY_CHARS, checkReply } from '../src/setter/guards.js';
+import { MAX_MESSAGE_CHARS, MAX_REPLY_CHARS, checkMessages, checkReply } from '../src/setter/guards.js';
 import { TEST_SETTER_LINKS } from './helpers.js';
 
 const allowed = { urls: [TEST_SETTER_LINKS.agenda, TEST_SETTER_LINKS.membership], emails: [TEST_SETTER_LINKS.contactEmail] };
@@ -34,6 +34,15 @@ describe('checkReply', () => {
     expect(checkReply('La garantía es [CONFIRMAR CONDICIONES EXACTAS]', allowed).ok).toBe(false);
     expect(checkReply('Agenda en [LINK AGENDA]', allowed).ok).toBe(false);
     expect(checkReply('Facilidades: [COMPLETAR]', allowed).ok).toBe(false);
+  });
+
+  it('checkMessages: varios mensajitos cortos pasan; demasiados, vacíos o largos no; y revisa enlaces en todos', () => {
+    expect(checkMessages(['hola!', 'ya usas alguna IA?'], allowed)).toEqual({ ok: true });
+    expect(checkMessages(['1', '2', '3', '4', '5'], allowed).ok).toBe(false);
+    expect(checkMessages(['hola', '  '], allowed).ok).toBe(false);
+    expect(checkMessages(['a'.repeat(MAX_MESSAGE_CHARS + 1)], allowed).ok).toBe(false);
+    const link = checkMessages(['genial', 'mira https://otra-web.com'], allowed);
+    expect(!link.ok && link.reasons.join(' ')).toContain('Enlace no permitido');
   });
 
   it('bloquea respuestas vacías o demasiado largas', () => {

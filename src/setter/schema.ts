@@ -24,7 +24,9 @@ export const LeadSchema = z.object({
 });
 
 export const SetterOutputSchema = z.object({
-  reply: z.string().describe('Mensaje para la persona, listo para enviar por Instagram. Vacío solo si no se debe responder.'),
+  messages: z
+    .array(z.string())
+    .describe('Mensajitos para la persona, en orden, como los mandaría alguien por chat: de 1 a 4, cada uno de 1-2 frases cortas. Lista vacía solo si no se debe responder.'),
   needs_human: z.boolean().describe('true si Jose tiene que intervenir en esta conversación.'),
   needs_human_reason: z.string().nullable().describe('Por qué tiene que intervenir Jose. null si needs_human es false.'),
   lead: LeadSchema,

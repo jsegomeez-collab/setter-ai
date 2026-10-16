@@ -2,7 +2,7 @@ import type { Action } from '../flows/engine.js';
 import type { InstagramEvent } from '../meta/parse.js';
 import { SETTINGS, type Store } from '../store.js';
 import type { BrainUsage, SetterBrain } from './brain.js';
-import { checkReply } from './guards.js';
+import { checkMessages } from './guards.js';
 import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks } from './prompt.js';
 import type { SetterOutput } from './schema.js';
 
@@ -31,9 +31,23 @@ export interface SetterServiceOptions {
   /** Sender.enqueue: se cumple cuando el envío terminó (bien o mal). */
   readonly enqueue: (actions: readonly Action[]) => Promise<void>;
   readonly getUsername: (igId: string) => Promise<string | null>;
+  /** Muestra "escribiendo…" (InstagramClient.sendTypingOn). Sin él, solo se espera. */
+  readonly showTyping?: (igId: string) => Promise<void>;
   readonly debounceMs?: number;
   readonly setTimer?: (fn: () => void, ms: number) => unknown;
   readonly clearTimer?: (handle: unknown) => void;
+  readonly sleep?: (ms: number) => Promise<void>;
+  readonly random?: () => number;
+}
+
+/** Pausa antes de cada mensajito: unos 3-4 s según lo largo que sea, con algo de azar (lo pidió Jose). */
+const TYPING_BASE_MS = 3000;
+const TYPING_MS_PER_CHAR = 10;
+const TYPING_MAX_EXTRA_MS = 1000;
+const TYPING_JITTER_MS = 400;
+
+export function typingDelayMs(text: string, random: number): number {
+  return TYPING_BASE_MS + Math.min(text.length * TYPING_MS_PER_CHAR, TYPING_MAX_EXTRA_MS) + Math.floor(random * TYPING_JITTER_MS);
 }
 
 export function parseUsernames(raw: string | null): string[] {
@@ -59,8 +73,12 @@ export class SetterService {
   private readonly debounceMs: number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly random: () => number;
 
   constructor(private readonly options: SetterServiceOptions) {
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.random = options.random ?? Math.random;
     this.debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
     this.setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle as NodeJS.Timeout));
@@ -150,29 +168,53 @@ export class SetterService {
 
   private async deliver(igId: string, dedupKey: string, output: SetterOutput, usage: BrainUsage): Promise<void> {
     const { store, links } = this.options;
-    const text = output.reply.trim();
-    const facts = { igId, usage, siguientePaso: output.lead.siguiente_paso, needsHuman: output.needs_human };
-    if (text.length === 0) {
+    const messages = output.messages.map((m) => m.trim()).filter((m) => m.length > 0);
+    const facts = { igId, usage, messages: messages.length, siguientePaso: output.lead.siguiente_paso, needsHuman: output.needs_human };
+    if (messages.length === 0) {
       await this.log('La IA decidió no responder.', facts);
     } else {
-      const guard = checkReply(text, { urls: [links.agenda, links.membership], emails: [links.contactEmail] });
+      const guard = checkMessages(messages, { urls: [links.agenda, links.membership], emails: [links.contactEmail] });
       if (!guard.ok) {
-        await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'held', dedupKey, note: guard.reasons.join(' · ') });
-        return this.stop(igId, `Respuesta retenida: ${guard.reasons.join(' · ')}`);
+        const note = guard.reasons.join(' · ');
+        await store.addMessage({ igId, direction: 'out', source: 'ai', text: messages.join('\n'), mid: null, status: 'held', dedupKey, note });
+        return this.stop(igId, `Respuesta retenida: ${note}`);
       }
       if ((await store.getSetting(SETTINGS.setterDraft)) === 'true') {
-        await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'held', dedupKey, note: 'Modo borrador: pendiente de aprobar' });
+        for (const [i, text] of messages.entries()) {
+          await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'held', dedupKey: `${dedupKey}:${i + 1}`, note: 'Modo borrador: pendiente de aprobar' });
+        }
         await this.log('Modo borrador: respuesta retenida para aprobar.', facts);
       } else {
         await this.log('Respuesta de la IA en cola.', facts);
-        await this.send(igId, dedupKey, text);
+        await this.sendAll(igId, dedupKey, messages);
       }
     }
     if (output.needs_human) await this.stop(igId, `La IA pide que intervenga Jose: ${output.needs_human_reason ?? 'sin motivo'}`);
     else if (output.lead.es_menor === 'si') await this.stop(igId, 'Posible menor de edad.');
   }
 
-  private async send(igId: string, dedupKey: string, text: string): Promise<void> {
+  /** Mensajito a mensajito, como una persona: "escribiendo…", pausa según lo largo, envío. Si uno falla, no salen los siguientes. */
+  private async sendAll(igId: string, dedupKey: string, messages: readonly string[]): Promise<void> {
+    for (const [i, text] of messages.entries()) {
+      await this.typeLikeHuman(igId, text);
+      if (!(await this.send(igId, `${dedupKey}:${i + 1}`, text))) return;
+    }
+  }
+
+  private async typeLikeHuman(igId: string, text: string): Promise<void> {
+    if (this.options.showTyping) {
+      try {
+        await this.options.showTyping(igId);
+      } catch (error) {
+        // Sin "escribiendo…" el mensaje sale igual.
+        await this.log('No se pudo mostrar "escribiendo…".', { igId, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    await this.sleep(typingDelayMs(text, this.random()));
+  }
+
+  /** Envía un mensajito por la cola y apunta cómo terminó. Devuelve true si Instagram lo aceptó. */
+  private async send(igId: string, dedupKey: string, text: string): Promise<boolean> {
     const { store } = this.options;
     await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'queued', dedupKey });
     const action: Action = {
@@ -185,6 +227,7 @@ export class SetterService {
     const done = await store.getAction(dedupKey);
     if (done?.ok === true) await store.setMessageStatus(dedupKey, 'sent', messageIdOf(done.response));
     else if (done?.ok === false) await store.setMessageStatus(dedupKey, 'failed');
+    return done?.ok === true;
   }
 
   private async stop(igId: string, reason: string): Promise<void> {

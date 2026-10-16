@@ -16,6 +16,8 @@ export interface BrainUsage {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly cacheReadTokens: number;
+  /** Tokens escritos en la caché (el documento la primera vez): sin esto el coste medido sale casi a cero. */
+  readonly cacheCreationTokens: number;
 }
 
 export type BrainResult =
@@ -53,7 +55,12 @@ export function readOutput(response: Anthropic.Message): BrainResult {
   return {
     kind: 'ok',
     output: parsed.data,
-    usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, cacheReadTokens: usage.cache_read_input_tokens ?? 0 },
+    usage: {
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+    },
   };
 }
 

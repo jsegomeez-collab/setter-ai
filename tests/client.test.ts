@@ -54,6 +54,14 @@ describe('InstagramClient', () => {
     await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'boom' } })).getFollowStatus('9')).rejects.toBeInstanceOf(MetaApiError);
   });
 
+  it('sendTypingOn: manda solo recipient y sender_action typing_on', async () => {
+    const fetchFn = fetchReturning(200, { recipient_id: '9' });
+    await new InstagramClient('t', 'v25.0', fetchFn).sendTypingOn('9');
+    const [url, init] = lastCall(fetchFn);
+    expect(url).toBe('https://graph.instagram.com/v25.0/me/messages');
+    expect(JSON.parse(init.body as string)).toEqual({ recipient: { id: '9' }, sender_action: 'typing_on' });
+  });
+
   it('getUsername: pide el campo username del IGSID; sin consentimiento devuelve null', async () => {
     const fetchFn = fetchReturning(200, { username: 'josegomezlife', id: '9' });
     expect(await new InstagramClient('t', 'v25.0', fetchFn).getUsername('9')).toBe('josegomezlife');

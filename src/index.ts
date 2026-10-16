@@ -56,6 +56,7 @@ async function main(): Promise<void> {
     links,
     enqueue: (actions) => activeSender.enqueue(actions),
     getUsername: async (igId) => (client ? client.getUsername(igId) : null),
+    showTyping: client ? (igId) => client.sendTypingOn(igId) : undefined,
   });
   const echoes = new EchoWatcher({ store });
 

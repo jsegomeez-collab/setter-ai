@@ -250,7 +250,7 @@ export const TEST_SETTER_CONFIG: SetterConfig = { anthropicApiKey: null, model: 
 /** Salida de Claude de ejemplo (respuesta + ficha), con lo que cada prueba quiera cambiar. */
 export function sampleOutput(overrides: Partial<SetterOutput> = {}, lead: Partial<SetterOutput['lead']> = {}): SetterOutput {
   return {
-    reply: '¡Genial! ¿Ya usas alguna IA como ChatGPT o Claude?',
+    messages: ['genial! 🙌', 'ya usas alguna IA como ChatGPT o Claude?'],
     needs_human: false,
     needs_human_reason: null,
     lead: {

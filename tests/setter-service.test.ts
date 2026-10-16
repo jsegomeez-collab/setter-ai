@@ -3,12 +3,12 @@ import type { Action } from '../src/flows/engine.js';
 import type { InstagramEvent } from '../src/meta/parse.js';
 import type { BrainResult, SetterBrain } from '../src/setter/brain.js';
 import { NO_TEXT_PLACEHOLDER } from '../src/setter/prompt.js';
-import { SetterService, parseUsernames } from '../src/setter/service.js';
+import { SetterService, parseUsernames, typingDelayMs } from '../src/setter/service.js';
 import { SETTINGS } from '../src/store.js';
 import { ACCOUNT_ID, STRANGER_ID, TEST_SETTER_LINKS, createMemoryStore, sampleOutput } from './helpers.js';
 
 type MessageEvent = Extract<InstagramEvent, { kind: 'message' }>;
-const USAGE = { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 0 };
+const USAGE = { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 0, cacheCreationTokens: 0 };
 const ok = (output = sampleOutput()): BrainResult => ({ kind: 'ok', output, usage: USAGE });
 
 function dm(text: string | null, mid: string): MessageEvent {
@@ -32,10 +32,12 @@ async function setup(options: SetupOptions = {}) {
   const enqueue = vi.fn(async (actions: readonly Action[]) => {
     for (const action of actions) {
       await store.claimAction(action.dedupKey, action.type, action);
-      await store.finishAction(action.dedupKey, options.sendOk ?? true, options.sendOk === false ? { error: 'x' } : { recipientId: STRANGER_ID, messageId: 'm-out-1' });
+      await store.finishAction(action.dedupKey, options.sendOk ?? true, options.sendOk === false ? { error: 'x' } : { recipientId: STRANGER_ID, messageId: `out-${action.dedupKey}` });
     }
   });
   const getUsername = vi.fn().mockResolvedValue(options.username === undefined ? 'josegomezlife' : options.username);
+  const showTyping = vi.fn().mockResolvedValue(undefined);
+  const sleep = vi.fn().mockResolvedValue(undefined);
   const timers: (() => void)[] = [];
   const service = new SetterService({
     store,
@@ -43,6 +45,9 @@ async function setup(options: SetupOptions = {}) {
     links: TEST_SETTER_LINKS,
     enqueue,
     getUsername,
+    showTyping,
+    sleep,
+    random: () => 0,
     setTimer: (fn) => timers.push(fn) - 1,
     clearTimer: (handle) => {
       timers[handle as number] = () => undefined;
@@ -53,24 +58,29 @@ async function setup(options: SetupOptions = {}) {
     timers.splice(0).forEach((fn) => fn());
     await service.idle();
   };
-  return { store, decide, enqueue, getUsername, service, flush };
+  return { store, decide, enqueue, getUsername, showTyping, sleep, service, flush };
 }
 
 describe('SetterService', () => {
-  it('responde por la cola de seguimientos, guarda la ficha y apunta el mensaje enviado con su id de Meta', async () => {
-    const { store, decide, enqueue, service, flush } = await setup();
+  it('responde en varios mensajitos por la cola, cada uno con "escribiendo…" y pausa, y guarda la ficha', async () => {
+    const { store, decide, enqueue, showTyping, sleep, service, flush } = await setup();
     await service.onIncoming(dm('hola, quiero info', 'm-1'));
     await flush();
     expect(decide).toHaveBeenCalledTimes(1);
     const [system, messages] = decide.mock.calls[0] ?? [];
     expect(system).toContain(`Agenda: ${TEST_SETTER_LINKS.agenda}`);
     expect(messages).toEqual([{ role: 'user', content: 'hola, quiero info' }]);
-    expect(enqueue.mock.calls[0]?.[0]).toEqual([
-      expect.objectContaining({ type: 'send_message', dedupKey: 'ai:m-1', recipientId: STRANGER_ID, message: expect.objectContaining({ text: sampleOutput().reply, buttons: [] }) }),
+    const [first, second] = sampleOutput().messages;
+    expect(enqueue.mock.calls.map((call) => call[0])).toEqual([
+      [expect.objectContaining({ type: 'send_message', dedupKey: 'ai:m-1:1', recipientId: STRANGER_ID, message: expect.objectContaining({ text: first, buttons: [] }) })],
+      [expect.objectContaining({ type: 'send_message', dedupKey: 'ai:m-1:2', recipientId: STRANGER_ID, message: expect.objectContaining({ text: second, buttons: [] }) })],
     ]);
+    expect(showTyping).toHaveBeenCalledTimes(2);
+    expect(sleep.mock.calls.map((call) => call[0])).toEqual([typingDelayMs(first ?? '', 0), typingDelayMs(second ?? '', 0)]);
     expect(store.messages.map((m) => [m.direction, m.source, m.status, m.mid])).toEqual([
       ['in', 'user', 'sent', 'm-1'],
-      ['out', 'ai', 'sent', 'm-out-1'],
+      ['out', 'ai', 'sent', 'out-ai:m-1:1'],
+      ['out', 'ai', 'sent', 'out-ai:m-1:2'],
     ]);
     expect((await store.getContact(STRANGER_ID))?.lead).toEqual(sampleOutput().lead);
   });
@@ -92,7 +102,7 @@ describe('SetterService', () => {
     await flush();
     await service.replyNow(STRANGER_ID);
     expect(decide).toHaveBeenCalledTimes(1);
-    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledTimes(sampleOutput().messages.length); // una vez cada mensajito, ninguno repetido
   });
 
   it('apagado: guarda el DM pero no llama a Claude', async () => {
@@ -135,7 +145,7 @@ describe('SetterService', () => {
 
   it('un enlace no permitido NO sale: se retiene y la IA se para para Jose', async () => {
     const { store, decide, enqueue, service, flush } = await setup();
-    decide.mockResolvedValue(ok(sampleOutput({ reply: 'Paga aquí: https://otro-pago.com/vip' })));
+    decide.mockResolvedValue(ok(sampleOutput({ messages: ['Paga aquí: https://otro-pago.com/vip'] })));
     await service.onIncoming(dm('quiero el vip', 'm-1'));
     await flush();
     expect(enqueue).not.toHaveBeenCalled();
@@ -145,7 +155,7 @@ describe('SetterService', () => {
 
   it('el enlace de agenda permitido sí sale', async () => {
     const { enqueue, service, decide, flush } = await setup();
-    decide.mockResolvedValue(ok(sampleOutput({ reply: `Agenda tu llamada aquí: ${TEST_SETTER_LINKS.agenda}` })));
+    decide.mockResolvedValue(ok(sampleOutput({ messages: [`Agenda tu llamada aquí: ${TEST_SETTER_LINKS.agenda}`] })));
     await service.onIncoming(dm('vale, agendo', 'm-1'));
     await flush();
     expect(enqueue).toHaveBeenCalledTimes(1);
@@ -165,7 +175,7 @@ describe('SetterService', () => {
 
   it('si la IA pide a Jose, envía su respuesta corta y se para', async () => {
     const { store, decide, enqueue, service, flush } = await setup();
-    decide.mockResolvedValue(ok(sampleOutput({ reply: 'Le paso tu mensaje al equipo.', needs_human: true, needs_human_reason: 'Queja por un pago' })));
+    decide.mockResolvedValue(ok(sampleOutput({ messages: ['Le paso tu mensaje al equipo.'], needs_human: true, needs_human_reason: 'Queja por un pago' })));
     await service.onIncoming(dm('me cobraron dos veces', 'm-1'));
     await flush();
     expect(enqueue).toHaveBeenCalledTimes(1);
@@ -174,7 +184,7 @@ describe('SetterService', () => {
 
   it('posible menor de edad: la IA se para', async () => {
     const { store, decide, service, flush } = await setup();
-    decide.mockResolvedValue(ok(sampleOutput({ reply: 'Gracias por escribir, ¡mucho ánimo con tus estudios!' }, { es_menor: 'si' })));
+    decide.mockResolvedValue(ok(sampleOutput({ messages: ['Gracias por escribir, ¡mucho ánimo con tus estudios!'] }, { es_menor: 'si' })));
     await service.onIncoming(dm('tengo 15 años', 'm-1'));
     await flush();
     expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: true, aiPausedReason: 'Posible menor de edad.' });
@@ -190,11 +200,51 @@ describe('SetterService', () => {
     expect((await store.getContact(STRANGER_ID))?.aiPaused).toBe(false);
   });
 
-  it('si Instagram no acepta el envío, el mensaje queda como fallido', async () => {
-    const { store, service, flush } = await setup({ sendOk: false });
+  it('modo borrador con varios mensajitos: se retienen todos, cada uno con su clave', async () => {
+    const { store, service, flush } = await setup();
+    store.settings.set(SETTINGS.setterDraft, 'true');
     await service.onIncoming(dm('hola', 'm-1'));
     await flush();
-    expect(store.messages.at(-1)).toMatchObject({ direction: 'out', status: 'failed' });
+    expect(store.messages.filter((m) => m.direction === 'out').map((m) => [m.status, m.dedupKey])).toEqual([
+      ['held', 'ai:m-1:1'],
+      ['held', 'ai:m-1:2'],
+    ]);
+  });
+
+  it('si Instagram no acepta un mensajito, queda como fallido y NO salen los siguientes', async () => {
+    const { store, enqueue, service, flush } = await setup({ sendOk: false });
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(store.messages.filter((m) => m.direction === 'out')).toEqual([expect.objectContaining({ status: 'failed', dedupKey: 'ai:m-1:1' })]);
+  });
+
+  it('si falla el "escribiendo…", el mensaje sale igual (y queda registrado)', async () => {
+    const { store, enqueue, showTyping, service, flush } = await setup();
+    showTyping.mockRejectedValue(new Error('Meta no lo admite'));
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(enqueue).toHaveBeenCalledTimes(2);
+    expect(store.events.some((e) => e.note.includes('No se pudo mostrar "escribiendo…"'))).toBe(true);
+  });
+
+  it.each([
+    ['demasiados mensajitos', ['uno', 'dos', 'tres', 'cuatro', 'cinco'], 'Demasiados mensajes'],
+    ['un mensajito larguísimo', ['a'.repeat(301)], 'demasiado largo'],
+  ])('%s: no sale nada, se retiene y la IA se para', async (_name, bubbles, reason) => {
+    const { store, decide, enqueue, service, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({ messages: bubbles })));
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(store.messages.at(-1)).toMatchObject({ status: 'held', note: expect.stringContaining(reason) });
+    expect((await store.getContact(STRANGER_ID))?.aiPaused).toBe(true);
+  });
+
+  it('la pausa entre mensajitos es de unos 3-4 s según lo largo', () => {
+    expect(typingDelayMs('ok', 0)).toBe(3020);
+    expect(typingDelayMs('a'.repeat(100), 0)).toBe(4000);
+    expect(typingDelayMs('a'.repeat(300), 0.99)).toBeLessThanOrEqual(4400);
   });
 
   it('sin clave de Anthropic o sin documento: guarda el DM, no responde y lo deja registrado', async () => {
