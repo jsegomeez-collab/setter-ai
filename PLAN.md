@@ -1,7 +1,8 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-16
-> Estado general: **Fase 1 en curso.** App de Meta publicada y conectada. Siguiente: prueba real con la cuenta de pruebas (pasos 9-12).
+> Estado general: **Fase 1 TERMINADA ✅ (2026-10-16).** Siguiente: Fase 2 (pendiente de que Jose dé el OK).
+> Modo seguro activo: DMs desactivados y reel de prueba = "00000" (no responde a nada).
 
 ## Objetivo
 
@@ -53,14 +54,17 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 - Repos revisados: OpenSetter, OpenReply, open-autodm, InstaAuto, ZernFlow, ig-setter, manychat-ai-agent.
 - Decisiones de arriba tomadas con Jose.
 
-### Fase 1 — Prueba de punta a punta, sin IA 🔄
+### Fase 1 — Prueba de punta a punta, sin IA ✅
 
 Progreso:
 - [x] Pasos 1-2: código hecho (2026-10-16). 60 pruebas automáticas OK, cobertura 85,5 % de líneas. `store.ts` (Postgres) sin prueba automática: se valida en el primer arranque con Neon.
 - [x] Paso 3: despliegue en Render + Neon (https://setter-ai-vfle.onrender.com). Panel lee la BD → `store.ts` validado con datos reales.
 - [x] Pasos 4-8 (2026-10-16, hecho con Playwright): app "AI Setter" (ID 1416642890618916, app de Instagram "AI Setter-IG"), @josenews.ai tester, permisos basic/comments/messages, 2 secretos + token en Render, webhook verificado (comments, messages, standby…), suscripción `{"success":true}`, URLs legales + categoría, **app PUBLICADA sin App Review ni verificación**.
 - [x] Primer aviso real tras publicar: `read` de un DM real de @josenews.ai (13:13 UTC).
-- [ ] Pasos 9-12: prueba real con @josegomezlife (cuenta de pruebas, sin rol) en un reel de poco tráfico.
+- [x] Pasos 9-12 (2026-10-16 13:19 UTC): @josegomezlife (SIN rol en la app) comentó "prueba setter" en el reel "Cómo crear tu primer agente…" (ManyChat pausado):
+  - Comentario recibido por webhook ✅ → respuesta pública ✅ → DM privado ✅ (recipient = mismo ID que el comentario).
+  - Respondió "Hola" → llegó como `messages` (NO standby) ✅ → contestación "Recibido" ✅.
+  - **R1 RESUELTO: con la app publicada y Standard Access, llegan comentarios y DMs de cuentas sin rol. Sin App Review ni verificación.**
 
 Seguros del código (ManyChat sigue en vivo): solo actúa en el reel elegido en `/eventos`; solo contesta DMs si están activados en el panel y a remitentes autorizados (quien comentó en el reel de prueba); los `standby` solo se registran.
 
@@ -145,7 +149,7 @@ Seguros del código (ManyChat sigue en vivo): solo actúa en el reel elegido en 
 
 | # | Riesgo | Qué hacemos |
 |---|---|---|
-| R1 | La doc de Meta se contradice: los avisos de comentarios piden "Advanced Access" ([webhooks](https://developers.facebook.com/docs/instagram-platform/webhooks)), pero para tu propia cuenta basta "Standard Access" ([overview](https://developers.facebook.com/docs/instagram-platform/overview)). | Lo resuelve la Fase 1. Planes B y C preparados. |
+| R1 | ✅ RESUELTO 2026-10-16: con la app publicada (Standard Access) llegan comentarios y DMs de cuentas sin rol. | — |
 | R2 | Instagram da cada conversación a **una sola app**. Mientras ManyChat siga conectado, puede quedarse con los DMs. | Fase 1, paso 11-12. Nunca cambiar el reparto sin Jose. |
 | R3 | Ban por comportamiento de spam. Meta no publica sus umbrales. | Protecciones anti-ban de la Fase 2. Solo API oficial. |
 | R4 | Ley de California (§17941): prohíbe usar un bot que **engañe** sobre ser un bot para empujar una venta. Si se avisa de que es un bot, no hay responsabilidad. ([texto](https://california.public.law/codes/ca_bus_and_prof_code_section_17941)) | Decidir en la Fase 3 cómo avisar. Leyes de LATAM: **no verificadas**. No es asesoramiento legal. |
@@ -168,10 +172,13 @@ Seguros del código (ManyChat sigue en vivo): solo actúa en el reel elegido en 
 - [ ] Antes de producción: base de datos definitiva (Neon de pago o Render Postgres).
 - [ ] La página `/data-deletion` dice que se borran los datos si escriben "BORRAR" por DM: hoy eso es **manual** (lo haría Jose). Automatizarlo en la Fase 2 o 4.
 - [ ] Añadir prueba automática de `store.ts` contra una base de datos real.
-- [ ] Reconocer avisos `read` / `reaction` (hoy salen como "vacio"; solo es registro).
+- [ ] Reconocer avisos `read` / `reaction` / `seen` (hoy salen como "vacio" u "other"; solo es registro).
+- [ ] Botón "Quitar reel de prueba" en el panel (hoy se usa el truco de poner "00000").
+- [ ] Comprobar si, con ManyChat activo, los DMs nos llegan como `messages` o `standby` (en la prueba ManyChat estaba pausado).
 - [ ] El token de Meta caduca (~60 días, no verificado): automatizar renovación (Fase 2).
 
 ## Registro de cambios
 
 - 2026-10-16 — Plan creado. Fase 0 terminada.
 - 2026-10-16 — Fase 1: código del servidor de prueba subido a GitHub (commit 48c4377).
+- 2026-10-16 — Fase 1 terminada: prueba de punta a punta OK con cuenta sin rol. Modo seguro activado.
