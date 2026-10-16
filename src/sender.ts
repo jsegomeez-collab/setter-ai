@@ -274,8 +274,17 @@ export class Sender {
         error.code !== POLICY_BLOCK_CODE;
       if (!canFallBack) throw error;
       // Meta no aceptó los botones en la respuesta privada: se manda solo texto (con los enlaces) y se deja constancia.
-      const result = await client.sendPrivateReply(action.commentId, toPlainFallback(action.message, this.signer));
-      return { fallback: 'solo texto (Meta rechazó los botones)', firstError: describeError(error), result };
+      try {
+        const result = await client.sendPrivateReply(action.commentId, toPlainFallback(action.message, this.signer));
+        return { fallback: 'solo texto (Meta rechazó los botones)', firstError: describeError(error), result };
+      } catch (fallbackError) {
+        await this.options.store.logEvent('respaldo', 'Reintento con solo texto: Meta también lo rechazó.', {
+          commentId: action.commentId,
+          firstError: describeError(error),
+          fallbackError: describeError(fallbackError),
+        });
+        throw fallbackError;
+      }
     }
   }
 

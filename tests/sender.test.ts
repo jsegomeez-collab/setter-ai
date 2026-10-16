@@ -71,6 +71,8 @@ describe('Sender', () => {
     const { client, sender, store } = setup(fakeClient({ sendPrivateReply: vi.fn().mockRejectedValue(invalid) }));
     await sender.enqueue([privateReply, reply]);
     expect(client.sendPrivateReply).toHaveBeenCalledTimes(2); // con botones y, de respaldo, solo texto
+    // Queda constancia de que se intentó el texto (para medir cuántos se salvan con él).
+    expect(store.events.some((e) => e.kind === 'respaldo' && e.note.includes('también'))).toBe(true);
     expect(client.replyToComment).not.toHaveBeenCalled();
     expect(store.actions.get('reply:c1')).toMatchObject({ ok: false, response: { skipped: expect.stringContaining('DM no salió') } });
   });
