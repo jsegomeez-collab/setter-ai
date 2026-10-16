@@ -7,6 +7,9 @@ const HOST = 'https://graph.instagram.com';
 const REQUEST_TIMEOUT_MS = 15_000;
 
 export class MetaApiError extends Error {
+  readonly code: number | null;
+  readonly subcode: number | null;
+
   constructor(
     message: string,
     readonly status: number,
@@ -14,6 +17,9 @@ export class MetaApiError extends Error {
   ) {
     super(message);
     this.name = 'MetaApiError';
+    const error = (body as { error?: { code?: unknown; error_subcode?: unknown } } | null)?.error;
+    this.code = typeof error?.code === 'number' ? error.code : null;
+    this.subcode = typeof error?.error_subcode === 'number' ? error.error_subcode : null;
   }
 }
 
@@ -35,8 +41,33 @@ export interface SendResult {
   readonly messageId: string | null;
 }
 
+/** Mensaje en el formato de la API: texto simple o plantilla de botones. */
+export type ApiMessage =
+  | { readonly text: string }
+  | {
+      readonly attachment: {
+        readonly type: 'template';
+        readonly payload: {
+          readonly template_type: 'button';
+          readonly text: string;
+          readonly buttons: readonly (
+            | { readonly type: 'web_url'; readonly url: string; readonly title: string }
+            | { readonly type: 'postback'; readonly payload: string; readonly title: string }
+          )[];
+        };
+      };
+    };
+
+export type FollowStatus = 'yes' | 'no' | 'unknown';
+
+export interface RefreshedToken {
+  readonly accessToken: string;
+  readonly expiresInSeconds: number | null;
+}
+
 type FetchFn = typeof fetch;
 type Json = Record<string, unknown>;
+export type TokenSource = string | (() => Promise<string | null>);
 
 function asString(value: unknown): string | null {
   if (typeof value === 'string') return value;
@@ -44,35 +75,54 @@ function asString(value: unknown): string | null {
   return null;
 }
 
+async function parseResponse(response: Response): Promise<Json> {
+  const text = await response.text();
+  let parsed: unknown = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    parsed = { raw: text.slice(0, 500) };
+  }
+  if (!response.ok) {
+    const error = (parsed as { error?: { message?: string } } | null)?.error;
+    throw new MetaApiError(error?.message ?? `HTTP ${response.status}`, response.status, parsed);
+  }
+  return (parsed ?? {}) as Json;
+}
+
+/** Renueva un token de larga duración (doc: GET /refresh_access_token, grant_type=ig_refresh_token). */
+export async function refreshAccessToken(token: string, fetchFn: FetchFn = fetch): Promise<RefreshedToken> {
+  const url = `${HOST}/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`;
+  const data = await parseResponse(await fetchFn(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }));
+  const accessToken = asString(data.access_token);
+  if (!accessToken) throw new MetaApiError('La renovación no devolvió access_token', 200, data);
+  return { accessToken, expiresInSeconds: typeof data.expires_in === 'number' ? data.expires_in : null };
+}
+
 export class InstagramClient {
   constructor(
-    private readonly token: string,
+    private readonly token: TokenSource,
     private readonly version: string,
     private readonly fetchFn: FetchFn = fetch,
   ) {}
+
+  private async currentToken(): Promise<string> {
+    const token = typeof this.token === 'string' ? this.token : await this.token();
+    if (!token) throw new MetaApiError('No hay token de Instagram configurado', 0, null);
+    return token;
+  }
 
   private async call(method: 'GET' | 'POST', path: string, body?: Json): Promise<Json> {
     const response = await this.fetchFn(`${HOST}/${this.version}/${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${this.token}`,
+        Authorization: `Bearer ${await this.currentToken()}`,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    const text = await response.text();
-    let parsed: unknown = null;
-    try {
-      parsed = text ? JSON.parse(text) : null;
-    } catch {
-      parsed = { raw: text.slice(0, 500) };
-    }
-    if (!response.ok) {
-      const error = (parsed as { error?: { message?: string } } | null)?.error;
-      throw new MetaApiError(error?.message ?? `HTTP ${response.status}`, response.status, parsed);
-    }
-    return (parsed ?? {}) as Json;
+    return parseResponse(response);
   }
 
   async getAccount(): Promise<Account> {
@@ -105,13 +155,40 @@ export class InstagramClient {
     return this.call('POST', `${encodeURIComponent(commentId)}/replies`, { message: text });
   }
 
-  async sendPrivateReply(commentId: string, text: string): Promise<SendResult> {
-    const data = await this.call('POST', 'me/messages', { recipient: { comment_id: commentId }, message: { text } });
+  async sendPrivateReply(commentId: string, message: ApiMessage | string): Promise<SendResult> {
+    return this.send({ comment_id: commentId }, message);
+  }
+
+  async sendMessage(recipientId: string, message: ApiMessage | string): Promise<SendResult> {
+    return this.send({ id: recipientId }, message);
+  }
+
+  /** Compatibilidad con la Fase 1. */
+  async sendText(recipientId: string, text: string): Promise<SendResult> {
+    return this.sendMessage(recipientId, text);
+  }
+
+  private async send(recipient: Json, message: ApiMessage | string): Promise<SendResult> {
+    const body = { recipient, message: typeof message === 'string' ? { text: message } : message };
+    const data = await this.call('POST', 'me/messages', body as unknown as Json);
     return { recipientId: asString(data.recipient_id), messageId: asString(data.message_id) };
   }
 
-  async sendText(recipientId: string, text: string): Promise<SendResult> {
-    const data = await this.call('POST', 'me/messages', { recipient: { id: recipientId }, message: { text } });
-    return { recipientId: asString(data.recipient_id), messageId: asString(data.message_id) };
+  /**
+   * ¿La persona sigue la cuenta? (doc: User Profile API, campo is_user_follow_business).
+   * Meta exige "consentimiento" (que haya escrito); si no lo hay, devolvemos "unknown".
+   */
+  async getFollowStatus(igsid: string): Promise<{ status: FollowStatus; detail: string }> {
+    try {
+      const data = await this.call('GET', `${encodeURIComponent(igsid)}?fields=is_user_follow_business`);
+      if (data.is_user_follow_business === true) return { status: 'yes', detail: 'is_user_follow_business=true' };
+      if (data.is_user_follow_business === false) return { status: 'no', detail: 'is_user_follow_business=false' };
+      return { status: 'unknown', detail: 'Meta no devolvió el campo' };
+    } catch (error) {
+      if (error instanceof MetaApiError && error.status >= 400 && error.status < 500) {
+        return { status: 'unknown', detail: `Meta no lo permite: ${error.message}` };
+      }
+      throw error;
+    }
   }
 }

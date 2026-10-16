@@ -1,6 +1,11 @@
 const MIN_PASSWORD_LENGTH = 12;
+const MIN_ENCRYPTION_KEY_LENGTH = 16;
 const DEFAULT_PORT = 3000;
 const DEFAULT_API_VERSION = 'v25.0';
+/** Muy por debajo de los ~750/h que citan terceros para respuestas privadas (no verificado en doc oficial). */
+const DEFAULT_SEND_LIMIT_PER_HOUR = 120;
+const DEFAULT_DELAY_MIN_MS = 2000;
+const DEFAULT_DELAY_MAX_MS = 5000;
 
 export interface Config {
   readonly port: number;
@@ -11,8 +16,11 @@ export interface Config {
   readonly appSecrets: readonly string[];
   readonly igAccessToken: string | null;
   readonly igApiVersion: string;
-  /** IDs de Instagram a los que se permite contestar por DM además de los que se añaden desde el panel. */
-  readonly allowedSenderIds: readonly string[];
+  /** Clave para guardar cifrado el token renovado. Sin ella no hay renovación automática. */
+  readonly tokenEncryptionKey: string | null;
+  readonly sendLimitPerHour: number;
+  readonly sendDelayMinMs: number;
+  readonly sendDelayMaxMs: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -24,11 +32,12 @@ function clean(value: string | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
-function splitList(value: string | undefined): string[] {
-  return (value ?? '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+function positiveInt(env: Env, key: string, fallback: number): number {
+  const raw = clean(env[key]);
+  if (raw === null) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) throw new Error(`${key} no es un número entero válido: ${raw}`);
+  return value;
 }
 
 export function loadConfig(env: Env = process.env): Config {
@@ -47,6 +56,15 @@ export function loadConfig(env: Env = process.env): Config {
     throw new Error(`PORT no es válido: ${env.PORT}`);
   }
 
+  const tokenEncryptionKey = clean(env.TOKEN_ENCRYPTION_KEY);
+  if (tokenEncryptionKey !== null && tokenEncryptionKey.length < MIN_ENCRYPTION_KEY_LENGTH) {
+    throw new Error(`TOKEN_ENCRYPTION_KEY debe tener al menos ${MIN_ENCRYPTION_KEY_LENGTH} caracteres`);
+  }
+
+  const sendDelayMinMs = positiveInt(env, 'SEND_DELAY_MIN_MS', DEFAULT_DELAY_MIN_MS);
+  const sendDelayMaxMs = positiveInt(env, 'SEND_DELAY_MAX_MS', DEFAULT_DELAY_MAX_MS);
+  if (sendDelayMaxMs < sendDelayMinMs) throw new Error('SEND_DELAY_MAX_MS no puede ser menor que SEND_DELAY_MIN_MS');
+
   const appSecrets = [clean(env.META_APP_SECRET), clean(env.META_APP_SECRET_ALT)].filter(
     (secret): secret is string => secret !== null,
   );
@@ -59,6 +77,9 @@ export function loadConfig(env: Env = process.env): Config {
     appSecrets,
     igAccessToken: clean(env.IG_ACCESS_TOKEN),
     igApiVersion: clean(env.IG_API_VERSION) ?? DEFAULT_API_VERSION,
-    allowedSenderIds: splitList(env.ALLOWED_SENDER_IDS),
+    tokenEncryptionKey,
+    sendLimitPerHour: positiveInt(env, 'SEND_LIMIT_PER_HOUR', DEFAULT_SEND_LIMIT_PER_HOUR),
+    sendDelayMinMs,
+    sendDelayMaxMs,
   };
 }

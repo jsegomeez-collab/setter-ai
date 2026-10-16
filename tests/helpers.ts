@@ -1,4 +1,5 @@
-import type { ActionRow, EventRow, Store } from '../src/store.js';
+import type { Flow } from '../src/flows/types.js';
+import { SEND_ACTION_TYPES, type ActionRow, type EventRow, type Store } from '../src/store.js';
 
 /** Base de datos falsa en memoria con el mismo comportamiento que la de Postgres. */
 export function createMemoryStore(): Store & {
@@ -7,12 +8,15 @@ export function createMemoryStore(): Store & {
   actions: Map<string, ActionRow & { request: unknown }>;
   settings: Map<string, string | null>;
   allowed: string[];
+  flows: Map<string, Flow>;
 } {
   const requests: { signatureOk: boolean; payload: unknown }[] = [];
   const events: EventRow[] = [];
   const actions = new Map<string, ActionRow & { request: unknown }>();
   const settings = new Map<string, string | null>();
   const allowed: string[] = [];
+  const flows = new Map<string, Flow>();
+  const sendTypes = new Set<string>(SEND_ACTION_TYPES);
 
   return {
     requests,
@@ -20,6 +24,19 @@ export function createMemoryStore(): Store & {
     actions,
     settings,
     allowed,
+    flows,
+    async listFlows() {
+      return [...flows.values()];
+    },
+    async saveFlow(flow) {
+      flows.set(flow.id, flow);
+    },
+    async deleteFlow(id) {
+      flows.delete(id);
+    },
+    async countSendsSince(since) {
+      return [...actions.values()].filter((a) => a.createdAt >= since && sendTypes.has(a.type) && a.ok !== false).length;
+    },
     async recordRequest(signatureOk, payload) {
       requests.push({ signatureOk, payload });
     },
@@ -77,6 +94,48 @@ export function commentPayload(overrides: Record<string, unknown> = {}): unknown
               media: { id: TEST_MEDIA_ID, media_product_type: 'REELS' },
               ...overrides,
             },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** Flujo de ejemplo con condición de seguir, igual que el que genera el formulario. */
+export function followFlow(overrides: Partial<Flow> = {}): Flow {
+  return {
+    id: 'flow1',
+    name: 'Reel n8n',
+    enabled: true,
+    trigger: { mediaIds: [TEST_MEDIA_ID], keywords: [] },
+    publicReplies: ['¡Te escribí por DM! 📩'],
+    startNodeId: 'start',
+    nodes: [
+      { id: 'start', type: 'message', text: 'Hola, pulsa el botón', buttons: [{ type: 'postback', title: 'Lo quiero', next: 'gate' }] },
+      { id: 'gate', type: 'follow_gate', ifFollowing: 'resource', ifNotFollowing: 'notfollow', ifUnknown: 'resource' },
+      { id: 'resource', type: 'message', text: 'Aquí lo tienes', buttons: [{ type: 'url', title: 'Abrir', url: 'https://example.com/recurso' }] },
+      { id: 'notfollow', type: 'message', text: 'Sígueme primero', buttons: [{ type: 'postback', title: 'Ya te sigo', next: 'gate' }] },
+    ],
+    testUsernames: [],
+    oncePerUser: true,
+    template: 'basic',
+    ...overrides,
+  };
+}
+
+export function postbackPayload(payload: string, options: { mid?: string; sender?: string } = {}): unknown {
+  return {
+    object: 'instagram',
+    entry: [
+      {
+        id: ACCOUNT_ID,
+        time: 1760000000,
+        messaging: [
+          {
+            sender: { id: options.sender ?? STRANGER_ID },
+            recipient: { id: ACCOUNT_ID },
+            timestamp: 1760000000000,
+            postback: { mid: options.mid ?? 'pb-1', title: 'Lo quiero', payload },
           },
         ],
       },

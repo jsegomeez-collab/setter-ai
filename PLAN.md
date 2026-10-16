@@ -1,47 +1,48 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-16
-> Estado general: **Fase 1 TERMINADA ✅ (2026-10-16).** Siguiente: Fase 2 (pendiente de que Jose dé el OK).
-> Modo seguro activo: DMs desactivados y reel de prueba = "00000" (no responde a nada).
+> Estado general: **Fase 2 en curso** (motor de flujos de comentarios). Fase 1 terminada ✅.
+> Modo seguro activo en producción: DMs desactivados y reel de prueba = "00000" (no responde a nada).
 
 ## Objetivo
 
-Un sistema propio, en internet 24/7, que:
+Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para la cuenta de Jose**:
 
-1. Responde a los comentarios de los reels (en público) y manda un DM con el recurso.
-2. Cuando la persona **responde** al DM, un setter con IA habla con ella para cualificarla (¿tiene negocio?, ¿de qué tipo?, etc.).
-3. Guarda toda la información para saber qué objeciones hay y qué tipo de personas escriben.
-4. Más adelante: ofrecer llamadas a los cualificados.
-
-Solo para la cuenta de Jose. Nunca se ofrece a otras cuentas.
+1. **Automatización de comentarios:** responde en público a los comentarios de los reels y manda un DM con el recurso, con **botones** (enlaces o acciones) y **condiciones** (p. ej. "¿me sigue?").
+2. **Setter con IA (corazón del proyecto):** con la información del negocio de Jose (oferta, FAQs, objeciones), habla con quien **responde** por DM como lo haría un setter: crea rapport, cualifica (¿tiene negocio?, tipo, facturación…) y más adelante ofrece llamada.
+3. **Inteligencia comercial:** guarda todo para saber qué objeciones hay, qué tipo de personas escriben y qué reel trae mejores leads.
+4. **Constructor visual de flujos (fase final):** una web para crear flujos sin tocar código: condiciones de seguimiento, botones a enlaces, mensajes, pasos hacia el setter IA, etc.
 
 ## Decisiones tomadas (no reabrir sin preguntar a Jose)
 
 | Fecha | Decisión |
 |---|---|
-| 2026-10-16 | App propia de Meta (Meta for Developers), intentando **no** hacer verificación de empresa ni App Review. |
+| 2026-10-16 | App propia de Meta ("AI Setter"), **publicada con Standard Access, sin App Review ni verificación** (funciona: probado en Fase 1). |
 | 2026-10-16 | La IA solo habla con quien **responde** un DM. Nunca escribe en frío. |
 | 2026-10-16 | Hosting: **Render Starter** (siempre encendido). Ni PC ni VPS. |
-| 2026-10-16 | Código propio. Referencia del lado setter: **OpenSetter** (MIT). Referencia de comentarios: **OpenReply** y **open-autodm** (MIT). |
-| 2026-10-16 | ManyChat se **quita** después de confirmar en la Fase 1 que la app propia recibe los comentarios. Hasta entonces sigue funcionando. |
+| 2026-10-16 | Código propio. Referencias MIT: **OpenSetter** (setter), **OpenReply** y **open-autodm** (comentarios). |
+| 2026-10-16 | ManyChat se apaga cuando la Fase 2 iguale su flujo actual en un reel real. Hasta entonces sigue en vivo. |
 | 2026-10-16 | Audiencia: **USA y LATAM**. |
+| 2026-10-16 | **Fase final = frontend constructor visual de flujos.** Los flujos se guardan desde la Fase 2 en un formato de nodos genérico para que el constructor solo tenga que editarlos. |
 
-Datos de Jose: cuenta Creator pública (Meta Verified), cuenta de pruebas, LLC en USA con EIN, ManyChat Pro, cuentas de GitHub y Render, API key de Anthropic, oferta/FAQs/objeciones por escrito.
+Datos de Jose: cuenta Creator pública @josenews.ai (Meta Verified), cuenta de pruebas @josegomezlife, LLC en USA con EIN, ManyChat Pro, GitHub + Render + Neon, API key de Anthropic, oferta/FAQs/objeciones por escrito.
+
+Infra: servidor https://setter-ai-vfle.onrender.com · repo `jsegomeez-collab/setter-ai` · app Meta ID 1416642890618916 (Instagram "AI Setter-IG").
 
 ## Cómo funciona (al final del plan)
 
 ```
 Alguien comenta en un reel
-   → Meta avisa a nuestro servidor (Render)
-   → respuesta pública variada + DM con el recurso (con botones / condición de seguir)
-La persona responde el DM
    → Meta avisa a nuestro servidor
-   → el setter IA (Claude) lee: tu oferta + FAQs + objeciones + historial del chat
-   → contesta para cualificar y guarda la ficha del lead
-Jose → panel web: conversaciones, fichas, objeciones más repetidas, por reel
+   → el FLUJO del reel: respuesta pública variada + DM (texto + botones)
+   → botones: enlace al recurso, o acción → condición "¿me sigue?" → recurso / "sígueme primero"
+La persona RESPONDE por DM
+   → SETTER IA (Claude): lee oferta + FAQs + objeciones + historial
+   → crea rapport, cualifica, guarda la ficha del lead, (más adelante) ofrece llamada
+Jose → web: constructor de flujos, conversaciones, fichas, objeciones, estadísticas por reel
 ```
 
-Pila técnica: Node + TypeScript, base de datos Postgres (Neon gratis para empezar), Claude por API de Anthropic, Render Starter.
+Pila técnica: Node + TypeScript (Hono), Postgres (Neon), Claude (API de Anthropic), Render Starter.
 
 ---
 
@@ -51,134 +52,98 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 
 ### Fase 0 — Investigación y decisiones ✅ (2026-10-16)
 
-- Repos revisados: OpenSetter, OpenReply, open-autodm, InstaAuto, ZernFlow, ig-setter, manychat-ai-agent.
-- Decisiones de arriba tomadas con Jose.
+### Fase 1 — Prueba de punta a punta, sin IA ✅ (2026-10-16)
 
-### Fase 1 — Prueba de punta a punta, sin IA ✅
+- Servidor en Render + Neon, panel `/eventos`, páginas legales. 60 pruebas automáticas.
+- App de Meta creada, conectada y **publicada** (hecho con Playwright).
+- Prueba real: @josegomezlife (sin rol) comentó → respuesta pública ✅ → DM privado ✅ → respondió "Hola" → llegó como `messages` (no standby) ✅ → contestación ✅. ManyChat estaba pausado.
 
-Progreso:
-- [x] Pasos 1-2: código hecho (2026-10-16). 60 pruebas automáticas OK, cobertura 85,5 % de líneas. `store.ts` (Postgres) sin prueba automática: se valida en el primer arranque con Neon.
-- [x] Paso 3: despliegue en Render + Neon (https://setter-ai-vfle.onrender.com). Panel lee la BD → `store.ts` validado con datos reales.
-- [x] Pasos 4-8 (2026-10-16, hecho con Playwright): app "AI Setter" (ID 1416642890618916, app de Instagram "AI Setter-IG"), @josenews.ai tester, permisos basic/comments/messages, 2 secretos + token en Render, webhook verificado (comments, messages, standby…), suscripción `{"success":true}`, URLs legales + categoría, **app PUBLICADA sin App Review ni verificación**.
-- [x] Primer aviso real tras publicar: `read` de un DM real de @josenews.ai (13:13 UTC).
-- [x] Pasos 9-12 (2026-10-16 13:19 UTC): @josegomezlife (SIN rol en la app) comentó "prueba setter" en el reel "Cómo crear tu primer agente…" (ManyChat pausado):
-  - Comentario recibido por webhook ✅ → respuesta pública ✅ → DM privado ✅ (recipient = mismo ID que el comentario).
-  - Respondió "Hola" → llegó como `messages` (NO standby) ✅ → contestación "Recibido" ✅.
-  - **R1 RESUELTO: con la app publicada y Standard Access, llegan comentarios y DMs de cuentas sin rol. Sin App Review ni verificación.**
+### Fase 2 — Motor de flujos de comentarios (sustituir a ManyChat) 🔄
 
-Seguros del código (ManyChat sigue en vivo): solo actúa en el reel elegido en `/eventos`; solo contesta DMs si están activados en el panel y a remitentes autorizados (quien comentó en el reel de prueba); los `standby` solo se registran.
+**Para qué:** que un reel real funcione igual (o mejor) que con ManyChat, con el formato de flujos que luego usará el constructor visual.
 
-**Para qué:** comprobar con datos reales que Meta nos deja recibir comentarios y DMs de desconocidos **sin** App Review, antes de construir nada más.
+1. **Modelo de flujo genérico (nodos)** guardado en la base de datos:
+   - Disparador: reels concretos o todos + palabras clave (o cualquier comentario).
+   - Respuestas públicas variadas (se elige una al azar).
+   - Nodos: `mensaje` (texto + hasta 3 botones: enlace o acción) y `condición de seguir` (si sigue → nodo A; si no → nodo B).
+   - Modo prueba por flujo: solo responde a usuarios concretos (p. ej. @josegomezlife) mientras ManyChat siga activo.
+2. **Motor:** comentario → flujo → respuesta pública + DM privado con el primer mensaje; pulsación de botón (`messaging_postbacks`) → siguiente nodo.
+3. **Condición de seguir:** `is_user_follow_business`. Meta exige "consentimiento" (que la persona haya escrito). **Hay que probar** si pulsar un botón cuenta. Si no se puede saber → se entrega el recurso igualmente (como OpenReply) y se registra.
+4. **Protecciones anti-ban:** cola de envíos de uno en uno, espera aleatoria de 2-5 s, una sola vez por persona y flujo, límite propio por hora, pausa automática de 24 h si Meta devuelve el error 368.
+5. **Token:** guardarlo en la base de datos y renovarlo solo (`refresh_access_token`, válido 60 días, necesita ≥24 h de antigüedad — verificado en la doc oficial).
+6. **Panel sencillo** (el bonito es la Fase 6): lista de flujos, formulario "plantilla tipo ManyChat" (reel, palabras, respuestas públicas, mensaje, botón, condición de seguir, recurso), activar/desactivar. Más: quitar reel de prueba, reconocer avisos `read`/`seen`.
+7. **Prueba real** con @josegomezlife en un reel de poco tráfico (ManyChat pausado un momento).
 
-**Yo (Claude):**
-1. Crear el proyecto en esta carpeta y subirlo a un repo **privado** de GitHub.
-2. Servidor con:
-   - Recepción de avisos de Meta (verificación + firma de seguridad).
-   - Guardar cada aviso en la base de datos.
-   - Comentario de otra cuenta en el reel de prueba → respuesta pública + DM "Recibido tu comentario: …".
-   - DM entrante → respuesta "Recibido: …".
-   - Páginas de privacidad, términos y borrado de datos (Meta las exige para poner la app en Live).
-   - Página `/eventos` con contraseña para ver todo lo que llega.
-3. Desplegar en Render Starter + base de datos Neon.
+**Necesito de Jose (al final de la fase):** cómo es hoy su flujo de ManyChat (textos, botones, condición de seguir, recurso) para replicarlo.
 
-**Jose (con guía paso a paso, son sus cuentas):**
-4. Crear la app en Meta for Developers (caso de uso Instagram) y añadir su cuenta Creator como tester (aceptar la invitación en Instagram).
-5. Generar el token de acceso en el panel de Meta y pegarlo en Render (nunca en el código).
-6. Configurar el webhook (URL + token de verificación) y suscribir `comments` y `messages`.
-7. Comprobar en Instagram que está activado el acceso a mensajes para herramientas conectadas (sin verificar el nombre exacto del ajuste).
-8. Poner la app en **Live**.
-
-**Prueba (sin tocar ManyChat):**
-9. Usar un reel **sin** automatización de ManyChat. Comentar desde la cuenta de pruebas, que **no** tiene rol en la app (simula a un desconocido).
-10. En `/eventos`: ¿llegó el comentario? ¿salió la respuesta pública? ¿llegó el DM?
-11. Responder el DM desde la cuenta de pruebas: ¿llega como `messages` (bien) o como `standby` (ManyChat es la dueña de la conversación)? ¿contesta?
-12. Si llega como `standby`: probar a tomar el control de la conversación. **Cambiar la app por defecto en Business Suite solo con permiso de Jose**, porque afecta a ManyChat en vivo.
-
-**Hecha cuando:** el ciclo comentario → respuesta pública → DM → respuesta del usuario → contestación funciona con la cuenta de pruebas y se ve en `/eventos`.
-
-**Si los comentarios NO llegan:** decide Jose entre:
-- Plan B: preguntar a Meta cada minuto por comentarios nuevos (endpoint oficial `GET /{media-id}/comments`).
-- Plan C: App Review + verificación de empresa con la LLC.
-
-### Fase 2 — Comentarios completos (sustituir a ManyChat) ⏳
-
-- Reglas por reel: palabra clave o cualquier comentario, texto del DM, recurso, botones y **condición de seguir** (como el flujo actual de ManyChat; referencia OpenReply).
-- Respuestas públicas **variadas**.
-- Protecciones anti-ban:
-  - Esperas aleatorias de unos segundos; envíos de uno en uno.
-  - Un solo DM por persona y comentario (bloqueado en la base de datos).
-  - Límite propio por hora, muy por debajo del de Meta.
-  - Si Meta devuelve el error 368 (bloqueo por política): pausa automática de 24 h.
-- Renovación automática del token de Meta.
-- Pantalla para crear y editar las reglas de cada reel.
-
-**Hecha cuando:** un reel real funciona igual que con ManyChat. Entonces Jose decide apagar ManyChat.
+**Hecha cuando:** un reel real funciona igual que con ManyChat → Jose decide apagar ManyChat.
 
 ### Fase 3 — Setter con IA ⏳
 
-- Claude con la base de conocimiento de Jose (oferta, FAQs, objeciones).
-- Instrucciones de setter: tono, objetivo (cualificar) y preguntas clave.
-- Lógica tomada de OpenSetter:
-  - Esperar unos segundos si mandan varios mensajes seguidos.
-  - Callarse si Jose escribe a mano.
-  - Filtro de temas delicados en **español e inglés**.
-  - No comprometer precios ni fechas.
-  - Modo borrador / automático.
-- Aviso de IA (ver Riesgos) — decide Jose.
+- Base de conocimiento de Jose (oferta, FAQs, objeciones) + instrucciones de setter (tono, rapport, preguntas de cualificación).
+- Claude responde a quien escribe por DM tras el flujo (o por su cuenta).
+- Lógica tomada de OpenSetter: esperar si mandan varios mensajes seguidos, callarse si Jose escribe a mano, filtro de temas delicados en español e inglés, no comprometer precios ni fechas, modo borrador / automático.
+- Aviso de IA (ver R4) — decide Jose.
+- Antes: comprobar si con ManyChat activo los DMs llegan como `messages` o `standby` (R2).
 
-**Hecha cuando:** 10-20 conversaciones de prueba con la cuenta de pruebas salen bien según Jose.
+**Hecha cuando:** 10-20 conversaciones de prueba salen bien según Jose.
 
-### Fase 4 — Fichas de leads y panel ⏳
+### Fase 4 — Fichas de leads e inteligencia comercial ⏳
 
-- Ficha por lead: tiene negocio, tipo/nicho, facturación aproximada, problema principal, objeciones, interés, etapa, resumen y reel de origen.
-- Panel: conversaciones, fichas, ranking de objeciones, datos por reel, pausar la IA por conversación y aprobar borradores.
+- Ficha por lead: tiene negocio, tipo/nicho, facturación aproximada, problema principal, objeciones, interés, etapa, resumen, reel de origen.
+- Panel: conversaciones, fichas, ranking de objeciones, estadísticas por reel, pausar la IA por conversación, aprobar borradores.
 
-### Fase 5 — Ofrecer llamadas ⏳ (más adelante)
+### Fase 5 — Ofrecer llamadas ⏳
 
-- Enlace de agenda solo a los cualificados. Se detalla cuando lleguemos.
+- Enlace de agenda solo a cualificados. Se detalla al llegar.
+
+### Fase 6 (FINAL) — Frontend constructor visual de flujos ⏳
+
+- Web para crear y editar flujos sin código: disparadores, mensajes, **botones a enlaces**, **condiciones de seguimiento**, esperas, pasar al setter IA, etiquetas…
+- Edita el mismo formato de nodos creado en la Fase 2.
+- Une en una sola web todo lo de las fases 2-5 (flujos, conversaciones, fichas, estadísticas).
 
 ---
 
 ## Reglas de Meta (verificadas en la doc oficial)
 
-- DM a quien comenta: **1 solo mensaje por comentario**, dentro de **7 días**. Seguir solo si responde, dentro de **24 h** desde su mensaje. ([private replies](https://developers.facebook.com/docs/instagram-platform/private-replies))
+- DM a quien comenta: **1 solo mensaje por comentario**, dentro de **7 días**. Seguir solo si responde, dentro de **24 h**. ([private replies](https://developers.facebook.com/docs/instagram-platform/private-replies))
 - Responder un comentario: `POST /{comment-id}/replies`. ([comment moderation](https://developers.facebook.com/docs/instagram-platform/comment-moderation))
-- La app tiene que estar en **Live** para recibir avisos, y la cuenta tiene que ser pública. ([webhooks](https://developers.facebook.com/docs/instagram-platform/webhooks))
+- Botones: 1-3 por mensaje, `web_url` o `postback`; texto ≤ 640 caracteres; al pulsar un `postback` llega `messaging_postbacks`. ([button template](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/button-template))
+- `is_user_follow_business` requiere consentimiento del usuario (que haya escrito). ([user profile](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/user-profile))
+- Token: `GET /refresh_access_token?grant_type=ig_refresh_token`, válido 60 días, token ≥ 24 h. ([refresh](https://developers.facebook.com/docs/instagram-platform/reference/refresh_access_token))
+- La app tiene que estar publicada para recibir avisos. ([webhooks](https://developers.facebook.com/docs/instagram-platform/webhooks))
 
 ## Riesgos abiertos
 
 | # | Riesgo | Qué hacemos |
 |---|---|---|
 | R1 | ✅ RESUELTO 2026-10-16: con la app publicada (Standard Access) llegan comentarios y DMs de cuentas sin rol. | — |
-| R2 | Instagram da cada conversación a **una sola app**. Mientras ManyChat siga conectado, puede quedarse con los DMs. | Fase 1, paso 11-12. Nunca cambiar el reparto sin Jose. |
+| R2 | Instagram da cada conversación a **una sola app**. Con ManyChat activo puede quedarse los DMs (standby). | Probar antes de la Fase 3. Nunca cambiar el reparto sin Jose. |
 | R3 | Ban por comportamiento de spam. Meta no publica sus umbrales. | Protecciones anti-ban de la Fase 2. Solo API oficial. |
-| R4 | Ley de California (§17941): prohíbe usar un bot que **engañe** sobre ser un bot para empujar una venta. Si se avisa de que es un bot, no hay responsabilidad. ([texto](https://california.public.law/codes/ca_bus_and_prof_code_section_17941)) | Decidir en la Fase 3 cómo avisar. Leyes de LATAM: **no verificadas**. No es asesoramiento legal. |
-| R5 | El token de Meta caduca. | Renovación automática en la Fase 2. |
-| R6 | La base de datos Neon gratis se apaga tras 5 min sin uso y da 100 horas de cómputo al mes por proyecto ([precios](https://neon.com/pricing)). Puede no bastar si el sistema la usa sin parar. | Vale para la Fase 1. Revisar antes de producción. |
+| R4 | Ley de California (§17941): bot que **engaña** sobre ser bot para vender. Avisar evita la responsabilidad. ([texto](https://california.public.law/codes/ca_bus_and_prof_code_section_17941)) | Decidir en Fase 3 cómo avisar. LATAM: **no verificado**. No es asesoramiento legal. |
+| R5 | El token caduca a los 60 días. | Renovación automática (Fase 2). |
+| R6 | Neon gratis: se apaga tras 5 min sin uso y 100 h de cómputo/mes ([precios](https://neon.com/pricing)). | Revisar consumo antes de producción. |
+| R7 | No sabemos si pulsar un botón da "consentimiento" para consultar si te sigue. | Probar en Fase 2. Plan B: entregar el recurso igualmente. |
 
 ## Costes aproximados al mes
 
 - Render Starter: ~7 $ por servicio (fuentes de terceros, no oficial).
 - Neon: 0 $ al principio.
-- API de Anthropic: según uso.
-- ManyChat Pro: hasta que se apague en la Fase 2.
+- API de Anthropic: según uso (desde la Fase 3).
+- ManyChat Pro: hasta que se apague.
 
-## Pendientes / apuntes (cosas a decidir más adelante)
+## Pendientes / apuntes
 
-- [ ] Fase 2: ¿respuestas públicas de una lista fija o generadas con IA?
-- [ ] Fase 3: qué modelo de Claude y si empezamos en modo borrador o automático.
-- [ ] Fase 3: texto exacto del aviso de IA.
-- [ ] Fase 3: si Jose vive u opera desde la UE, revisar si la Ley de IA europea (art. 50, aviso de IA) le aplica aunque la audiencia sea USA/LATAM. **No verificado.**
+- [ ] Fase 2: ¿respuestas públicas de una lista fija o generadas con IA? (de momento lista fija)
+- [ ] Fase 3: modelo de Claude; empezar en borrador o automático; texto del aviso de IA.
+- [ ] Fase 3: si Jose vive u opera desde la UE, revisar si le aplica la Ley de IA europea (art. 50). **No verificado.**
 - [ ] Antes de producción: base de datos definitiva (Neon de pago o Render Postgres).
-- [ ] La página `/data-deletion` dice que se borran los datos si escriben "BORRAR" por DM: hoy eso es **manual** (lo haría Jose). Automatizarlo en la Fase 2 o 4.
-- [ ] Añadir prueba automática de `store.ts` contra una base de datos real.
-- [ ] Reconocer avisos `read` / `reaction` / `seen` (hoy salen como "vacio" u "other"; solo es registro).
-- [ ] Botón "Quitar reel de prueba" en el panel (hoy se usa el truco de poner "00000").
-- [ ] Comprobar si, con ManyChat activo, los DMs nos llegan como `messages` o `standby` (en la prueba ManyChat estaba pausado).
-- [ ] El token de Meta caduca (~60 días, no verificado): automatizar renovación (Fase 2).
+- [ ] `/data-deletion` promete borrar datos si escriben "BORRAR": hoy es **manual**. Automatizar (Fase 4).
+- [ ] Prueba automática de `store.ts` contra una base de datos real.
 
 ## Registro de cambios
 
 - 2026-10-16 — Plan creado. Fase 0 terminada.
-- 2026-10-16 — Fase 1: código del servidor de prueba subido a GitHub (commit 48c4377).
-- 2026-10-16 — Fase 1 terminada: prueba de punta a punta OK con cuenta sin rol. Modo seguro activado.
+- 2026-10-16 — Fase 1: código subido (48c4377), app de Meta publicada y conectada, prueba punta a punta OK.
+- 2026-10-16 — Plan reorganizado: el setter IA es el corazón; nueva Fase 6 final = constructor visual de flujos. Empieza la Fase 2.

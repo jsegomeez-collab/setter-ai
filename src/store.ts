@@ -1,7 +1,13 @@
 import postgres from 'postgres';
+import type { Flow } from './flows/types.js';
 
 /** Todo lo que el servidor guarda o lee. La interfaz permite usar una versión en memoria en las pruebas. */
 export interface Store {
+  listFlows(): Promise<Flow[]>;
+  saveFlow(flow: Flow): Promise<void>;
+  deleteFlow(id: string): Promise<void>;
+  /** Envíos a Instagram (acciones terminadas o en curso) desde una fecha. Para el límite por hora. */
+  countSendsSince(since: Date): Promise<number>;
   recordRequest(signatureOk: boolean, payload: unknown): Promise<void>;
   logEvent(kind: string, note: string, data: unknown): Promise<void>;
   /** Reserva una acción. Devuelve false si ya existía (evita enviar dos veces lo mismo). */
@@ -33,7 +39,18 @@ export interface ActionRow {
 export const SETTINGS = {
   testMediaId: 'test_media_id',
   dmRepliesEnabled: 'dm_replies_enabled',
+  /** Fecha ISO hasta la que los envíos están pausados (p. ej. tras un error 368 de Meta). */
+  pausedUntil: 'paused_until',
+  pauseReason: 'pause_reason',
+  /** Token de Instagram cifrado y su información de renovación. */
+  igToken: 'ig_token_encrypted',
+  igTokenRefreshedAt: 'ig_token_refreshed_at',
+  igTokenExpiresAt: 'ig_token_expires_at',
+  igTokenLastError: 'ig_token_last_error',
 } as const;
+
+/** Tipos de acción que cuentan como envío a Instagram (para el límite por hora). */
+export const SEND_ACTION_TYPES = ['reply_comment', 'private_reply', 'send_message', 'send_dm'] as const;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS webhook_requests (
@@ -67,6 +84,12 @@ CREATE TABLE IF NOT EXISTS allowed_senders (
   ig_id TEXT PRIMARY KEY,
   added_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS flows (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS actions_created_at_idx ON actions (created_at);
 `;
 
 type Sql = ReturnType<typeof postgres>;
@@ -76,11 +99,42 @@ function toJson(sql: Sql, value: unknown) {
   return sql.json(JSON.parse(JSON.stringify(value ?? null)));
 }
 
-export async function createPostgresStore(databaseUrl: string): Promise<Store & { close(): Promise<void> }> {
-  const sql = postgres(databaseUrl, { ssl: 'require', max: 5, onnotice: () => undefined });
+export interface StoreOptions {
+  /** En producción SIEMPRE con SSL. Solo las pruebas locales (PGlite) lo desactivan. */
+  readonly ssl?: boolean;
+  readonly maxConnections?: number;
+}
+
+export async function createPostgresStore(
+  databaseUrl: string,
+  options: StoreOptions = {},
+): Promise<Store & { close(): Promise<void> }> {
+  const sql = postgres(databaseUrl, {
+    ssl: options.ssl === false ? false : 'require',
+    max: options.maxConnections ?? 5,
+    onnotice: () => undefined,
+  });
   await sql.unsafe(SCHEMA);
 
   return {
+    async listFlows() {
+      const rows = await sql<{ data: Flow }[]>`SELECT data FROM flows ORDER BY updated_at DESC`;
+      return rows.map((row) => row.data);
+    },
+    async saveFlow(flow) {
+      await sql`
+        INSERT INTO flows (id, data, updated_at) VALUES (${flow.id}, ${toJson(sql, flow)}, now())
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`;
+    },
+    async deleteFlow(id) {
+      await sql`DELETE FROM flows WHERE id = ${id}`;
+    },
+    async countSendsSince(since) {
+      const rows = await sql<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM actions
+        WHERE created_at >= ${since} AND type IN ${sql([...SEND_ACTION_TYPES])} AND ok IS DISTINCT FROM false`;
+      return rows[0]?.n ?? 0;
+    },
     async recordRequest(signatureOk, payload) {
       await sql`INSERT INTO webhook_requests (signature_ok, payload) VALUES (${signatureOk}, ${toJson(sql, payload)})`;
     },

@@ -14,6 +14,8 @@ services:
         value: v25.0
       - key: WEBHOOK_VERIFY_TOKEN
         generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
       - key: DATABASE_URL
         sync: false
       - key: ADMIN_PASSWORD

@@ -71,6 +71,24 @@ describe('parseWebhook', () => {
     expect(events).toContainEqual(expect.objectContaining({ kind: 'postback', payload: 'GO' }));
   });
 
+  it('reconoce avisos de "leído" (aunque vengan sin remitente) y reacciones', () => {
+    const payload = {
+      entry: [
+        {
+          id: ACCOUNT_ID,
+          messaging: [
+            { read: { mid: 'x' }, timestamp: 1 },
+            { sender: { id: STRANGER_ID }, reaction: { mid: 'y', reaction: 'love' } },
+          ],
+        },
+      ],
+    };
+    expect(parseWebhook(payload)).toEqual([
+      { kind: 'receipt', accountId: ACCOUNT_ID, senderId: '', receipt: 'read' },
+      { kind: 'receipt', accountId: ACCOUNT_ID, senderId: STRANGER_ID, receipt: 'reaction' },
+    ]);
+  });
+
   it('marca como "other" los campos que no son comentarios ni DMs', () => {
     const payload = { entry: [{ id: ACCOUNT_ID, changes: [{ field: 'mentions', value: { media_id: '1' } }] }] };
     expect(parseWebhook(payload)).toEqual([{ kind: 'other', accountId: ACCOUNT_ID, field: 'mentions' }]);

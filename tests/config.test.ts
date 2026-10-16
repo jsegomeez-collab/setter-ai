@@ -9,31 +9,39 @@ const base = {
 
 describe('loadConfig', () => {
   it('carga valores por defecto razonables', () => {
-    const config = loadConfig(base);
-    expect(config).toMatchObject({ port: 3000, igApiVersion: 'v25.0', igAccessToken: null, appSecrets: [], allowedSenderIds: [] });
+    expect(loadConfig(base)).toMatchObject({
+      port: 3000,
+      igApiVersion: 'v25.0',
+      igAccessToken: null,
+      appSecrets: [],
+      tokenEncryptionKey: null,
+      sendLimitPerHour: 120,
+      sendDelayMinMs: 2000,
+      sendDelayMaxMs: 5000,
+    });
   });
 
-  it('lee secretos opcionales y la lista de remitentes', () => {
+  it('lee secretos, token, clave de cifrado y límites', () => {
     const config = loadConfig({
       ...base,
       PORT: '10000',
       META_APP_SECRET: ' a ',
       META_APP_SECRET_ALT: 'b',
       IG_ACCESS_TOKEN: 'tok',
-      ALLOWED_SENDER_IDS: '1, 2,,3',
+      TOKEN_ENCRYPTION_KEY: 'clave-larga-de-16+',
+      SEND_LIMIT_PER_HOUR: '50',
+      SEND_DELAY_MIN_MS: '1000',
+      SEND_DELAY_MAX_MS: '1500',
     });
-    expect(config).toMatchObject({ port: 10000, appSecrets: ['a', 'b'], igAccessToken: 'tok', allowedSenderIds: ['1', '2', '3'] });
+    expect(config).toMatchObject({ port: 10000, appSecrets: ['a', 'b'], igAccessToken: 'tok', sendLimitPerHour: 50, sendDelayMaxMs: 1500 });
   });
 
-  it('falla claro si falta algo obligatorio', () => {
+  it('falla claro con valores incorrectos', () => {
     expect(() => loadConfig({ ...base, DATABASE_URL: '' })).toThrow('DATABASE_URL');
-  });
-
-  it('exige una contraseña de panel larga', () => {
     expect(() => loadConfig({ ...base, ADMIN_PASSWORD: 'corta' })).toThrow('ADMIN_PASSWORD');
-  });
-
-  it('rechaza un puerto inválido', () => {
     expect(() => loadConfig({ ...base, PORT: 'abc' })).toThrow('PORT');
+    expect(() => loadConfig({ ...base, TOKEN_ENCRYPTION_KEY: 'corta' })).toThrow('TOKEN_ENCRYPTION_KEY');
+    expect(() => loadConfig({ ...base, SEND_LIMIT_PER_HOUR: '-1' })).toThrow('SEND_LIMIT_PER_HOUR');
+    expect(() => loadConfig({ ...base, SEND_DELAY_MIN_MS: '5000', SEND_DELAY_MAX_MS: '1000' })).toThrow('SEND_DELAY_MAX_MS');
   });
 });

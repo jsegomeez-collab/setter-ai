@@ -1,4 +1,5 @@
-import type { Account, Media } from './meta/client.js';
+import type { Account } from './meta/client.js';
+import type { TokenStatus } from './meta/token.js';
 import type { ActionRow, EventRow } from './store.js';
 
 const MAX_JSON_PREVIEW = 1500;
@@ -12,20 +13,37 @@ export function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
-function layout(title: string, body: string): string {
+export function jsonPreview(value: unknown): string {
+  const text = JSON.stringify(value, null, 1) ?? '';
+  return escapeHtml(text.length > MAX_JSON_PREVIEW ? `${text.slice(0, MAX_JSON_PREVIEW)}…` : text);
+}
+
+export function status(ok: boolean, yes: string, no: string): string {
+  return ok ? `<span class="ok">✔ ${escapeHtml(yes)}</span>` : `<span class="bad">✘ ${escapeHtml(no)}</span>`;
+}
+
+const NAV = `<nav><a href="/eventos">Estado y eventos</a> · <a href="/flujos">Flujos</a></nav>`;
+
+export function layout(title: string, body: string): string {
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <style>
   body{font-family:system-ui,sans-serif;max-width:1100px;margin:0 auto;padding:16px;color:#1a1a1a;background:#fafafa}
-  h1{font-size:1.4rem} h2{font-size:1.1rem;margin-top:28px}
+  h1{font-size:1.4rem} h2{font-size:1.1rem;margin-top:28px} nav{margin-bottom:12px}
   table{border-collapse:collapse;width:100%;font-size:.85rem;background:#fff}
   th,td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
   pre{white-space:pre-wrap;word-break:break-all;margin:0;font-size:.75rem;max-height:160px;overflow:auto}
   .ok{color:#137333;font-weight:600} .bad{color:#b3261e;font-weight:600} .warn{color:#8a5a00;font-weight:600}
   .card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;margin:8px 0}
-  button{cursor:pointer;padding:6px 10px} form{display:inline}
-</style></head><body>${body}</body></html>`;
+  .errors{background:#fdecea;border:1px solid #f5c2c0;border-radius:8px;padding:8px 12px;margin:8px 0}
+  button{cursor:pointer;padding:6px 10px} form.inline{display:inline}
+  label{display:block;margin:10px 0 4px;font-weight:600} small{color:#555;font-weight:400}
+  input[type=text],input[type=url],textarea{width:100%;box-sizing:border-box;padding:6px;font:inherit}
+  textarea{min-height:70px} fieldset{border:1px solid #ddd;border-radius:8px;margin:12px 0;background:#fff}
+  .reels{max-height:260px;overflow:auto;border:1px solid #ddd;padding:6px;background:#fff}
+  .reels label{font-weight:400;margin:2px 0}
+</style></head><body>${NAV}${body}</body></html>`;
 }
 
 export function legalPage(kind: 'privacy' | 'terms' | 'data-deletion'): string {
@@ -54,41 +72,32 @@ export function legalPage(kind: 'privacy' | 'terms' | 'data-deletion'): string {
 export interface DashboardData {
   readonly account: Account | null;
   readonly accountError: string | null;
-  readonly tokenConfigured: boolean;
   readonly secretConfigured: boolean;
-  readonly testMediaId: string | null;
-  readonly dmRepliesEnabled: boolean;
-  readonly allowedSenders: readonly string[];
-  readonly media: readonly Media[];
+  readonly token: TokenStatus;
+  readonly pausedUntil: string | null;
+  readonly pauseReason: string | null;
+  readonly sendsLastHour: number;
+  readonly limitPerHour: number;
+  readonly activeFlows: number;
+  readonly totalFlows: number;
   readonly events: readonly EventRow[];
   readonly actions: readonly ActionRow[];
   readonly flash: string | null;
 }
 
-function json(value: unknown): string {
-  const text = JSON.stringify(value, null, 1) ?? '';
-  return escapeHtml(text.length > MAX_JSON_PREVIEW ? `${text.slice(0, MAX_JSON_PREVIEW)}…` : text);
+function pauseBlock(data: DashboardData): string {
+  if (!data.pausedUntil) return '<span class="ok">✔ Envíos activos</span>';
+  return `<span class="bad">⏸ PAUSADO hasta ${escapeHtml(data.pausedUntil)}</span> — ${escapeHtml(data.pauseReason ?? '')}
+  <form class="inline" method="post" action="/eventos/reanudar"><button>Reanudar ahora</button></form>`;
 }
 
-function status(ok: boolean, yes: string, no: string): string {
-  return ok ? `<span class="ok">✔ ${escapeHtml(yes)}</span>` : `<span class="bad">✘ ${escapeHtml(no)}</span>`;
-}
-
-function mediaSection(data: DashboardData): string {
-  if (data.media.length === 0) return '<p class="warn">No hay reels para mostrar (¿falta el token?).</p>';
-  const rows = data.media
-    .map((item) => {
-      const selected = item.id === data.testMediaId;
-      const caption = (item.caption ?? '').slice(0, 80);
-      return `<tr><td>${selected ? '<span class="ok">● PRUEBA</span>' : ''}</td>
-<td>${escapeHtml(item.timestamp?.slice(0, 10))}</td><td>${escapeHtml(item.mediaProductType)}</td>
-<td>${escapeHtml(caption)}</td>
-<td>${item.permalink ? `<a href="${escapeHtml(item.permalink)}" target="_blank" rel="noopener">ver</a>` : ''}</td>
-<td><form method="post" action="/eventos/reel-prueba"><input type="hidden" name="mediaId" value="${escapeHtml(item.id)}">
-<button>Usar como reel de prueba</button></form></td></tr>`;
-    })
-    .join('');
-  return `<table><tr><th></th><th>Fecha</th><th>Tipo</th><th>Texto</th><th></th><th></th></tr>${rows}</table>`;
+function tokenBlock(token: TokenStatus): string {
+  const parts = [`origen: <strong>${escapeHtml(token.source)}</strong>`];
+  if (token.expiresAt) parts.push(`caduca: ${escapeHtml(token.expiresAt)}`);
+  if (token.refreshedAt) parts.push(`renovado: ${escapeHtml(token.refreshedAt)}`);
+  if (!token.encryptionConfigured) parts.push('<span class="warn">sin TOKEN_ENCRYPTION_KEY → no se renueva solo</span>');
+  if (token.lastError) parts.push(`<span class="bad">último error: ${escapeHtml(token.lastError)}</span>`);
+  return parts.join(' · ');
 }
 
 export function dashboardPage(data: DashboardData): string {
@@ -99,35 +108,32 @@ export function dashboardPage(data: DashboardData): string {
   const events = data.events
     .map(
       (row) => `<tr><td>${escapeHtml(row.createdAt.toISOString())}</td><td>${escapeHtml(row.kind)}</td>
-<td>${escapeHtml(row.note)}</td><td><pre>${json(row.data)}</pre></td></tr>`,
+<td>${escapeHtml(row.note)}</td><td><pre>${jsonPreview(row.data)}</pre></td></tr>`,
     )
     .join('');
   const actions = data.actions
     .map(
       (row) => `<tr><td>${escapeHtml(row.createdAt.toISOString())}</td><td>${escapeHtml(row.type)}</td>
-<td>${row.ok === null ? '<span class="warn">en curso</span>' : status(row.ok, 'OK', 'ERROR')}</td>
-<td><pre>${json(row.response)}</pre></td></tr>`,
+<td>${row.ok === null ? '<span class="warn">en curso</span>' : status(row.ok, 'OK', 'ERROR / OMITIDO')}</td>
+<td><pre>${jsonPreview(row.response)}</pre></td></tr>`,
     )
     .join('');
 
-  const body = `<h1>Setter IA — Fase 1 (prueba sin IA)</h1>
+  const body = `<h1>Setter IA — estado</h1>
 ${data.flash ? `<div class="card">${escapeHtml(data.flash)}</div>` : ''}
 <div class="card">
   <div>Cuenta de Instagram: ${account}</div>
-  <div>Token de Instagram: ${status(data.tokenConfigured, 'configurado', 'falta IG_ACCESS_TOKEN')}</div>
+  <div>Token: ${tokenBlock(data.token)}</div>
   <div>App Secret (firma de avisos): ${status(data.secretConfigured, 'configurado', 'falta META_APP_SECRET')}</div>
-  <div>Reel de prueba: ${data.testMediaId ? `<span class="ok">${escapeHtml(data.testMediaId)}</span>` : '<span class="warn">ninguno (no se responde a ningún comentario)</span>'}</div>
-  <div>Respuestas por DM: ${data.dmRepliesEnabled ? '<span class="ok">ACTIVADAS</span>' : '<span class="warn">desactivadas</span>'}
-    <form method="post" action="/eventos/dms"><input type="hidden" name="enabled" value="${data.dmRepliesEnabled ? 'false' : 'true'}">
-    <button>${data.dmRepliesEnabled ? 'Desactivar' : 'Activar'}</button></form></div>
-  <div>Remitentes autorizados: ${data.allowedSenders.length > 0 ? escapeHtml(data.allowedSenders.join(', ')) : 'ninguno'}</div>
-  <p><form method="post" action="/eventos/suscribir"><button>Activar suscripción de la cuenta (comments + messages)</button></form>
+  <div>Anti-ban: ${pauseBlock(data)} · envíos última hora: <strong>${data.sendsLastHour}</strong> / ${data.limitPerHour}</div>
+  <div>Flujos: <strong>${data.activeFlows}</strong> activos de ${data.totalFlows} · <a href="/flujos">gestionar flujos</a></div>
+  <p><form class="inline" method="post" action="/eventos/suscribir"><button>Activar suscripción de la cuenta (comments + messages)</button></form>
+  <form class="inline" method="post" action="/eventos/renovar-token"><button>Renovar token ahora</button></form>
   <a href="/eventos">↻ Recargar</a></p>
 </div>
-<h2>Reels recientes</h2>${mediaSection(data)}
 <h2>Acciones (envíos a Instagram)</h2>
 <table><tr><th>Fecha (UTC)</th><th>Tipo</th><th>Estado</th><th>Respuesta de Meta</th></tr>${actions}</table>
 <h2>Eventos recibidos</h2>
 <table><tr><th>Fecha (UTC)</th><th>Tipo</th><th>Qué se hizo</th><th>Datos</th></tr>${events}</table>`;
-  return layout('Setter IA — eventos', body);
+  return layout('Setter IA — estado', body);
 }

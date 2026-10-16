@@ -1,13 +1,13 @@
-import { decide, type Action, type DecisionContext } from './decide.js';
-import { InstagramClient, MetaApiError } from './meta/client.js';
-import { parseWebhook } from './meta/parse.js';
-import { SETTINGS, type Store } from './store.js';
+import { planComment, planPostback, type Plan } from './flows/engine.js';
+import { MetaApiError } from './meta/client.js';
+import { parseWebhook, type InstagramEvent } from './meta/parse.js';
+import type { Sender } from './sender.js';
+import type { Store } from './store.js';
 
 export interface ProcessDeps {
   readonly store: Store;
-  readonly client: InstagramClient | null;
-  /** Remitentes autorizados desde la variable de entorno ALLOWED_SENDER_IDS. */
-  readonly envAllowedSenderIds: readonly string[];
+  readonly sender: Sender;
+  readonly random?: () => number;
 }
 
 function describeError(error: unknown): Record<string, unknown> {
@@ -16,52 +16,42 @@ function describeError(error: unknown): Record<string, unknown> {
   return { message: String(error) };
 }
 
-async function loadContext(store: Store, envAllowed: readonly string[]): Promise<DecisionContext> {
-  const [testMediaId, dmEnabled, allowed] = await Promise.all([
-    store.getSetting(SETTINGS.testMediaId),
-    store.getSetting(SETTINGS.dmRepliesEnabled),
-    store.listAllowedSenders(),
-  ]);
-  return {
-    testMediaId,
-    dmRepliesEnabled: dmEnabled === 'true',
-    allowedSenderIds: new Set([...envAllowed, ...allowed]),
-  };
-}
-
-async function runAction(action: Action, client: InstagramClient): Promise<unknown> {
-  switch (action.type) {
-    case 'reply_comment':
-      return client.replyToComment(action.commentId, action.text);
-    case 'private_reply':
-      return client.sendPrivateReply(action.commentId, action.text);
-    case 'send_dm':
-      return client.sendText(action.recipientId, action.text);
+function logOnly(event: InstagramEvent): string {
+  switch (event.kind) {
+    case 'message':
+      return event.isEcho || event.senderId === event.accountId
+        ? 'Mensaje enviado desde tu cuenta (eco).'
+        : 'DM recibido. Solo registro (el setter IA llega en la Fase 3).';
+    case 'standby':
+      return 'STANDBY: otra app (p. ej. ManyChat) es dueña de esta conversación. Solo registro.';
+    case 'receipt':
+      return event.receipt === 'read' ? 'Aviso de "leído". Solo registro.' : 'Reacción a un mensaje. Solo registro.';
+    case 'other':
+      return `Aviso de tipo "${event.field}". Solo registro.`;
+    default:
+      return 'Solo registro.';
   }
 }
 
-async function executeAction(action: Action, deps: ProcessDeps): Promise<void> {
-  const { store, client } = deps;
-  if (!client) {
-    await store.logEvent('error', 'No se envió nada: falta IG_ACCESS_TOKEN.', action);
+async function planFor(event: InstagramEvent, deps: ProcessDeps): Promise<Plan | null> {
+  if (event.kind === 'comment') return planComment(await deps.store.listFlows(), event, deps.random);
+  if (event.kind === 'postback') return planPostback(await deps.store.listFlows(), event);
+  return null;
+}
+
+async function handleEvent(event: InstagramEvent, deps: ProcessDeps): Promise<void> {
+  const plan = await planFor(event, deps);
+  if (!plan) {
+    await deps.store.logEvent(event.kind, logOnly(event), event);
     return;
   }
-  const claimed = await store.claimAction(action.dedupKey, action.type, action);
-  if (!claimed) {
-    await store.logEvent('duplicado', 'Acción ya hecha antes (aviso repetido de Meta): no se repite.', action);
+  await deps.store.logEvent(event.kind, plan.note, event);
+  if (plan.actions.length === 0) return;
+  if (plan.onceKey && !(await deps.store.claimAction(plan.onceKey, 'once', { flowId: plan.flowId }))) {
+    await deps.store.logEvent('duplicado', 'Esta persona ya recibió este flujo: no se repite (una vez por persona).', { onceKey: plan.onceKey });
     return;
   }
-  try {
-    const result = await runAction(action, client);
-    await store.finishAction(action.dedupKey, true, result);
-    // Quien recibe nuestro DM privado queda autorizado para que la prueba de respuesta por DM funcione.
-    const recipientId = (result as { recipientId?: string | null } | null)?.recipientId;
-    if (action.type === 'private_reply' && recipientId) {
-      await store.allowSender(recipientId);
-    }
-  } catch (error) {
-    await store.finishAction(action.dedupKey, false, describeError(error));
-  }
+  await deps.sender.enqueue(plan.actions);
 }
 
 export async function processWebhook(payload: unknown, deps: ProcessDeps): Promise<void> {
@@ -71,15 +61,7 @@ export async function processWebhook(payload: unknown, deps: ProcessDeps): Promi
     return;
   }
   for (const event of events) {
-    const ctx = await loadContext(deps.store, deps.envAllowedSenderIds);
-    const decision = decide(event, ctx);
-    await deps.store.logEvent(event.kind, decision.note, event);
-    if (event.kind === 'comment' && decision.actions.length > 0) {
-      await deps.store.allowSender(event.fromId);
-    }
-    for (const action of decision.actions) {
-      await executeAction(action, deps);
-    }
+    await handleEvent(event, deps);
   }
 }
 

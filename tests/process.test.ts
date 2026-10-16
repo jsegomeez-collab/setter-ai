@@ -1,106 +1,82 @@
 import { describe, expect, it, vi } from 'vitest';
-import { InstagramClient, MetaApiError } from '../src/meta/client.js';
+import { encodePayload } from '../src/flows/engine.js';
+import type { InstagramClient } from '../src/meta/client.js';
 import { processInBackground, processWebhook } from '../src/process.js';
-import { SETTINGS } from '../src/store.js';
-import { STRANGER_ID, TEST_MEDIA_ID, commentPayload, createMemoryStore, messagePayload } from './helpers.js';
+import { Sender } from '../src/sender.js';
+import { STRANGER_ID, commentPayload, createMemoryStore, followFlow, messagePayload, postbackPayload } from './helpers.js';
 
-function fakeClient(overrides: Partial<Record<'replyToComment' | 'sendPrivateReply' | 'sendText', unknown>> = {}) {
-  return {
-    replyToComment: vi.fn().mockResolvedValue({ id: 'reply-1' }),
-    sendPrivateReply: vi.fn().mockResolvedValue({ recipientId: 'igsid-77', messageId: 'mid-1' }),
-    sendText: vi.fn().mockResolvedValue({ recipientId: STRANGER_ID, messageId: 'mid-2' }),
-    ...overrides,
-  } as unknown as InstagramClient & {
-    replyToComment: ReturnType<typeof vi.fn>;
-    sendPrivateReply: ReturnType<typeof vi.fn>;
-    sendText: ReturnType<typeof vi.fn>;
-  };
+function setup(flows = [followFlow()]) {
+  const store = createMemoryStore();
+  for (const flow of flows) store.flows.set(flow.id, flow);
+  const client = {
+    replyToComment: vi.fn().mockResolvedValue({ id: 'r1' }),
+    sendPrivateReply: vi.fn().mockResolvedValue({ recipientId: STRANGER_ID, messageId: 'm1' }),
+    sendMessage: vi.fn().mockResolvedValue({ recipientId: STRANGER_ID, messageId: 'm2' }),
+    getFollowStatus: vi.fn().mockResolvedValue({ status: 'yes', detail: 'ok' }),
+  } as unknown as InstagramClient & Record<string, ReturnType<typeof vi.fn>>;
+  const sender = new Sender(
+    { store, client, limitPerHour: 100, minDelayMs: 0, maxDelayMs: 0, sleep: async () => undefined },
+    async (id) => store.flows.get(id),
+  );
+  return { store, client, sender, deps: { store, sender, random: () => 0 } };
 }
 
-describe('processWebhook', () => {
-  it('comentario en el reel de prueba: responde en público, manda DM y autoriza al que comentó', async () => {
-    const store = createMemoryStore();
-    store.settings.set(SETTINGS.testMediaId, TEST_MEDIA_ID);
-    const client = fakeClient();
-
-    await processWebhook(commentPayload(), { store, client, envAllowedSenderIds: [] });
-
-    expect(client.replyToComment).toHaveBeenCalledWith('c-1', expect.any(String));
-    expect(client.sendPrivateReply).toHaveBeenCalledWith('c-1', expect.stringContaining('info'));
-    expect([...store.actions.values()].every((action) => action.ok === true)).toBe(true);
-    expect(store.allowed).toEqual([STRANGER_ID, 'igsid-77']);
+describe('processWebhook con flujos', () => {
+  it('comentario en el reel del flujo → respuesta pública + DM con botón', async () => {
+    const { client, deps, store } = setup();
+    await processWebhook(commentPayload(), deps);
+    expect(client.replyToComment).toHaveBeenCalledWith('c-1', '¡Te escribí por DM! 📩');
+    expect(client.sendPrivateReply).toHaveBeenCalledWith('c-1', expect.objectContaining({ attachment: expect.anything() }));
+    expect(store.events[0]?.note).toContain('Reel n8n');
   });
 
-  it('no repite envíos si Meta manda el mismo aviso dos veces', async () => {
-    const store = createMemoryStore();
-    store.settings.set(SETTINGS.testMediaId, TEST_MEDIA_ID);
-    const client = fakeClient();
-
-    await processWebhook(commentPayload(), { store, client, envAllowedSenderIds: [] });
-    await processWebhook(commentPayload(), { store, client, envAllowedSenderIds: [] });
-
+  it('una sola vez por persona: el segundo comentario de la misma persona no recibe nada', async () => {
+    const { client, deps, store } = setup();
+    await processWebhook(commentPayload(), deps);
+    await processWebhook(commentPayload({ id: 'c-2' }), deps);
     expect(client.sendPrivateReply).toHaveBeenCalledTimes(1);
-    expect(store.events.some((event) => event.kind === 'duplicado')).toBe(true);
+    expect(store.events.some((e) => e.note.includes('ya recibió este flujo'))).toBe(true);
   });
 
-  it('guarda el error de Meta en la acción sin romper el resto', async () => {
-    const store = createMemoryStore();
-    store.settings.set(SETTINGS.testMediaId, TEST_MEDIA_ID);
-    const error = new MetaApiError('(#10) Application does not have permission', 400, { error: { code: 10 } });
-    const client = fakeClient({ replyToComment: vi.fn().mockRejectedValue(error) });
-
-    await processWebhook(commentPayload(), { store, client, envAllowedSenderIds: [] });
-
-    expect(store.actions.get('reply:c-1')).toMatchObject({ ok: false, response: { status: 400 } });
-    expect(store.actions.get('private:c-1')).toMatchObject({ ok: true });
+  it('pulsar "Lo quiero" → comprueba si sigue → manda el recurso', async () => {
+    const { client, deps, sender } = setup();
+    await processWebhook(postbackPayload(encodePayload('flow1', 'gate')), deps);
+    await sender.idle();
+    expect(client.getFollowStatus).toHaveBeenCalledWith(STRANGER_ID);
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      STRANGER_ID,
+      expect.objectContaining({ attachment: expect.objectContaining({ payload: expect.objectContaining({ text: 'Aquí lo tienes' }) }) }),
+    );
   });
 
-  it('sin token: registra que no pudo enviar', async () => {
-    const store = createMemoryStore();
-    store.settings.set(SETTINGS.testMediaId, TEST_MEDIA_ID);
-
-    await processWebhook(commentPayload(), { store, client: null, envAllowedSenderIds: [] });
-
-    expect(store.events.filter((event) => event.kind === 'error')).toHaveLength(2);
-    expect(store.actions.size).toBe(0);
+  it('comentario sin flujo, DMs, ecos y avisos "leído": solo se registran', async () => {
+    const { client, deps, store } = setup([]);
+    await processWebhook(commentPayload(), deps);
+    await processWebhook(messagePayload('quiero info'), deps);
+    await processWebhook(messagePayload('yo', { isEcho: true }), deps);
+    await processWebhook({ entry: [{ id: '1', messaging: [{ read: { mid: 'x' }, timestamp: 1 }] }] }, deps);
+    expect(client.replyToComment).not.toHaveBeenCalled();
+    expect(client.sendMessage).not.toHaveBeenCalled();
+    const notes = store.events.map((e) => e.note).join(' | ');
+    expect(notes).toContain('ningún flujo');
+    expect(notes).toContain('Fase 3');
+    expect(notes).toContain('eco');
+    expect(notes).toContain('leído');
   });
 
-  it('DM de remitente autorizado por variable de entorno con DMs activados: contesta', async () => {
-    const store = createMemoryStore();
-    store.settings.set(SETTINGS.dmRepliesEnabled, 'true');
-    const client = fakeClient();
-
-    await processWebhook(messagePayload('hola'), { store, client, envAllowedSenderIds: [STRANGER_ID] });
-
-    expect(client.sendText).toHaveBeenCalledWith(STRANGER_ID, expect.stringContaining('hola'));
-  });
-
-  it('DM de un cliente real (no autorizado): solo se registra', async () => {
-    const store = createMemoryStore();
-    store.settings.set(SETTINGS.dmRepliesEnabled, 'true');
-    const client = fakeClient();
-
-    await processWebhook(messagePayload('quiero info', { sender: '555' }), { store, client, envAllowedSenderIds: [] });
-
-    expect(client.sendText).not.toHaveBeenCalled();
-    expect(store.events[0]?.note).toContain('no autorizado');
-  });
-
-  it('aviso vacío: lo registra como "vacio"', async () => {
-    const store = createMemoryStore();
-    await processWebhook({ object: 'instagram', entry: [] }, { store, client: null, envAllowedSenderIds: [] });
+  it('aviso vacío → "vacio"', async () => {
+    const { deps, store } = setup();
+    await processWebhook({ object: 'instagram', entry: [] }, deps);
     expect(store.events[0]?.kind).toBe('vacio');
   });
 });
 
 describe('processInBackground', () => {
   it('registra el error si algo falla dentro', async () => {
-    const store = createMemoryStore();
-    store.getSetting = vi.fn().mockRejectedValue(new Error('BD caída'));
-
-    processInBackground(messagePayload('hola'), { store, client: null, envAllowedSenderIds: [] });
+    const { deps, store } = setup();
+    store.listFlows = vi.fn().mockRejectedValue(new Error('BD caída'));
+    processInBackground(commentPayload(), deps);
     await vi.waitFor(() => expect(store.events.some((event) => event.kind === 'error')).toBe(true));
-
     expect(store.events.find((event) => event.kind === 'error')?.data).toEqual({ message: 'BD caída' });
   });
 });

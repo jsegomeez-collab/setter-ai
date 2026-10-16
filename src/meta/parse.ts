@@ -40,6 +40,13 @@ export type InstagramEvent =
       readonly text: string | null;
     }
   | {
+      /** Avisos informativos: "leído" (read) o reacción con emoji (reaction). */
+      readonly kind: 'receipt';
+      readonly accountId: string;
+      readonly senderId: string;
+      readonly receipt: 'read' | 'reaction';
+    }
+  | {
       readonly kind: 'other';
       readonly accountId: string;
       readonly field: string;
@@ -82,6 +89,9 @@ function parseComment(accountId: string, value: Json): InstagramEvent | null {
 function parseMessaging(accountId: string, item: Json): InstagramEvent | null {
   const sender = isObject(item.sender) ? str(item.sender.id) : null;
   const recipient = isObject(item.recipient) ? str(item.recipient.id) : null;
+  // Los avisos de "leído" pueden venir sin remitente: se reconocen antes de exigirlo.
+  if (isObject(item.read)) return { kind: 'receipt', accountId, senderId: sender ?? '', receipt: 'read' };
+  if (isObject(item.reaction)) return { kind: 'receipt', accountId, senderId: sender ?? '', receipt: 'reaction' };
   if (!sender) return null;
 
   if (isObject(item.postback)) {
