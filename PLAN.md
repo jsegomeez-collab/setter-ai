@@ -1,8 +1,8 @@
 # Plan — Setter IA para Instagram
 
-> Última actualización: 2026-10-16
-> Estado general: **Fase 2 en producción** (réplica de ManyChat atendiendo a seguidores reales desde el 2026-10-16 14:53 UTC). Vigilando 24-48 h. Siguiente: Fase 3 (setter IA) — necesito oferta/FAQs/objeciones de Jose.
-> ManyChat sigue conectado a Instagram (sin disparador). Para la Fase 3 Jose autoriza desconectarlo.
+> Última actualización: 2026-10-17
+> Estado general: **Fase 2 y Fase 3 en producción.** Flujos de comentarios atendiendo a seguidores reales; setter IA en modo **PRUEBA** (solo @josegomezlife). ManyChat desconectado.
+> **Siguiente: Fase 4.** Decisión de Jose (2026-10-17): terminar primero el programa (Fases 4-6); el marketing del setter lo pule él después. Antes de empezar la Fase 4, repasarla con Jose (qué entra y en qué orden).
 
 ## Objetivo
 
@@ -25,6 +25,8 @@ Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para
 | 2026-10-16 | Audiencia: **USA y LATAM**. |
 | 2026-10-16 | **Fase final = frontend completo (software de gestión de todo)**, incluido el constructor visual de flujos. Los flujos se guardan desde la Fase 2 en un formato de nodos genérico para que el constructor solo tenga que editarlos. |
 | 2026-10-16 | **Todo medido:** cada comentario guarda su reel de origen; cada clic, etiqueta y paso del flujo queda registrado. Las conversaciones se analizan en masa (objeciones, mercado, ángulos de contenido). |
+| 2026-10-16 | Setter: Claude Haiku 5.5 responde y rellena la ficha; Sonnet 5.5 para el análisis masivo; nunca Opus. Solo español. Detalle en la Fase 3. |
+| 2026-10-17 | **Primero terminar el programa (Fases 4-6); el marketing del setter (documento, objeciones, tono) lo pule Jose después.** |
 
 Datos de Jose: cuenta Creator pública @josenews.ai (Meta Verified), cuenta de pruebas @josegomezlife, LLC en USA con EIN, ManyChat Pro, GitHub + Render + Neon, API key de Anthropic, oferta/FAQs/objeciones por escrito.
 
@@ -100,46 +102,38 @@ Progreso:
 
 **Hecha cuando:** un reel real funciona igual que con ManyChat → Jose decide apagar ManyChat.
 
-### Fase 3 — Setter con IA 🔄 (preparación)
+### Fase 3 — Setter con IA ✅ técnica (2026-10-16) · en producción en modo PRUEBA
 
 **Para qué:** que cada persona que **responde** por DM hable con un setter IA que cualifica (5 preguntas del documento de Jose) y agenda llamada con Código Maestría, o ofrece la membresía si no hay presupuesto.
 
-**Recibido de Jose (2026-10-16, versión temporal para probar):** documento con rol, reglas, oferta, niveles, 5 preguntas de calificación, perfil ideal, FAQs y objeciones. Tiene huecos marcados [LINK AGENDA], [LINK MEMBRESÍA], [CONFIRMAR…] y [COMPLETAR] → la IA NUNCA rellena esos huecos: deriva a la llamada o a info@codigomaestria.com.
+**Estado (2026-10-17):**
+- En producción desde el 2026-10-16. Modo **PRUEBA**: solo responde a `josegomezlife`; a los demás solo les guarda los DMs. Modo público = solo con el OK de Jose.
+- Código desplegado: `main` = **ff43a01**. La rama `fase3-wip` = `main` + commits de documentación (no hace falta desplegarlos). 237 pruebas.
+- Documento del setter en uso: **versión #4** (= v2: con las respuestas de Jose a los huecos; "Español, tuteo"; llamada de unos 45 min). Se edita en `/setter`, nunca en el repo.
+- ManyChat **desconectado** de Instagram (Jose, 2026-10-16 18:10 UTC): los DMs llegan como `message`.
 
-Pasos (en orden, comprobando cada uno):
-1. **Conversaciones**: guardar cada DM entrante y saliente (historial propio, no depender de Meta) + página /conversaciones.
-2. **Base de conocimiento editable** desde el panel (el documento de Jose, con historial de versiones). No se guarda en el repo.
-3. **Motor del setter**: DM de texto → espera unos segundos por si escribe varios mensajes → Claude con documento + historial → respuesta corta → cola de seguimientos. En la misma llamada extrae datos del lead (respuestas a las 5 preguntas, nivel, presupuesto, objeción) → base de la Fase 4.
-4. **Seguros**: modo prueba (solo usuarios autorizados), modo borrador opcional, la IA se calla si Jose escribe a mano, solo los 2 enlaces permitidos (cualquier otro enlace se bloquea antes de enviar), nunca menores, no responde a ecos ni a pulsaciones de botón (eso es del flujo).
-5. **Desconectar ManyChat** (autorizado por Jose) para que los DMs lleguen como `messages` y no `standby`.
-6. **Prueba**: 10-20 conversaciones con @josegomezlife cubriendo perfiles y objeciones; Jose valida.
+**Qué hay construido:**
+- `src/setter/`: `schema.ts` (mensajitos + ficha del lead), `prompt.ts` (documento + marco técnico), `brain.ts` (Claude Haiku 5.5, `effort: low`, JSON validado tras mirar `stop_reason`), `guards.ts` (solo 2 enlaces + correo, ≤4 mensajitos de ≤300 caracteres, sin precios del grupal/VIP, sin huecos, sin otros alfabetos), `reply.ts` (si no pasa el filtro, segundo intento explicando por qué; si vuelve a fallar, se retiene y se para), `service.ts` (espera 8 s, modos off/test/live, borrador, "escribiendo…" + pausa ~3-4 s por mensajito, envío por la cola), `echoes.ts` (si Jose escribe a mano, la IA se para en esa conversación), `scenarios.ts` + `simulator.ts` (simulador).
+- Panel: `/setter` (modo, borrador, usuarios de prueba, documento con versiones), `/setter/simulador` (18 escenarios; otra IA hace de lead; no envía nada), `/conversaciones` (hilo, ficha, parar/reanudar).
 
-**Hecha cuando:** las conversaciones de prueba salen bien según Jose y pasa a producción con el público.
+**Verificado con datos reales (2026-10-16):** DM → 8 s → Haiku → mensajitos con "escribiendo…" → eco reconocido como nuestro (7/7) · Jose escribe a mano → "IA parada: Jose escribió a mano" · ficha rellenada sin inventar · clave de Anthropic OK · coste real ≈ 0,0003 $/respuesta con caché (≈ 0,0009 $ sin caché) · 4 vueltas del simulador: nunca precios del grupal/VIP ni su enlace, nunca citas inventadas, menor y cliente enfadado → se para, lead en inglés → responde en español.
 
-**Decisiones de Jose para la Fase 3 (2026-10-16):**
-- Enlaces: membresía https://buy.stripe.com/8x29AS3ZI0Uk1jg0Fpbwk1Z · agenda https://codigomaestria.com/agenda?utm_source=instagram
-- El setter responde a **cualquier DM** (venga de flujo o no).
-- Arranque **solo con @josegomezlife**; público cuando Jose dé el visto bueno.
-- **Sin aviso proactivo de IA** (solo decir la verdad si preguntan). Decisión de Jose, no reabrir.
-- Si Jose escribe a mano en una conversación → la IA se **para indefinidamente** en esa conversación hasta que Jose la reanude en el panel.
-- **Modelos:** responder mensajes = **Claude Haiku 5.5** (`claude-haiku-5-5`, configurable por variable). Analizar/extraer datos y conclusiones = **Claude Sonnet 5.5** (`claude-sonnet-5-5`). **Nunca Opus** (caro).
-- **Ficha del lead (2026-10-16):** la rellena **Haiku en la misma llamada** en la que responde (una llamada por mensaje). Sonnet queda para el análisis masivo de la Fase 4.
-- `ANTHROPIC_API_KEY`: Jose la pega en Render (pantalla preparada con Playwright).
-- Sin `fallbacks` de servidor (no documentado con salidas estructuradas): si Claude rechaza/falla → conversación parada y marcada para Jose.
+**Decisiones de Jose para la Fase 3 (no reabrir):**
+- Enlaces: membresía https://buy.stripe.com/8x29AS3ZI0Uk1jg0Fpbwk1Z · agenda https://codigomaestria.com/agenda?utm_source=instagram · correo info@codigomaestria.com.
+- Responde a **cualquier DM**. Arranque solo con @josegomezlife; público cuando Jose lo diga.
+- **Sin aviso proactivo de IA** (solo la verdad si preguntan).
+- Si Jose escribe a mano → la IA se **para indefinidamente** en esa conversación (se reanuda en el panel). Con el setter en "apagado", los ecos ajenos no paran nada.
+- **Modelos:** Haiku 5.5 responde y rellena la ficha en la misma llamada; Sonnet 5.5 solo para el análisis masivo (Fase 4). **Nunca Opus.**
+- **Estilo:** varios mensajitos cortos, informal sin faltas, una pregunta por turno, "escribiendo…" y pausa de ~3-4 s.
+- **Solo español** (tuteo). Si escriben en otro idioma, responde en español y lo explica.
+- **Precios:** solo "hay opciones desde $47 al mes hasta acompañamiento 1:1…"; nunca los del grupal/VIP por chat (bloqueado también en código).
+- "Hablar con una persona" → se le pasa la agenda (la llamada es con el equipo) y la IA sigue. Pasa a Jose (se para) solo si: problema con algo pagado, queja, agresividad, o insiste tras darle la agenda. Posible menor → se despide y se para.
+- **2026-10-17:** primero se termina el programa (Fases 4-6). El marketing del setter (documento, objeciones, tono) lo pule **Jose** después: no tocarlo ahora.
 
-**Estado del código (trabajo en curso, NO desplegado):**
-- `@anthropic-ai/sdk` 0.135.0 instalado (helper `zodOutputFormat` en `@anthropic-ai/sdk/helpers/zod`, `client.messages.parse` + `output_config: {effort, format}`).
-- `src/store.ts`: añadidas tablas `messages`, `knowledge_versions`, columnas de contacto `ai_paused`, `ai_paused_reason`, `lead` y métodos (addMessage, setMessageStatus, listMessages, listConversations, getContact, setAiPaused, saveLead, findActionByMessageId, saveKnowledge, getKnowledge, listKnowledgeVersions). ✅ Store en memoria de pruebas completo; `npm run typecheck` ahora revisa también `tests/` (`tsconfig.test.json`); 140 pruebas pasando.
-- ✅ `src/setter/` (2026-10-16, sin conectar todavía): `schema.ts` (respuesta + ficha), `prompt.ts` (documento con enlaces + marco técnico + historial), `brain.ts` (Haiku, `effort: low`, JSON validado tras mirar `stop_reason`), `guards.ts` (solo los 2 enlaces y el correo, ≤1000 caracteres, sin huecos), `service.ts` (espera 8 s, modos `off`/`test`/`live` en `settings`, borrador, pausa por conversación, envío por la cola con clave `ai:<mid>`). Config: `ANTHROPIC_API_KEY`, `SETTER_MODEL`, `SETTER_LINK_*`. `client.getUsername`. 177 pruebas; prueba de sabotaje hecha.
-- ✅ `src/setter/echoes.ts` (2026-10-16, sin conectar): eco cuyo `mid` no es de un envío nuestro tras mirar a los 5, 15 y 30 s → Jose escribió a mano → IA parada en esa conversación; los ecos del flujo se guardan en el historial. (1) ✅ VERIFICADO 2026-10-16 18:47 en producción: Jose escribió "Ey" a mano → eco ajeno → "IA parada: Jose escribió a mano" a los ~30 s; (2) ✅ VERIFICADO 2026-10-16 con producción: en los últimos 60 eventos, los 7 `message_id` de nuestros envíos aparecen como `mid` de un eco (7/7).
-- ✅ Panel (2026-10-16): `/setter` (modo off/test/live, borrador, usuarios de prueba, estado de la clave y el modelo, documento con avisos de huecos, versiones y restaurar) y `/conversaciones` (lista, hilo con retenidos, ficha, parar/reanudar). Con contraseña y CSRF. 193 pruebas. No visto aún en un navegador real.
-- ✅ Cableado (2026-10-16, commit 0c0fc43): `process.ts` manda los DMs al setter y los ecos al vigilante; `index.ts` crea el cerebro solo si hay clave (el setter arranca apagado). SQL de la Fase 3 probado contra Postgres real (PGlite). 203 pruebas. `index.ts` no se pudo arrancar en local (pide SSL y PGlite no lo admite): se comprobará al desplegar.
-- ✅ Arreglado (decisión de Jose): con el setter en modo apagado, un eco ajeno (p. ej. de ManyChat) se guarda pero no para la IA.
-- ✅ DESPLEGADO 2026-10-16 19:56 (main = f06f7b3): Render arranca bien, `/setter` pide contraseña, `ANTHROPIC_API_KEY configurada`, modo apagado.
-- 🔄 Paso 8 (2026-10-16): prueba real con @josegomezlife OK (mensajitos con "escribiendo…", ficha, IA se para si Jose escribe a mano). Simulador `/setter/simulador` (18 escenarios, otra IA hace de lead) + 4 vueltas. Producción: main=e718dbd, documento v3. Seguro: nunca precios del grupal/VIP ni su enlace, nunca citas inventadas, menor y cliente enfadado → se para; segundo intento antes de retener; filtro de alfabetos. Decisión de Jose (2026-10-16): **solo español** (main=ff43a01, documento #4 = v2 restaurada); verificado en simulación. Pendiente: (b) tiende a mandar al correo en vez de cerrar la llamada con leads escépticos; (c) a veces contesta lo que no toca (receta de pasta) o erratas ("ola").
-- ✅ Paso 6: documento de Jose cargado desde el panel (versión #1, 6.493 caracteres, idéntico al original, 6 huecos avisados). El formulario del panel funciona en producción (CSRF OK con navegador real).
-- Pendiente (antes): cableado en `index.ts`/`process.ts`, pruebas, desconectar ManyChat, prueba con @josegomezlife.
-- El documento de Jose (temporal) está en la conversación; se cargará en la BD desde el panel, no en el repo.
+**Pendiente de la Fase 3 (no bloquea seguir con la Fase 4):**
+- Modo público: solo con el OK de Jose, después de que pula el documento.
+- Para cuando Jose pula el marketing (vistos en el simulador): con leads escépticos que piden "todo por escrito" manda al correo en vez de defender la llamada; a veces contesta algo fuera de tema (receta de pasta); alguna errata ("ola").
+- Técnicos (ver Pendientes/apuntes): espera de 8 s en memoria, aprobar borradores desde el panel, reanudar no contesta lo pendiente, `listConversations` sin LIMIT en SQL, caché de 1 h opcional.
 
 ### Fase 4 — Fichas de leads, análisis masivo y medición ⏳
 
@@ -207,11 +201,13 @@ Pasos (en orden, comprobando cada uno):
 ## Pendientes / apuntes
 
 - [ ] Fase 2: ¿respuestas públicas de una lista fija o generadas con IA? (de momento lista fija)
-- [ ] Fase 3: modelo de Claude; empezar en borrador o automático; texto del aviso de IA.
+- [x] Fase 3: modelo de Claude (Haiku 5.5), arranque en modo prueba, sin aviso proactivo de IA. Resuelto 2026-10-16.
 - [ ] Fase 3: si Jose vive u opera desde la UE, revisar si le aplica la Ley de IA europea (art. 50). **No verificado.**
-- [ ] Antes de producción: base de datos definitiva (Neon de pago o Render Postgres).
+- [ ] Antes de abrir el setter al público: base de datos definitiva (Neon de pago o Render Postgres) y revisar el consumo de Neon (R6).
 - [ ] `/data-deletion` promete borrar datos si escriben "BORRAR": hoy es **manual**. Automatizar (Fase 4).
-- [ ] Prueba automática de `store.ts` contra una base de datos real.
+- [x] Prueba automática de `store.ts` contra una base de datos real (PGlite, `tests/store.integration.test.ts`). Hecho 2026-10-16.
+- [ ] Setter (marketing, lo pule Jose): objeción "lo quiero todo por escrito"; no contestar fuera de tema; erratas.
+- [ ] Setter: caché de 1 h para respuestas lentas (hoy 5 min; diferencia de céntimos con poco volumen).
 - [ ] `listConversations` (store.ts) lee todos los mensajes y corta después: irá lenta con miles. Pasar el límite a la consulta SQL.
 - [ ] Panel: aprobar y enviar un borrador retenido (hoy el modo borrador solo deja leer lo que diría la IA). Fuera del paso 4; ¿Fase 4/6?
 - [ ] Panel: al reanudar la IA no contesta al mensaje que quedó pendiente; espera al siguiente mensaje de la persona.
@@ -224,3 +220,5 @@ Pasos (en orden, comprobando cada uno):
 - 2026-10-16 — Plan reorganizado: el setter IA es el corazón; nueva Fase 6 final = constructor visual de flujos. Empieza la Fase 2.
 - 2026-10-16 — Plan ampliado (Jose): Fase 4 = análisis masivo de conversaciones (objeciones, mercado, ángulos de contenido) + medición 100 %; Fase 6 = software de gestión completo. Origen por reel implementado.
 - 2026-10-16 — Réplica de ManyChat en producción (opción B: una vez por persona y por reel). Jose autoriza desconectar ManyChat en la Fase 3.
+- 2026-10-16 — Fase 3 en producción (modo prueba): setter IA con Haiku, panel `/setter` + `/conversaciones` + simulador. ManyChat desconectado. Prueba real con @josegomezlife OK; 4 vueltas de 18 escenarios simulados. Documento del setter v4 (= v2).
+- 2026-10-17 — Decisión de Jose: terminar el programa (Fases 4-6) antes de pulir el marketing del setter. Siguiente: Fase 4.
