@@ -2,12 +2,18 @@ import { planComment, planPostback, type Plan } from './flows/engine.js';
 import { MetaApiError } from './meta/client.js';
 import { parseWebhook, type InstagramEvent } from './meta/parse.js';
 import type { Sender } from './sender.js';
+import type { EchoWatcher } from './setter/echoes.js';
+import type { SetterService } from './setter/service.js';
 import type { Store } from './store.js';
 
 export interface ProcessDeps {
   readonly store: Store;
   readonly sender: Sender;
   readonly random?: () => number;
+  /** Setter IA: recibe los DMs de las personas (Fase 3). */
+  readonly setter?: Pick<SetterService, 'onIncoming'>;
+  /** Ecos de lo que sale de la cuenta: si no es nuestro, Jose escribió a mano y la IA se para. */
+  readonly echoes?: Pick<EchoWatcher, 'onEcho'>;
 }
 
 function describeError(error: unknown): Record<string, unknown> {
@@ -21,7 +27,7 @@ function logOnly(event: InstagramEvent): string {
     case 'message':
       return event.isEcho || event.senderId === event.accountId
         ? 'Mensaje enviado desde tu cuenta (eco).'
-        : 'DM recibido. Solo registro (el setter IA llega en la Fase 3).';
+        : 'DM recibido: pasa al setter IA (responde solo si está activo para esta persona).';
     case 'standby':
       return 'STANDBY: otra app (p. ej. ManyChat) es dueña de esta conversación. Solo registro.';
     case 'receipt':
@@ -56,11 +62,23 @@ async function touchContact(event: InstagramEvent, store: Store): Promise<void> 
   }
 }
 
+/** DM de una persona → setter IA. Eco de la cuenta → vigilante de ecos. Los botones (postback) son del flujo. */
+async function routeMessage(event: InstagramEvent, deps: ProcessDeps): Promise<void> {
+  if (event.kind !== 'message') return;
+  if (event.isEcho) {
+    deps.echoes?.onEcho(event);
+    return;
+  }
+  if (event.senderId === event.accountId) return;
+  await deps.setter?.onIncoming(event);
+}
+
 async function handleEvent(event: InstagramEvent, deps: ProcessDeps): Promise<void> {
   await touchContact(event, deps.store);
   const plan = await planFor(event, deps);
   if (!plan) {
     await deps.store.logEvent(event.kind, logOnly(event), event);
+    await routeMessage(event, deps);
     return;
   }
   await deps.store.logEvent(event.kind, plan.note, event);

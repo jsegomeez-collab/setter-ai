@@ -127,4 +127,60 @@ describe('createPostgresStore (Postgres real)', () => {
     await store.allowSender('9');
     expect(await store.listAllowedSenders()).toEqual(['9']);
   });
+
+  it('Fase 3 · mensajes: no duplica por mid, cambia estado y mid por clave, y lista en orden', async () => {
+    await store.addMessage({ igId: 'p1', direction: 'in', source: 'user', text: 'hola', mid: 'mid-1', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: 'p1', direction: 'in', source: 'user', text: 'hola (repetido)', mid: 'mid-1', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: 'p1', direction: 'out', source: 'ai', text: 'respuesta', mid: null, status: 'queued', dedupKey: 'ai:mid-1' });
+    await store.addMessage({ igId: 'p1', direction: 'out', source: 'flow', text: 'botones', mid: null, status: 'sent', dedupKey: null });
+    await store.setMessageStatus('ai:mid-1', 'sent', 'mid-out-1');
+    const messages = await store.listMessages('p1', 10);
+    expect(messages.map((m) => [m.text, m.status, m.mid])).toEqual([
+      ['hola', 'sent', 'mid-1'],
+      ['respuesta', 'sent', 'mid-out-1'],
+      ['botones', 'sent', null],
+    ]);
+    expect((await store.listMessages('p1', 2)).map((m) => m.text)).toEqual(['respuesta', 'botones']);
+  });
+
+  it('Fase 3 · conversaciones: último mensaje de cada persona, con username, pausa y ficha', async () => {
+    await store.touchContact('p2', 'segunda');
+    await store.addMessage({ igId: 'p2', direction: 'in', source: 'user', text: 'soy p2', mid: 'mid-p2', status: 'sent', dedupKey: null });
+    await store.setAiPaused('p2', true, 'Jose escribió a mano');
+    await store.saveLead('p2', { nivel: 'nivel_1', objeciones: ['es caro'] });
+    const conversations = await store.listConversations(10);
+    expect(conversations.map((c) => c.igId)).toEqual(['p2', 'p1']);
+    expect(conversations[0]).toMatchObject({ username: 'segunda', lastText: 'soy p2', lastDirection: 'in', aiPaused: true, lead: { nivel: 'nivel_1', objeciones: ['es caro'] } });
+    expect(conversations[1]).toMatchObject({ lastText: 'botones', aiPaused: false, lead: null });
+    expect(await store.listConversations(1)).toHaveLength(1);
+  });
+
+  it('Fase 3 · contacto: pausa y ficha también para alguien nuevo; se puede reanudar', async () => {
+    expect(await store.getContact('nadie')).toBeNull();
+    await store.setAiPaused('p3', true, 'Posible menor de edad.');
+    expect(await store.getContact('p3')).toMatchObject({ igId: 'p3', aiPaused: true, aiPausedReason: 'Posible menor de edad.', lead: null, tags: [] });
+    await store.setAiPaused('p3', false, null);
+    await store.saveLead('p3', { resumen: 'hola' });
+    expect(await store.getContact('p3')).toMatchObject({ aiPaused: false, aiPausedReason: null, lead: { resumen: 'hola' } });
+  });
+
+  it('Fase 3 · acciones por message_id de Meta (para reconocer nuestros ecos) y getAction con respuesta', async () => {
+    await store.claimAction('ai:mid-1', 'send_message', { type: 'send_message' });
+    await store.finishAction('ai:mid-1', true, { recipientId: 'p1', messageId: 'mid-out-1' });
+    await store.claimAction('private:c-9', 'private_reply', { type: 'private_reply' });
+    await store.finishAction('private:c-9', true, { fallback: 'solo texto', result: { recipientId: 'p1', messageId: 'mid-out-2' } });
+    expect(await store.findActionByMessageId('mid-out-1')).toMatchObject({ dedupKey: 'ai:mid-1' });
+    expect(await store.findActionByMessageId('mid-out-2')).toMatchObject({ dedupKey: 'private:c-9' });
+    expect(await store.findActionByMessageId('no-existe')).toBeNull();
+    expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
+  });
+
+  it('Fase 3 · documento del setter: versiones, la última manda', async () => {
+    expect(await store.getKnowledge()).toBeNull();
+    const first = await store.saveKnowledge('versión 1');
+    const second = await store.saveKnowledge('versión 2 con ñ y emojis 🚀');
+    expect(second).toBeGreaterThan(first);
+    expect(await store.getKnowledge()).toMatchObject({ id: second, text: 'versión 2 con ñ y emojis 🚀' });
+    expect((await store.listKnowledgeVersions(10)).map((v) => v.id)).toEqual([second, first]);
+  });
 });

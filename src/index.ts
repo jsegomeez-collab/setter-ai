@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
@@ -7,6 +8,9 @@ import { TokenManager } from './meta/token.js';
 import { processInBackground, rescueComments } from './process.js';
 import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
+import { ClaudeBrain } from './setter/brain.js';
+import { EchoWatcher } from './setter/echoes.js';
+import { SetterService } from './setter/service.js';
 import { createPostgresStore } from './store.js';
 
 const TOKEN_CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
@@ -43,13 +47,25 @@ async function main(): Promise<void> {
   const resumed = await activeSender.recover();
   if (resumed > 0) await store.logEvent('cola', `Retomados ${resumed} envíos pendientes tras el arranque.`, null);
 
+  // Setter IA (Fase 3). Sin ANTHROPIC_API_KEY los DMs se guardan pero no se responde. Arranca apagado (modo en /setter).
+  const { anthropicApiKey, model, links } = config.setter;
+  const brain = anthropicApiKey ? new ClaudeBrain(new Anthropic({ apiKey: anthropicApiKey }), model) : null;
+  const setter = new SetterService({
+    store,
+    brain,
+    links,
+    enqueue: (actions) => activeSender.enqueue(actions),
+    getUsername: async (igId) => (client ? client.getUsername(igId) : null),
+  });
+  const echoes = new EchoWatcher({ store });
+
   const app = createApp({
     config,
     store,
     client,
     tokens,
     linkSecret: linkSigner ? linkSecret : null,
-    processPayload: (payload) => processInBackground(payload, { store, sender: activeSender }),
+    processPayload: (payload) => processInBackground(payload, { store, sender: activeSender, setter, echoes }),
     rescue: (since) => rescueComments(since, { store, sender: activeSender }),
   });
 
@@ -71,8 +87,8 @@ async function main(): Promise<void> {
     clearInterval(periodicCheck);
     scheduler.stop();
     server.close();
-    activeSender
-      .idle()
+    Promise.all([setter.idle(), echoes.idle()])
+      .then(() => activeSender.idle())
       .then(() => store.close())
       .finally(() => process.exit(0));
   };

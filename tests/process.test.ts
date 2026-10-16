@@ -67,7 +67,7 @@ describe('processWebhook con flujos', () => {
     expect(client.sendMessage).not.toHaveBeenCalled();
     const notes = store.events.map((e) => e.note).join(' | ');
     expect(notes).toContain('ningún flujo');
-    expect(notes).toContain('Fase 3');
+    expect(notes).toContain('pasa al setter IA');
     expect(notes).toContain('eco');
     expect(notes).toContain('leído');
   });

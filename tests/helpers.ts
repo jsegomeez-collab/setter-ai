@@ -342,7 +342,7 @@ export function postbackPayload(payload: string, options: { mid?: string; sender
   };
 }
 
-export function messagePayload(text: string, options: { mid?: string; sender?: string; isEcho?: boolean } = {}): unknown {
+export function messagePayload(text: string, options: { mid?: string; sender?: string; recipient?: string; isEcho?: boolean } = {}): unknown {
   return {
     object: 'instagram',
     entry: [
@@ -352,7 +352,7 @@ export function messagePayload(text: string, options: { mid?: string; sender?: s
         messaging: [
           {
             sender: { id: options.sender ?? STRANGER_ID },
-            recipient: { id: ACCOUNT_ID },
+            recipient: { id: options.recipient ?? ACCOUNT_ID },
             timestamp: 1760000000000,
             message: { mid: options.mid ?? 'm-1', text, ...(options.isEcho ? { is_echo: true } : {}) },
           },
