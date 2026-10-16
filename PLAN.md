@@ -100,15 +100,21 @@ Progreso:
 
 **Hecha cuando:** un reel real funciona igual que con ManyChat → Jose decide apagar ManyChat.
 
-### Fase 3 — Setter con IA ⏳
+### Fase 3 — Setter con IA 🔄 (preparación)
 
-- Base de conocimiento de Jose (oferta, FAQs, objeciones) + instrucciones de setter (tono, rapport, preguntas de cualificación).
-- Claude responde a quien escribe por DM tras el flujo (o por su cuenta).
-- Lógica tomada de OpenSetter: esperar si mandan varios mensajes seguidos, callarse si Jose escribe a mano, filtro de temas delicados en español e inglés, no comprometer precios ni fechas, modo borrador / automático.
-- Aviso de IA (ver R4) — decide Jose.
-- Antes: comprobar si con ManyChat activo los DMs llegan como `messages` o `standby` (R2).
+**Para qué:** que cada persona que **responde** por DM hable con un setter IA que cualifica (5 preguntas del documento de Jose) y agenda llamada con Código Maestría, o ofrece la membresía si no hay presupuesto.
 
-**Hecha cuando:** 10-20 conversaciones de prueba salen bien según Jose.
+**Recibido de Jose (2026-10-16, versión temporal para probar):** documento con rol, reglas, oferta, niveles, 5 preguntas de calificación, perfil ideal, FAQs y objeciones. Tiene huecos marcados [LINK AGENDA], [LINK MEMBRESÍA], [CONFIRMAR…] y [COMPLETAR] → la IA NUNCA rellena esos huecos: deriva a la llamada o a info@codigomaestria.com.
+
+Pasos (en orden, comprobando cada uno):
+1. **Conversaciones**: guardar cada DM entrante y saliente (historial propio, no depender de Meta) + página /conversaciones.
+2. **Base de conocimiento editable** desde el panel (el documento de Jose, con historial de versiones). No se guarda en el repo.
+3. **Motor del setter**: DM de texto → espera unos segundos por si escribe varios mensajes → Claude con documento + historial → respuesta corta → cola de seguimientos. En la misma llamada extrae datos del lead (respuestas a las 5 preguntas, nivel, presupuesto, objeción) → base de la Fase 4.
+4. **Seguros**: modo prueba (solo usuarios autorizados), modo borrador opcional, la IA se calla si Jose escribe a mano, solo los 2 enlaces permitidos (cualquier otro enlace se bloquea antes de enviar), nunca menores, no responde a ecos ni a pulsaciones de botón (eso es del flujo).
+5. **Desconectar ManyChat** (autorizado por Jose) para que los DMs lleguen como  y no .
+6. **Prueba**: 10-20 conversaciones con @josegomezlife cubriendo perfiles y objeciones; Jose valida.
+
+**Hecha cuando:** las conversaciones de prueba salen bien según Jose y pasa a producción con el público.
 
 ### Fase 4 — Fichas de leads, análisis masivo y medición ⏳
 
