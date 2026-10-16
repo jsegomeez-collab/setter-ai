@@ -116,6 +116,22 @@ Pasos (en orden, comprobando cada uno):
 
 **Hecha cuando:** las conversaciones de prueba salen bien según Jose y pasa a producción con el público.
 
+**Decisiones de Jose para la Fase 3 (2026-10-16):**
+- Enlaces: membresía https://buy.stripe.com/8x29AS3ZI0Uk1jg0Fpbwk1Z · agenda https://codigomaestria.com/agenda?utm_source=instagram
+- El setter responde a **cualquier DM** (venga de flujo o no).
+- Arranque **solo con @josegomezlife**; público cuando Jose dé el visto bueno.
+- **Sin aviso proactivo de IA** (solo decir la verdad si preguntan). Decisión de Jose, no reabrir.
+- Si Jose escribe a mano en una conversación → la IA se **para indefinidamente** en esa conversación hasta que Jose la reanude en el panel.
+- **Modelos:** responder mensajes = **Claude Haiku 5.5** (`claude-haiku-5-5`, configurable por variable). Analizar/extraer datos y conclusiones = **Claude Sonnet 5.5** (`claude-sonnet-5-5`). **Nunca Opus** (caro).
+- `ANTHROPIC_API_KEY`: Jose la pega en Render (pantalla preparada con Playwright).
+- Sin `fallbacks` de servidor (no documentado con salidas estructuradas): si Claude rechaza/falla → conversación parada y marcada para Jose.
+
+**Estado del código (trabajo en curso, NO desplegado):**
+- `@anthropic-ai/sdk` 0.135.0 instalado (helper `zodOutputFormat` en `@anthropic-ai/sdk/helpers/zod`, `client.messages.parse` + `output_config: {effort, format}`).
+- `src/store.ts`: añadidas tablas `messages`, `knowledge_versions`, columnas de contacto `ai_paused`, `ai_paused_reason`, `lead` y métodos (addMessage, setMessageStatus, listMessages, listConversations, getContact, setAiPaused, saveLead, findActionByMessageId, saveKnowledge, getKnowledge, listKnowledgeVersions). **Falta**: helpers de prueba, compilar.
+- Pendiente de escribir: `src/setter/` (esquema lead con zod, prompt con documento + enlaces, cerebro Haiku, guardas de enlaces/longitud, servicio con espera 8 s y "callarse si Jose escribe" vía ecos: si el `mid` del eco no está en `actions` tras ~5 s → humano → pausa), rutas `/setter` (documento + versiones + activar + usuarios de prueba) y `/conversaciones` (lista, hilo, pausar/reanudar, ficha), cableado en `index.ts`/`process.ts`, pruebas, desconectar ManyChat, prueba con @josegomezlife.
+- El documento de Jose (temporal) está en la conversación; se cargará en la BD desde el panel, no en el repo.
+
 ### Fase 4 — Fichas de leads, análisis masivo y medición ⏳
 
 **Para qué:** que cada conversación se convierta en datos útiles para vender y para crear contenido, y que todo esté medido.
