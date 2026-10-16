@@ -5,7 +5,7 @@ import type { Config } from '../src/config.js';
 import type { InstagramClient } from '../src/meta/client.js';
 import { TokenManager } from '../src/meta/token.js';
 import { SETTINGS } from '../src/store.js';
-import { TEST_MEDIA_ID, commentPayload, createMemoryStore, followFlow } from './helpers.js';
+import { TEST_MEDIA_ID, TEST_SETTER_CONFIG, commentPayload, createMemoryStore, followFlow } from './helpers.js';
 
 const config: Config = {
   port: 3000,
@@ -19,6 +19,7 @@ const config: Config = {
   publicBaseUrl: null,
   limits: { privateReplies: 700, publicReplies: 700, followUps: 3000 },
   delays: { commentMin: 1000, commentMax: 2000, followUpMin: 300, followUpMax: 800 },
+  setter: TEST_SETTER_CONFIG,
 };
 
 const auth = `Basic ${Buffer.from(`jose:${config.adminPassword}`).toString('base64')}`;

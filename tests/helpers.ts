@@ -1,4 +1,6 @@
+import type { SetterConfig } from '../src/config.js';
 import type { Flow } from '../src/flows/types.js';
+import type { SetterOutput } from '../src/setter/schema.js';
 import {
   SEND_ACTION_TYPES,
   type ActionRow,
@@ -195,7 +197,7 @@ export function createMemoryStore(): Store & {
     },
     async getAction(dedupKey) {
       const action = actions.get(dedupKey);
-      return action ? { ok: action.ok, request: action.request } : null;
+      return action ? { ok: action.ok, request: action.request, response: action.response } : null;
     },
     async pendingActions() {
       return [...actions.values()].filter((a) => a.ok === null && a.type !== 'once').map((a) => a.request);
@@ -233,6 +235,39 @@ export function createMemoryStore(): Store & {
     async recentActions(limit) {
       return [...actions.values()].reverse().slice(0, limit);
     },
+  };
+}
+
+/** Enlaces y correo de prueba del setter (no son los reales). */
+export const TEST_SETTER_LINKS = {
+  agenda: 'https://agenda.example.com/llamada?utm_source=instagram',
+  membership: 'https://pago.example.com/membresia',
+  contactEmail: 'info@example.com',
+} as const;
+
+export const TEST_SETTER_CONFIG: SetterConfig = { anthropicApiKey: null, model: 'claude-haiku-5-5', links: TEST_SETTER_LINKS };
+
+/** Salida de Claude de ejemplo (respuesta + ficha), con lo que cada prueba quiera cambiar. */
+export function sampleOutput(overrides: Partial<SetterOutput> = {}, lead: Partial<SetterOutput['lead']> = {}): SetterOutput {
+  return {
+    reply: '¡Genial! ¿Ya usas alguna IA como ChatGPT o Claude?',
+    needs_human: false,
+    needs_human_reason: null,
+    lead: {
+      usa_ia: null,
+      gano_dinero: null,
+      dedicacion_ubicacion: null,
+      objetivo_6_meses: null,
+      puede_invertir: 'desconocido',
+      nivel: 'desconocido',
+      vive_en_eeuu: 'desconocido',
+      es_menor: 'no',
+      siguiente_paso: 'seguir_calificando',
+      objeciones: [],
+      resumen: 'Acaba de escribir, sin datos todavía.',
+      ...lead,
+    },
+    ...overrides,
   };
 }
 

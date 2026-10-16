@@ -27,6 +27,21 @@ export interface SendDelays {
   readonly followUpMax: number;
 }
 
+/** Enlaces y correo que el setter puede compartir (los únicos: guards.ts bloquea cualquier otro). Dados por Jose el 2026-10-16. */
+const DEFAULT_SETTER_LINKS = {
+  agenda: 'https://codigomaestria.com/agenda?utm_source=instagram',
+  membership: 'https://buy.stripe.com/8x29AS3ZI0Uk1jg0Fpbwk1Z',
+  contactEmail: 'info@codigomaestria.com',
+} as const;
+const DEFAULT_SETTER_MODEL = 'claude-haiku-5-5';
+
+export interface SetterConfig {
+  /** Sin clave no hay setter IA (el resto del servidor funciona igual). */
+  readonly anthropicApiKey: string | null;
+  readonly model: string;
+  readonly links: { readonly agenda: string; readonly membership: string; readonly contactEmail: string };
+}
+
 export interface Config {
   readonly port: number;
   readonly databaseUrl: string;
@@ -42,6 +57,7 @@ export interface Config {
   readonly delays: SendDelays;
   /** URL pública del servidor (para los enlaces con seguimiento). Render la da en RENDER_EXTERNAL_URL. */
   readonly publicBaseUrl: string | null;
+  readonly setter: SetterConfig;
 }
 
 type Env = Record<string, string | undefined>;
@@ -114,5 +130,14 @@ export function loadConfig(env: Env = process.env): Config {
     },
     delays: loadDelays(env),
     publicBaseUrl: clean(env.PUBLIC_BASE_URL) ?? clean(env.RENDER_EXTERNAL_URL),
+    setter: {
+      anthropicApiKey: clean(env.ANTHROPIC_API_KEY),
+      model: clean(env.SETTER_MODEL) ?? DEFAULT_SETTER_MODEL,
+      links: {
+        agenda: clean(env.SETTER_LINK_AGENDA) ?? DEFAULT_SETTER_LINKS.agenda,
+        membership: clean(env.SETTER_LINK_MEMBERSHIP) ?? DEFAULT_SETTER_LINKS.membership,
+        contactEmail: clean(env.SETTER_CONTACT_EMAIL) ?? DEFAULT_SETTER_LINKS.contactEmail,
+      },
+    },
   };
 }

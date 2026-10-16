@@ -1,0 +1,46 @@
+/**
+ * Última barrera antes de enviar lo que escribió la IA. Si algo falla, la respuesta NO sale:
+ * se retiene para Jose. Reglas del documento: solo 2 enlaces y un correo permitidos, mensajes cortos,
+ * y nunca huecos sin rellenar ([LINK…], [CONFIRMAR…], [COMPLETAR]).
+ */
+
+export const MAX_REPLY_CHARS = 1000;
+
+export interface AllowedContacts {
+  readonly urls: readonly string[];
+  readonly emails: readonly string[];
+}
+
+export type GuardResult = { readonly ok: true } | { readonly ok: false; readonly reasons: readonly string[] };
+
+/** Dominios de primer nivel habituales. Lista cerrada a propósito: "EE.UU." o "p.ej." no son enlaces. */
+const TLDS = [
+  'com', 'net', 'org', 'io', 'ai', 'co', 'me', 'ly', 'app', 'link', 'gg', 'es', 'mx', 'us', 'info', 'biz', 'xyz',
+  'site', 'online', 'store', 'shop', 'dev', 'tv', 'ar', 'cl', 'pe', 'uy', 've', 'ec', 'bo', 'py', 'cr', 'do', 'gt',
+  'hn', 'ni', 'pa', 'sv', 'pr', 'uk', 'de', 'fr', 'it', 'br', 'ca', 'eu', 'page', 'so', 'to', 'cc', 'vip', 'pro',
+  'top', 'club', 'live', 'ws', 'fm', 'sh', 'lat', 'gl', 'gd', 'be', 'bio', 'tech', 'academy',
+];
+const LINK_PATTERN = new RegExp(`https?://|www\\.|\\b[a-z0-9-]+(\\.[a-z0-9-]+)*\\.(${TLDS.join('|')})\\b`, 'i');
+const EMAIL_PATTERN = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+const PLACEHOLDER_PATTERN = /\[(LINK|CONFIRMAR|COMPLETAR)[^\]]*\]/i;
+
+/** Quita del texto los enlaces y correos permitidos; lo que quede con pinta de enlace o correo está prohibido. */
+function stripAllowed(text: string, allowed: AllowedContacts): string {
+  const all = [...allowed.urls, ...allowed.emails].sort((a, b) => b.length - a.length);
+  return all.reduce((rest, item) => rest.split(item).join(' '), text);
+}
+
+export function checkReply(text: string, allowed: AllowedContacts): GuardResult {
+  const reasons: string[] = [];
+  const trimmed = text.trim();
+  if (trimmed.length === 0) reasons.push('Respuesta vacía');
+  if (trimmed.length > MAX_REPLY_CHARS) reasons.push(`Respuesta demasiado larga (${trimmed.length} caracteres, máximo ${MAX_REPLY_CHARS})`);
+  if (PLACEHOLDER_PATTERN.test(trimmed)) reasons.push('Contiene un hueco sin rellenar del documento');
+  const rest = stripAllowed(trimmed, allowed);
+  const emails = rest.match(EMAIL_PATTERN) ?? [];
+  if (emails.length > 0) reasons.push(`Correo no permitido: ${emails.join(', ')}`);
+  const withoutEmails = rest.replace(EMAIL_PATTERN, ' ');
+  const link = withoutEmails.match(LINK_PATTERN);
+  if (link) reasons.push(`Enlace no permitido: ${link[0]}`);
+  return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
+}

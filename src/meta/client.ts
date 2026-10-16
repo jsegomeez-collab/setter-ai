@@ -175,6 +175,20 @@ export class InstagramClient {
   }
 
   /**
+   * Username de quien escribió (doc: User Profile API, campo username). Meta lo da cuando la persona
+   * ya nos ha escrito un DM (consentimiento); si no lo permite, null.
+   */
+  async getUsername(igsid: string): Promise<string | null> {
+    try {
+      const data = await this.call('GET', `${encodeURIComponent(igsid)}?fields=username`);
+      return asString(data.username);
+    } catch (error) {
+      if (error instanceof MetaApiError && error.status >= 400 && error.status < 500) return null;
+      throw error;
+    }
+  }
+
+  /**
    * ¿La persona sigue la cuenta? (doc: User Profile API, campo is_user_follow_business).
    * Meta exige "consentimiento" (que haya escrito); si no lo hay, devolvemos "unknown".
    */

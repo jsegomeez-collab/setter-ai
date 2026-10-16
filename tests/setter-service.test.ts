@@ -1,0 +1,226 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { Action } from '../src/flows/engine.js';
+import type { InstagramEvent } from '../src/meta/parse.js';
+import type { BrainResult, SetterBrain } from '../src/setter/brain.js';
+import { NO_TEXT_PLACEHOLDER } from '../src/setter/prompt.js';
+import { SetterService, parseUsernames } from '../src/setter/service.js';
+import { SETTINGS } from '../src/store.js';
+import { ACCOUNT_ID, STRANGER_ID, TEST_SETTER_LINKS, createMemoryStore, sampleOutput } from './helpers.js';
+
+type MessageEvent = Extract<InstagramEvent, { kind: 'message' }>;
+const USAGE = { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 0 };
+const ok = (output = sampleOutput()): BrainResult => ({ kind: 'ok', output, usage: USAGE });
+
+function dm(text: string | null, mid: string): MessageEvent {
+  return { kind: 'message', accountId: ACCOUNT_ID, senderId: STRANGER_ID, recipientId: ACCOUNT_ID, mid, text, isEcho: false };
+}
+
+interface SetupOptions {
+  readonly mode?: string | null;
+  readonly brain?: SetterBrain | null;
+  readonly sendOk?: boolean;
+  readonly username?: string | null;
+}
+
+async function setup(options: SetupOptions = {}) {
+  const store = createMemoryStore();
+  store.settings.set(SETTINGS.setterMode, options.mode === undefined ? 'test' : options.mode);
+  store.settings.set(SETTINGS.setterTestUsernames, '@JoseGomezLife, otra_cuenta');
+  await store.saveKnowledge('Eres el setter de Jose. Agenda: [LINK AGENDA]');
+  const decide = vi.fn<SetterBrain['decide']>().mockResolvedValue(ok());
+  // Cola falsa: hace lo mismo que Sender (reserva la acción y la termina con la respuesta de Meta).
+  const enqueue = vi.fn(async (actions: readonly Action[]) => {
+    for (const action of actions) {
+      await store.claimAction(action.dedupKey, action.type, action);
+      await store.finishAction(action.dedupKey, options.sendOk ?? true, options.sendOk === false ? { error: 'x' } : { recipientId: STRANGER_ID, messageId: 'm-out-1' });
+    }
+  });
+  const getUsername = vi.fn().mockResolvedValue(options.username === undefined ? 'josegomezlife' : options.username);
+  const timers: (() => void)[] = [];
+  const service = new SetterService({
+    store,
+    brain: options.brain === undefined ? { decide } : options.brain,
+    links: TEST_SETTER_LINKS,
+    enqueue,
+    getUsername,
+    setTimer: (fn) => timers.push(fn) - 1,
+    clearTimer: (handle) => {
+      timers[handle as number] = () => undefined;
+    },
+  });
+  /** Hace como si pasaran los 8 segundos y espera a que termine la respuesta. */
+  const flush = async () => {
+    timers.splice(0).forEach((fn) => fn());
+    await service.idle();
+  };
+  return { store, decide, enqueue, getUsername, service, flush };
+}
+
+describe('SetterService', () => {
+  it('responde por la cola de seguimientos, guarda la ficha y apunta el mensaje enviado con su id de Meta', async () => {
+    const { store, decide, enqueue, service, flush } = await setup();
+    await service.onIncoming(dm('hola, quiero info', 'm-1'));
+    await flush();
+    expect(decide).toHaveBeenCalledTimes(1);
+    const [system, messages] = decide.mock.calls[0] ?? [];
+    expect(system).toContain(`Agenda: ${TEST_SETTER_LINKS.agenda}`);
+    expect(messages).toEqual([{ role: 'user', content: 'hola, quiero info' }]);
+    expect(enqueue.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({ type: 'send_message', dedupKey: 'ai:m-1', recipientId: STRANGER_ID, message: expect.objectContaining({ text: sampleOutput().reply, buttons: [] }) }),
+    ]);
+    expect(store.messages.map((m) => [m.direction, m.source, m.status, m.mid])).toEqual([
+      ['in', 'user', 'sent', 'm-1'],
+      ['out', 'ai', 'sent', 'm-out-1'],
+    ]);
+    expect((await store.getContact(STRANGER_ID))?.lead).toEqual(sampleOutput().lead);
+  });
+
+  it('espera por si la persona escribe varios mensajes y responde una sola vez a todos', async () => {
+    const { decide, service, flush } = await setup();
+    await service.onIncoming(dm('hola', 'm-1'));
+    await service.onIncoming(dm('vi tu reel', 'm-2'));
+    await service.idle();
+    expect(decide).not.toHaveBeenCalled(); // todavía no han pasado los 8 s
+    await flush();
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(decide.mock.calls[0]?.[1]).toEqual([{ role: 'user', content: 'hola\nvi tu reel' }]);
+  });
+
+  it('no responde dos veces al mismo mensaje', async () => {
+    const { decide, enqueue, service, flush } = await setup();
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    await service.replyNow(STRANGER_ID);
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('apagado: guarda el DM pero no llama a Claude', async () => {
+    const { store, decide, service, flush } = await setup({ mode: null });
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(store.messages).toHaveLength(1);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('modo prueba: solo responde a los usuarios de la lista (busca el username en Meta y lo guarda)', async () => {
+    const allowed = await setup({ username: 'JoseGomezLife' });
+    await allowed.service.onIncoming(dm('hola', 'm-1'));
+    await allowed.flush();
+    expect(allowed.decide).toHaveBeenCalledTimes(1);
+    expect((await allowed.store.getContact(STRANGER_ID))?.username).toBe('JoseGomezLife');
+
+    const stranger = await setup({ username: 'desconocida' });
+    await stranger.service.onIncoming(dm('hola', 'm-1'));
+    await stranger.flush();
+    expect(stranger.decide).not.toHaveBeenCalled();
+    expect(stranger.store.events.at(-1)?.note).toContain('@desconocida no está en la lista');
+  });
+
+  it('modo público: responde a cualquiera sin mirar el username', async () => {
+    const { decide, getUsername, service, flush } = await setup({ mode: 'live', username: null });
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(getUsername).not.toHaveBeenCalled();
+  });
+
+  it('si la IA está parada en esa conversación, no responde', async () => {
+    const { store, decide, service, flush } = await setup();
+    await store.setAiPaused(STRANGER_ID, true, 'Jose escribió a mano');
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('un enlace no permitido NO sale: se retiene y la IA se para para Jose', async () => {
+    const { store, decide, enqueue, service, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({ reply: 'Paga aquí: https://otro-pago.com/vip' })));
+    await service.onIncoming(dm('quiero el vip', 'm-1'));
+    await flush();
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(store.messages.at(-1)).toMatchObject({ direction: 'out', status: 'held', note: expect.stringContaining('Enlace no permitido') });
+    expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: true, aiPausedReason: expect.stringContaining('Respuesta retenida') });
+  });
+
+  it('el enlace de agenda permitido sí sale', async () => {
+    const { enqueue, service, decide, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({ reply: `Agenda tu llamada aquí: ${TEST_SETTER_LINKS.agenda}` })));
+    await service.onIncoming(dm('vale, agendo', 'm-1'));
+    await flush();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['rechazo', { kind: 'refusal', detail: 'Claude rechazó responder' } as BrainResult, 'Claude rechazó responder'],
+    ['fallo', { kind: 'failed', detail: 'sin conexión' } as BrainResult, 'Fallo al llamar a Claude'],
+  ])('si Claude da %s, no se envía nada y la conversación queda parada para Jose', async (_name, result, reason) => {
+    const { store, decide, enqueue, service, flush } = await setup();
+    decide.mockResolvedValue(result);
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: true, aiPausedReason: expect.stringContaining(reason) });
+  });
+
+  it('si la IA pide a Jose, envía su respuesta corta y se para', async () => {
+    const { store, decide, enqueue, service, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({ reply: 'Le paso tu mensaje al equipo.', needs_human: true, needs_human_reason: 'Queja por un pago' })));
+    await service.onIncoming(dm('me cobraron dos veces', 'm-1'));
+    await flush();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: true, aiPausedReason: expect.stringContaining('Queja por un pago') });
+  });
+
+  it('posible menor de edad: la IA se para', async () => {
+    const { store, decide, service, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({ reply: 'Gracias por escribir, ¡mucho ánimo con tus estudios!' }, { es_menor: 'si' })));
+    await service.onIncoming(dm('tengo 15 años', 'm-1'));
+    await flush();
+    expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: true, aiPausedReason: 'Posible menor de edad.' });
+  });
+
+  it('modo borrador: la respuesta se retiene para aprobar, sin enviar y sin parar la IA', async () => {
+    const { store, enqueue, service, flush } = await setup();
+    store.settings.set(SETTINGS.setterDraft, 'true');
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(store.messages.at(-1)).toMatchObject({ status: 'held', note: 'Modo borrador: pendiente de aprobar' });
+    expect((await store.getContact(STRANGER_ID))?.aiPaused).toBe(false);
+  });
+
+  it('si Instagram no acepta el envío, el mensaje queda como fallido', async () => {
+    const { store, service, flush } = await setup({ sendOk: false });
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(store.messages.at(-1)).toMatchObject({ direction: 'out', status: 'failed' });
+  });
+
+  it('sin clave de Anthropic o sin documento: guarda el DM, no responde y lo deja registrado', async () => {
+    const noKey = await setup({ brain: null });
+    await noKey.service.onIncoming(dm('hola', 'm-1'));
+    await noKey.flush();
+    expect(noKey.store.events.at(-1)?.note).toContain('sin ANTHROPIC_API_KEY');
+
+    const noDoc = await setup();
+    noDoc.store.knowledge.splice(0);
+    await noDoc.service.onIncoming(dm('hola', 'm-1'));
+    await noDoc.flush();
+    expect(noDoc.decide).not.toHaveBeenCalled();
+    expect(noDoc.store.events.at(-1)?.note).toContain('No hay documento');
+  });
+
+  it('un DM sin texto (audio, foto) se guarda con un aviso que Claude entiende', async () => {
+    const { store, service } = await setup();
+    await service.onIncoming(dm(null, 'm-1'));
+    expect(store.messages[0]?.text).toBe(NO_TEXT_PLACEHOLDER);
+  });
+});
+
+describe('parseUsernames', () => {
+  it('acepta comas, espacios, @ y mayúsculas', () => {
+    expect(parseUsernames(' @JoseGomezLife, otra_cuenta ,, ')).toEqual(['josegomezlife', 'otra_cuenta']);
+    expect(parseUsernames(null)).toEqual([]);
+  });
+});

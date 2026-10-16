@@ -130,7 +130,8 @@ Pasos (en orden, comprobando cada uno):
 **Estado del código (trabajo en curso, NO desplegado):**
 - `@anthropic-ai/sdk` 0.135.0 instalado (helper `zodOutputFormat` en `@anthropic-ai/sdk/helpers/zod`, `client.messages.parse` + `output_config: {effort, format}`).
 - `src/store.ts`: añadidas tablas `messages`, `knowledge_versions`, columnas de contacto `ai_paused`, `ai_paused_reason`, `lead` y métodos (addMessage, setMessageStatus, listMessages, listConversations, getContact, setAiPaused, saveLead, findActionByMessageId, saveKnowledge, getKnowledge, listKnowledgeVersions). ✅ Store en memoria de pruebas completo; `npm run typecheck` ahora revisa también `tests/` (`tsconfig.test.json`); 140 pruebas pasando.
-- Pendiente de escribir: `src/setter/` (esquema lead con zod, prompt con documento + enlaces, cerebro Haiku, guardas de enlaces/longitud, servicio con espera 8 s y "callarse si Jose escribe" vía ecos: si el `mid` del eco no está en `actions` tras ~5 s → humano → pausa), rutas `/setter` (documento + versiones + activar + usuarios de prueba) y `/conversaciones` (lista, hilo, pausar/reanudar, ficha), cableado en `index.ts`/`process.ts`, pruebas, desconectar ManyChat, prueba con @josegomezlife.
+- ✅ `src/setter/` (2026-10-16, sin conectar todavía): `schema.ts` (respuesta + ficha), `prompt.ts` (documento con enlaces + marco técnico + historial), `brain.ts` (Haiku, `effort: low`, JSON validado tras mirar `stop_reason`), `guards.ts` (solo los 2 enlaces y el correo, ≤1000 caracteres, sin huecos), `service.ts` (espera 8 s, modos `off`/`test`/`live` en `settings`, borrador, pausa por conversación, envío por la cola con clave `ai:<mid>`). Config: `ANTHROPIC_API_KEY`, `SETTER_MODEL`, `SETTER_LINK_*`. `client.getUsername`. 177 pruebas; prueba de sabotaje hecha.
+- Pendiente de escribir: "callarse si Jose escribe" vía ecos (si el `mid` del eco no está en `actions` tras ~5 s → humano → pausa), rutas `/setter` (documento + versiones + activar + usuarios de prueba) y `/conversaciones` (lista, hilo, pausar/reanudar, ficha), cableado en `index.ts`/`process.ts`, pruebas, desconectar ManyChat, prueba con @josegomezlife.
 - El documento de Jose (temporal) está en la conversación; se cargará en la BD desde el panel, no en el repo.
 
 ### Fase 4 — Fichas de leads, análisis masivo y medición ⏳
@@ -205,6 +206,7 @@ Pasos (en orden, comprobando cada uno):
 - [ ] `/data-deletion` promete borrar datos si escriben "BORRAR": hoy es **manual**. Automatizar (Fase 4).
 - [ ] Prueba automática de `store.ts` contra una base de datos real.
 - [ ] `listConversations` (store.ts) lee todos los mensajes y corta después: irá lenta con miles. Pasar el límite a la consulta SQL.
+- [ ] Setter: la espera de 8 s vive en memoria. Si el servidor se reinicia en esos segundos, el DM queda guardado pero sin respuesta. Arreglo propuesto (paso 5): al arrancar, responder a las conversaciones cuyo último mensaje sea de la persona y reciente.
 
 ## Registro de cambios
 

@@ -9,7 +9,7 @@ export interface Store {
   /** Envíos a Instagram (terminados bien o en curso) desde una fecha, de los tipos indicados. Para los límites por hora. */
   countSendsSince(since: Date, types?: readonly string[]): Promise<number>;
   /** Estado de una acción (null si no existe). */
-  getAction(dedupKey: string): Promise<{ readonly ok: boolean | null; readonly request: unknown } | null>;
+  getAction(dedupKey: string): Promise<{ readonly ok: boolean | null; readonly request: unknown; readonly response: unknown } | null>;
   /** Acciones reservadas que nunca terminaron (p. ej. por un reinicio). Para retomarlas al arrancar. */
   pendingActions(): Promise<unknown[]>;
   /** Contactos: alta o actualización (username, última vez visto y, si viene de un comentario, el reel). */
@@ -156,6 +156,12 @@ export const SETTINGS = {
   igTokenRefreshedAt: 'ig_token_refreshed_at',
   igTokenExpiresAt: 'ig_token_expires_at',
   igTokenLastError: 'ig_token_last_error',
+  /** Setter IA: 'off' (apagado, por defecto) · 'test' (solo usuarios de prueba) · 'live' (todo el mundo). */
+  setterMode: 'setter_mode',
+  /** 'true' = la IA escribe pero no envía: todo queda retenido para que Jose lo apruebe. */
+  setterDraft: 'setter_draft',
+  /** Usernames de Instagram autorizados en modo prueba, separados por comas. */
+  setterTestUsernames: 'setter_test_usernames',
 } as const;
 
 /** Tipos de acción que cuentan como envío a Instagram (para el límite por hora). */
@@ -296,7 +302,7 @@ export async function createPostgresStore(
       return rows[0]?.n ?? 0;
     },
     async getAction(dedupKey) {
-      const rows = await sql<{ ok: boolean | null; request: unknown }[]>`SELECT ok, request FROM actions WHERE dedup_key = ${dedupKey}`;
+      const rows = await sql<{ ok: boolean | null; request: unknown; response: unknown }[]>`SELECT ok, request, response FROM actions WHERE dedup_key = ${dedupKey}`;
       return rows[0] ?? null;
     },
     async pendingActions() {

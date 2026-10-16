@@ -54,6 +54,15 @@ describe('InstagramClient', () => {
     await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'boom' } })).getFollowStatus('9')).rejects.toBeInstanceOf(MetaApiError);
   });
 
+  it('getUsername: pide el campo username del IGSID; sin consentimiento devuelve null', async () => {
+    const fetchFn = fetchReturning(200, { username: 'josegomezlife', id: '9' });
+    expect(await new InstagramClient('t', 'v25.0', fetchFn).getUsername('9')).toBe('josegomezlife');
+    expect(lastCall(fetchFn)[0]).toBe('https://graph.instagram.com/v25.0/9?fields=username');
+    const consent = fetchReturning(400, { error: { message: 'User consent is required to access user profile.' } });
+    expect(await new InstagramClient('t', 'v25.0', consent).getUsername('9')).toBeNull();
+    await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'boom' } })).getUsername('9')).rejects.toBeInstanceOf(MetaApiError);
+  });
+
   it('MetaApiError guarda el código (p. ej. 368) y aguanta respuestas que no son JSON', async () => {
     const error = new MetaApiError('x', 400, { error: { code: 368, error_subcode: 1 } });
     expect([error.code, error.subcode]).toEqual([368, 1]);

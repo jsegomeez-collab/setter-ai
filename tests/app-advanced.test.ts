@@ -4,7 +4,7 @@ import type { Config } from '../src/config.js';
 import { createLinkToken, deriveLinkSecret } from '../src/links.js';
 import { TokenManager } from '../src/meta/token.js';
 import { JOSE_FLOW } from './fixtures.js';
-import { createMemoryStore } from './helpers.js';
+import { TEST_SETTER_CONFIG, createMemoryStore } from './helpers.js';
 
 const config: Config = {
   port: 3000,
@@ -18,6 +18,7 @@ const config: Config = {
   limits: { privateReplies: 700, publicReplies: 700, followUps: 3000 },
   delays: { commentMin: 1000, commentMax: 2000, followUpMin: 300, followUpMax: 800 },
   publicBaseUrl: 'https://setter.example.com',
+  setter: TEST_SETTER_CONFIG,
 };
 const SECRET = deriveLinkSecret(config.tokenEncryptionKey as string);
 const auth = `Basic ${Buffer.from(`jose:${config.adminPassword}`).toString('base64')}`;
