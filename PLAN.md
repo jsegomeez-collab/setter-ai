@@ -1,7 +1,7 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-16
-> Estado general: **Fase 0 terminada. Siguiente: Fase 1 (sin empezar).**
+> Estado general: **Fase 1 en curso.** Código hecho y subido (pasos 1-2). Siguiente: despliegue en Render (paso 3).
 
 ## Objetivo
 
@@ -53,7 +53,15 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 - Repos revisados: OpenSetter, OpenReply, open-autodm, InstaAuto, ZernFlow, ig-setter, manychat-ai-agent.
 - Decisiones de arriba tomadas con Jose.
 
-### Fase 1 — Prueba de punta a punta, sin IA ⏳
+### Fase 1 — Prueba de punta a punta, sin IA 🔄
+
+Progreso:
+- [x] Pasos 1-2: código hecho (2026-10-16). 60 pruebas automáticas OK, cobertura 85,5 % de líneas. `store.ts` (Postgres) sin prueba automática: se valida en el primer arranque con Neon.
+- [ ] Paso 3: despliegue en Render + Neon.
+- [ ] Pasos 4-8: app de Meta (Jose).
+- [ ] Pasos 9-12: prueba real.
+
+Seguros del código (ManyChat sigue en vivo): solo actúa en el reel elegido en `/eventos`; solo contesta DMs si están activados en el panel y a remitentes autorizados (quien comentó en el reel de prueba); los `standby` solo se registran.
 
 **Para qué:** comprobar con datos reales que Meta nos deja recibir comentarios y DMs de desconocidos **sin** App Review, antes de construir nada más.
 
@@ -157,7 +165,10 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 - [ ] Fase 3: texto exacto del aviso de IA.
 - [ ] Fase 3: si Jose vive u opera desde la UE, revisar si la Ley de IA europea (art. 50, aviso de IA) le aplica aunque la audiencia sea USA/LATAM. **No verificado.**
 - [ ] Antes de producción: base de datos definitiva (Neon de pago o Render Postgres).
+- [ ] La página `/data-deletion` dice que se borran los datos si escriben "BORRAR" por DM: hoy eso es **manual** (lo haría Jose). Automatizarlo en la Fase 2 o 4.
+- [ ] Añadir prueba automática de `store.ts` contra una base de datos real.
 
 ## Registro de cambios
 
 - 2026-10-16 — Plan creado. Fase 0 terminada.
+- 2026-10-16 — Fase 1: código del servidor de prueba subido a GitHub (commit 48c4377).
