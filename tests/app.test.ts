@@ -16,9 +16,9 @@ const config: Config = {
   igAccessToken: null,
   igApiVersion: 'v25.0',
   tokenEncryptionKey: null,
-  sendLimitPerHour: 120,
-  sendDelayMinMs: 2000,
-  sendDelayMaxMs: 5000,
+  publicBaseUrl: null,
+  limits: { privateReplies: 700, publicReplies: 700, followUps: 3000 },
+  delays: { commentMin: 1000, commentMax: 2000, followUpMin: 300, followUpMax: 800 },
 };
 
 const auth = `Basic ${Buffer.from(`jose:${config.adminPassword}`).toString('base64')}`;
@@ -114,7 +114,7 @@ describe('panel', () => {
     const html = await (await app.request('/eventos', { headers: { authorization: auth } })).text();
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('PAUSADO');
-    expect(html).toContain('/ 120');
+    expect(html).toContain('/700');
   });
 
   it('reanudar quita la pausa; suscribir sin token avisa', async () => {

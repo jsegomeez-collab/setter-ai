@@ -65,20 +65,28 @@ async function handleEvent(event: InstagramEvent, deps: ProcessDeps): Promise<vo
   }
   await deps.store.logEvent(event.kind, plan.note, event);
   if (plan.actions.length === 0) return;
-  if (!(await claimOnce(plan, deps.store))) return;
+  const commentId = event.kind === 'comment' ? event.commentId : null;
+  if (!(await claimOnce(plan, deps.store, commentId))) return;
   await deps.sender.enqueue(plan.actions);
 }
 
-/** "Una vez por persona": reserva la clave. Devuelve false si la persona ya recibió este flujo. */
-async function claimOnce(plan: Plan, store: Store): Promise<boolean> {
+/**
+ * "Una vez por persona": reserva la clave (guardando qué comentario la usó).
+ * Devuelve false si la persona ya recibió este flujo por OTRO comentario.
+ * Si la clave es de este mismo comentario (p. ej. su DM nunca salió), deja reintentar.
+ */
+async function claimOnce(plan: Plan, store: Store, commentId: string | null): Promise<boolean> {
   if (!plan.onceKey) return true;
-  if (!(await store.claimAction(plan.onceKey, 'once', { flowId: plan.flowId }))) {
-    await store.logEvent('duplicado', 'Esta persona ya recibió este flujo: no se repite (una vez por persona).', { onceKey: plan.onceKey });
-    return false;
+  if (await store.claimAction(plan.onceKey, 'once', { flowId: plan.flowId, commentId })) {
+    // Se marca como hecha para que no aparezca "en curso" en el panel.
+    await store.finishAction(plan.onceKey, true, { flowId: plan.flowId, commentId });
+    return true;
   }
-  // Se marca como hecha para que no aparezca "en curso" en el panel.
-  await store.finishAction(plan.onceKey, true, { flowId: plan.flowId });
-  return true;
+  const existing = await store.getAction(plan.onceKey);
+  const sameComment = commentId !== null && (existing?.request as { commentId?: unknown } | null)?.commentId === commentId;
+  if (sameComment) return true;
+  await store.logEvent('duplicado', 'Esta persona ya recibió este flujo: no se repite (una vez por persona).', { onceKey: plan.onceKey });
+  return false;
 }
 
 /** Meta permite la respuesta privada hasta 7 días después del comentario. Margen de 1 hora. */
@@ -113,7 +121,7 @@ export async function rescueComments(since: Date, deps: ProcessDeps, now: Date =
       continue;
     }
     const plan = planComment(flows, row, deps.random);
-    if (plan.actions.length === 0 || !(await claimOnce(plan, deps.store))) {
+    if (plan.actions.length === 0 || !(await claimOnce(plan, deps.store, row.commentId))) {
       skipped += 1;
       continue;
     }

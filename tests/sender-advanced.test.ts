@@ -23,7 +23,7 @@ function setup() {
   } as unknown as InstagramClient & Record<string, ReturnType<typeof vi.fn>>;
   const schedule = vi.fn().mockResolvedValue(true);
   const sender = new Sender(
-    { store, client, limitPerHour: 100, minDelayMs: 0, maxDelayMs: 0, sleep: async () => undefined, linkSigner: { baseUrl: 'https://setter.example.com', secret: SECRET }, schedule },
+    { store, client, limits: { privateReplies: 100, publicReplies: 100, followUps: 100 }, delays: { commentMin: 0, commentMax: 0, followUpMin: 0, followUpMax: 0 }, sleep: async () => undefined, linkSigner: { baseUrl: 'https://setter.example.com', secret: SECRET }, schedule },
     async (id) => store.flows.get(id),
   );
   return { store, client, schedule, sender };
@@ -65,7 +65,7 @@ describe('flujo real de Jose de punta a punta (con Instagram falso)', () => {
 
   it('sin programador configurado, la pausa queda como error registrado (no rompe la cola)', async () => {
     const store = createMemoryStore();
-    const sender = new Sender({ store, client: {} as InstagramClient, limitPerHour: 10, minDelayMs: 0, maxDelayMs: 0 }, async () => undefined);
+    const sender = new Sender({ store, client: {} as InstagramClient, limits: { privateReplies: 100, publicReplies: 100, followUps: 100 }, delays: { commentMin: 0, commentMax: 0, followUpMin: 0, followUpMax: 0 } }, async () => undefined);
     await sender.enqueue([{ type: 'schedule', dedupKey: 's1', recipientId: '9', flowId: 'f', nodeId: 'n', delaySeconds: 60, depth: 1 }]);
     expect(store.actions.get('s1')).toMatchObject({ ok: false, response: { message: expect.stringContaining('programador') } });
   });

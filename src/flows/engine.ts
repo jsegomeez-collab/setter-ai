@@ -16,7 +16,14 @@ export interface OutMessage {
 }
 
 export type Action =
-  | { readonly type: 'reply_comment'; readonly dedupKey: string; readonly commentId: string; readonly text: string }
+  | {
+      readonly type: 'reply_comment';
+      readonly dedupKey: string;
+      readonly commentId: string;
+      readonly text: string;
+      /** Solo se publica si esta otra acción (el DM) salió bien: así nunca decimos "mira tus DMs" sin DM. */
+      readonly requires?: string;
+    }
   | { readonly type: 'private_reply'; readonly dedupKey: string; readonly commentId: string; readonly message: OutMessage }
   | { readonly type: 'send_message'; readonly dedupKey: string; readonly recipientId: string; readonly message: OutMessage }
   | {
@@ -117,17 +124,21 @@ export function planComment(flows: readonly Flow[], event: CommentEvent, random:
   const start = findNode(flow, flow.startNodeId);
   if (!start || start.type !== 'message') return none(`Flujo "${flow.name}" mal configurado: el inicio no es un mensaje.`);
 
-  const actions: Action[] = [];
+  // Primero el DM; la respuesta pública solo si el DM salió bien.
+  const privateKey = `private:${event.commentId}`;
+  const actions: Action[] = [
+    { type: 'private_reply', dedupKey: privateKey, commentId: event.commentId, message: toOutMessage(flow, start, event.fromId) },
+  ];
   if (flow.publicReplies.length > 0) {
     const index = Math.min(flow.publicReplies.length - 1, Math.floor(random() * flow.publicReplies.length));
-    actions.push({ type: 'reply_comment', dedupKey: `reply:${event.commentId}`, commentId: event.commentId, text: flow.publicReplies[index] as string });
+    actions.push({
+      type: 'reply_comment',
+      dedupKey: `reply:${event.commentId}`,
+      commentId: event.commentId,
+      text: flow.publicReplies[index] as string,
+      requires: privateKey,
+    });
   }
-  actions.push({
-    type: 'private_reply',
-    dedupKey: `private:${event.commentId}`,
-    commentId: event.commentId,
-    message: toOutMessage(flow, start, event.fromId),
-  });
   return {
     actions,
     note: `Flujo "${flow.name}": respuesta pública + DM.`,

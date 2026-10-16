@@ -1,3 +1,4 @@
+import type { SendLimits } from './config.js';
 import type { Account, Media } from './meta/client.js';
 import type { TokenStatus } from './meta/token.js';
 import type { ActionRow, ContactRow, EventRow, ReelStatsRow } from './store.js';
@@ -110,8 +111,8 @@ export interface DashboardData {
   readonly token: TokenStatus;
   readonly pausedUntil: string | null;
   readonly pauseReason: string | null;
-  readonly sendsLastHour: number;
-  readonly limitPerHour: number;
+  readonly sends: SendLimits;
+  readonly limits: SendLimits;
   readonly activeFlows: number;
   readonly totalFlows: number;
   readonly linkTracking: boolean;
@@ -160,7 +161,7 @@ ${data.flash ? `<div class="card">${escapeHtml(data.flash)}</div>` : ''}
   <div>Cuenta de Instagram: ${account}</div>
   <div>Token: ${tokenBlock(data.token)}</div>
   <div>App Secret (firma de avisos): ${status(data.secretConfigured, 'configurado', 'falta META_APP_SECRET')}</div>
-  <div>Anti-ban: ${pauseBlock(data)} · envíos última hora: <strong>${data.sendsLastHour}</strong> / ${data.limitPerHour}</div>
+  <div>Anti-ban: ${pauseBlock(data)} · última hora → DMs a comentarios <strong>${data.sends.privateReplies}</strong>/${data.limits.privateReplies} · respuestas públicas <strong>${data.sends.publicReplies}</strong>/${data.limits.publicReplies} · seguimientos <strong>${data.sends.followUps}</strong>/${data.limits.followUps}</div>
   <div>Flujos: <strong>${data.activeFlows}</strong> activos de ${data.totalFlows} · <a href="/flujos">gestionar flujos</a></div>
   <div>Enlaces con seguimiento (clics + etiquetas): ${status(data.linkTracking, 'activos', 'desactivados (falta URL pública o TOKEN_ENCRYPTION_KEY)')}</div>
   <p><form class="inline" method="post" action="/eventos/suscribir"><button>Activar suscripción de la cuenta (comments + messages)</button></form>

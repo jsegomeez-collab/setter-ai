@@ -6,8 +6,12 @@ export interface Store {
   listFlows(): Promise<Flow[]>;
   saveFlow(flow: Flow): Promise<void>;
   deleteFlow(id: string): Promise<void>;
-  /** Envíos a Instagram (acciones terminadas o en curso) desde una fecha. Para el límite por hora. */
-  countSendsSince(since: Date): Promise<number>;
+  /** Envíos a Instagram (terminados bien o en curso) desde una fecha, de los tipos indicados. Para los límites por hora. */
+  countSendsSince(since: Date, types?: readonly string[]): Promise<number>;
+  /** Estado de una acción (null si no existe). */
+  getAction(dedupKey: string): Promise<{ readonly ok: boolean | null; readonly request: unknown } | null>;
+  /** Acciones reservadas que nunca terminaron (p. ej. por un reinicio). Para retomarlas al arrancar. */
+  pendingActions(): Promise<unknown[]>;
   /** Contactos: alta o actualización (username, última vez visto y, si viene de un comentario, el reel). */
   touchContact(igId: string, username: string | null, mediaId?: string | null): Promise<void>;
   /** Comentarios registrados desde una fecha que NO recibieron respuesta privada (para rescatarlos). */
@@ -206,11 +210,20 @@ export async function createPostgresStore(
     async deleteFlow(id) {
       await sql`DELETE FROM flows WHERE id = ${id}`;
     },
-    async countSendsSince(since) {
+    async countSendsSince(since, types = SEND_ACTION_TYPES) {
       const rows = await sql<{ n: number }[]>`
         SELECT count(*)::int AS n FROM actions
-        WHERE created_at >= ${since} AND type IN ${sql([...SEND_ACTION_TYPES])} AND ok IS DISTINCT FROM false`;
+        WHERE created_at >= ${since} AND type IN ${sql([...types])} AND ok IS DISTINCT FROM false`;
       return rows[0]?.n ?? 0;
+    },
+    async getAction(dedupKey) {
+      const rows = await sql<{ ok: boolean | null; request: unknown }[]>`SELECT ok, request FROM actions WHERE dedup_key = ${dedupKey}`;
+      return rows[0] ?? null;
+    },
+    async pendingActions() {
+      const rows = await sql<{ request: unknown }[]>`
+        SELECT request FROM actions WHERE ok IS NULL AND type <> 'once' ORDER BY id`;
+      return rows.map((row) => row.request);
     },
     async touchContact(igId, username, mediaId = null) {
       await sql`

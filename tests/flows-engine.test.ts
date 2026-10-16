@@ -74,8 +74,8 @@ describe('planComment', () => {
   it('respuesta pública al azar + DM con el primer mensaje + clave "una vez por persona"', () => {
     const flow = followFlow({ publicReplies: ['A', 'B', 'C'] });
     const plan = planComment([flow], comment(), () => 0.5);
-    expect(plan.actions[0]).toEqual({ type: 'reply_comment', dedupKey: 'reply:c-1', commentId: 'c-1', text: 'B' });
-    expect(plan.actions[1]).toMatchObject({ type: 'private_reply', commentId: 'c-1', message: { text: 'Hola, pulsa el botón', flowId: 'flow1' } });
+    expect(plan.actions[0]).toMatchObject({ type: 'private_reply', commentId: 'c-1', message: { text: 'Hola, pulsa el botón', flowId: 'flow1' } });
+    expect(plan.actions[1]).toEqual({ type: 'reply_comment', dedupKey: 'reply:c-1', commentId: 'c-1', text: 'B', requires: 'private:c-1' });
     expect(plan.onceKey).toBe(`once:flow1:${STRANGER_ID}:${TEST_MEDIA_ID}`);
     const perFlow = planComment([followFlow({ onceScope: 'flow' })], comment());
     expect(perFlow.onceKey).toBe(`once:flow1:${STRANGER_ID}`);

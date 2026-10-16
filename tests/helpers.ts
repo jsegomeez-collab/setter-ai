@@ -107,8 +107,16 @@ export function createMemoryStore(): Store & {
     async deleteFlow(id) {
       flows.delete(id);
     },
-    async countSendsSince(since) {
-      return [...actions.values()].filter((a) => a.createdAt >= since && sendTypes.has(a.type) && a.ok !== false).length;
+    async countSendsSince(since, types) {
+      const allowed = types ? new Set<string>(types) : sendTypes;
+      return [...actions.values()].filter((a) => a.createdAt >= since && allowed.has(a.type) && a.ok !== false).length;
+    },
+    async getAction(dedupKey) {
+      const action = actions.get(dedupKey);
+      return action ? { ok: action.ok, request: action.request } : null;
+    },
+    async pendingActions() {
+      return [...actions.values()].filter((a) => a.ok === null && a.type !== 'once').map((a) => a.request);
     },
     async recordRequest(signatureOk, payload) {
       requests.push({ signatureOk, payload });

@@ -15,7 +15,7 @@ function setup(flows = [followFlow()]) {
     getFollowStatus: vi.fn().mockResolvedValue({ status: 'yes', detail: 'ok' }),
   } as unknown as InstagramClient & Record<string, ReturnType<typeof vi.fn>>;
   const sender = new Sender(
-    { store, client, limitPerHour: 100, minDelayMs: 0, maxDelayMs: 0, sleep: async () => undefined },
+    { store, client, limits: { privateReplies: 100, publicReplies: 100, followUps: 100 }, delays: { commentMin: 0, commentMax: 0, followUpMin: 0, followUpMax: 0 }, sleep: async () => undefined },
     async (id) => store.flows.get(id),
   );
   return { store, client, sender, deps: { store, sender, random: () => 0 } };

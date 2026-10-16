@@ -15,9 +15,8 @@ describe('loadConfig', () => {
       igAccessToken: null,
       appSecrets: [],
       tokenEncryptionKey: null,
-      sendLimitPerHour: 120,
-      sendDelayMinMs: 2000,
-      sendDelayMaxMs: 5000,
+      limits: { privateReplies: 700, publicReplies: 700, followUps: 3000 },
+      delays: { commentMin: 1000, commentMax: 2000, followUpMin: 300, followUpMax: 800 },
     });
   });
 
@@ -29,11 +28,11 @@ describe('loadConfig', () => {
       META_APP_SECRET_ALT: 'b',
       IG_ACCESS_TOKEN: 'tok',
       TOKEN_ENCRYPTION_KEY: 'clave-larga-de-16+',
-      SEND_LIMIT_PER_HOUR: '50',
-      SEND_DELAY_MIN_MS: '1000',
-      SEND_DELAY_MAX_MS: '1500',
+      SEND_LIMIT_PRIVATE_PER_HOUR: '50',
+      SEND_DELAY_FOLLOWUP_MIN_MS: '100',
+      SEND_DELAY_FOLLOWUP_MAX_MS: '150',
     });
-    expect(config).toMatchObject({ port: 10000, appSecrets: ['a', 'b'], igAccessToken: 'tok', sendLimitPerHour: 50, sendDelayMaxMs: 1500 });
+    expect(config).toMatchObject({ port: 10000, appSecrets: ['a', 'b'], igAccessToken: 'tok', limits: { privateReplies: 50, publicReplies: 700, followUps: 3000 }, delays: { followUpMin: 100, followUpMax: 150 } });
   });
 
   it('falla claro con valores incorrectos', () => {
@@ -41,7 +40,8 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, ADMIN_PASSWORD: 'corta' })).toThrow('ADMIN_PASSWORD');
     expect(() => loadConfig({ ...base, PORT: 'abc' })).toThrow('PORT');
     expect(() => loadConfig({ ...base, TOKEN_ENCRYPTION_KEY: 'corta' })).toThrow('TOKEN_ENCRYPTION_KEY');
-    expect(() => loadConfig({ ...base, SEND_LIMIT_PER_HOUR: '-1' })).toThrow('SEND_LIMIT_PER_HOUR');
-    expect(() => loadConfig({ ...base, SEND_DELAY_MIN_MS: '5000', SEND_DELAY_MAX_MS: '1000' })).toThrow('SEND_DELAY_MAX_MS');
+    expect(() => loadConfig({ ...base, SEND_LIMIT_PUBLIC_PER_HOUR: '-1' })).toThrow('SEND_LIMIT_PUBLIC_PER_HOUR');
+    expect(() => loadConfig({ ...base, SEND_DELAY_COMMENT_MIN_MS: '5000', SEND_DELAY_COMMENT_MAX_MS: '1000' })).toThrow('SEND_DELAY_COMMENT_MAX_MS');
+    expect(() => loadConfig({ ...base, SEND_DELAY_FOLLOWUP_MIN_MS: '5000', SEND_DELAY_FOLLOWUP_MAX_MS: '1000' })).toThrow('SEND_DELAY_FOLLOWUP_MAX_MS');
   });
 });

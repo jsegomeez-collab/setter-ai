@@ -15,9 +15,8 @@ const config: Config = {
   igAccessToken: null,
   igApiVersion: 'v25.0',
   tokenEncryptionKey: 'clave-de-cifrado-larga-123',
-  sendLimitPerHour: 120,
-  sendDelayMinMs: 2000,
-  sendDelayMaxMs: 5000,
+  limits: { privateReplies: 700, publicReplies: 700, followUps: 3000 },
+  delays: { commentMin: 1000, commentMax: 2000, followUpMin: 300, followUpMax: 800 },
   publicBaseUrl: 'https://setter.example.com',
 };
 const SECRET = deriveLinkSecret(config.tokenEncryptionKey as string);

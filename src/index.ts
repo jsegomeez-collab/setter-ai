@@ -30,9 +30,8 @@ async function main(): Promise<void> {
     {
       store,
       client,
-      limitPerHour: config.sendLimitPerHour,
-      minDelayMs: config.sendDelayMinMs,
-      maxDelayMs: config.sendDelayMaxMs,
+      limits: config.limits,
+      delays: config.delays,
       linkSigner,
       schedule: (payload, delaySeconds) => scheduler.add(payload, delaySeconds),
     },
@@ -41,6 +40,8 @@ async function main(): Promise<void> {
   const activeSender = sender;
   const recovered = await scheduler.start();
   if (recovered > 0) await store.logEvent('pausas', `Recuperadas ${recovered} pausas pendientes tras el arranque.`, null);
+  const resumed = await activeSender.recover();
+  if (resumed > 0) await store.logEvent('cola', `Retomados ${resumed} envíos pendientes tras el arranque.`, null);
 
   const app = createApp({
     config,

@@ -1,3 +1,4 @@
+import type { SendDelays, SendLimits } from './config.js';
 import { planAfterFollowCheck, planNode, encodePayload, type Action, type OutMessage } from './flows/engine.js';
 import type { Flow } from './flows/types.js';
 import { buttonUrl, type LinkSigner } from './links.js';
@@ -6,30 +7,37 @@ import type { JobPayload } from './scheduler.js';
 import { SETTINGS, type Store } from './store.js';
 
 /**
- * Ejecuta acciones contra Instagram con protecciones anti-ban:
- * - cola: un envío detrás de otro, nunca en paralelo;
- * - espera aleatoria entre envíos;
- * - límite propio de envíos por hora;
- * - si Meta responde con el error 368 (bloqueo por política), pausa TODO 24 h;
- * - cada acción se reserva antes de enviarse, así un aviso repetido nunca envía dos veces.
+ * Ejecuta acciones contra Instagram con protecciones anti-ban y sin perder a nadie:
+ * - dos colas: "comments" (respuesta pública + primer DM) y "followups" (botones, condiciones, pausas),
+ *   para que un pico de comentarios no retrase las respuestas a quien pulsa un botón;
+ * - cada acción se RESERVA en la base de datos al encolarla (no se envía dos veces y, si el servidor
+ *   se reinicia, las pendientes se retoman con recover());
+ * - límites por hora por tipo (pegados a los de Meta) → si se alcanzan, la cola ESPERA, no descarta;
+ * - esperas aleatorias entre envíos;
+ * - error 368 de Meta (bloqueo por política) → pausa TODO 24 h (la cola espera, no descarta);
+ * - la respuesta pública solo se publica si el DM salió bien (campo `requires`).
  */
 
 const POLICY_BLOCK_CODE = 368;
 const PAUSE_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
-const SEND_TYPES = new Set<Action['type']>(['reply_comment', 'private_reply', 'send_message']);
-// "schedule" y "check_follow" no envían nada a la persona: no cuentan para el límite ni esperan.
+const DEFAULT_THROTTLE_CHECK_MS = 30_000;
+
+type Lane = 'comments' | 'followups';
+const COMMENT_TYPES = new Set<Action['type']>(['reply_comment', 'private_reply']);
+const laneOf = (action: Action): Lane => (COMMENT_TYPES.has(action.type) ? 'comments' : 'followups');
 
 export interface SenderOptions {
   readonly store: Store;
   readonly client: InstagramClient | null;
-  readonly limitPerHour: number;
-  readonly minDelayMs: number;
-  readonly maxDelayMs: number;
+  readonly limits: SendLimits;
+  readonly delays: SendDelays;
   /** Firma de enlaces con seguimiento. null = los botones llevan la URL real (sin registrar clics ni etiquetas). */
   readonly linkSigner?: LinkSigner | null;
   /** Programa una pausa (Scheduler.add). */
   readonly schedule?: (payload: JobPayload, delaySeconds: number) => Promise<boolean>;
+  /** Cada cuánto se vuelve a mirar si ya hay hueco (límite por hora o pausa). */
+  readonly throttleCheckMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly random?: () => number;
   readonly now?: () => Date;
@@ -64,11 +72,17 @@ function describeError(error: unknown): Record<string, unknown> {
   return { message: error instanceof Error ? error.message : String(error) };
 }
 
+function isAction(value: unknown): value is Action {
+  const v = value as Partial<Action> | null;
+  return !!v && typeof v.type === 'string' && typeof v.dedupKey === 'string';
+}
+
 export class Sender {
-  private chain: Promise<void> = Promise.resolve();
+  private readonly chains: Record<Lane, Promise<void>> = { comments: Promise.resolve(), followups: Promise.resolve() };
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly random: () => number;
   private readonly now: () => Date;
+  private readonly throttleCheckMs: number;
 
   constructor(
     private readonly options: SenderOptions,
@@ -77,15 +91,27 @@ export class Sender {
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.random = options.random ?? Math.random;
     this.now = options.now ?? (() => new Date());
+    this.throttleCheckMs = options.throttleCheckMs ?? DEFAULT_THROTTLE_CHECK_MS;
   }
 
-  /** Añade acciones a la cola. Devuelve una promesa que se cumple cuando se han ejecutado. */
-  enqueue(actions: readonly Action[]): Promise<void> {
-    const run = this.chain.then(async () => {
-      for (const action of actions) await this.runSafely(action);
-    });
-    this.chain = run.catch(() => undefined);
-    return run;
+  /** Reserva y encola acciones. Se cumple cuando se han ejecutado todas. */
+  async enqueue(actions: readonly Action[]): Promise<void> {
+    const runs: Promise<void>[] = [];
+    for (const action of actions) {
+      if (!(await this.options.store.claimAction(action.dedupKey, action.type, action))) {
+        await this.options.store.logEvent('duplicado', 'Acción ya hecha antes: no se repite.', action);
+        continue;
+      }
+      runs.push(this.push(action));
+    }
+    await Promise.all(runs);
+  }
+
+  /** Retoma acciones reservadas que no llegaron a terminar (p. ej. por un reinicio). */
+  async recover(): Promise<number> {
+    const pending = (await this.options.store.pendingActions()).filter(isAction);
+    for (const action of pending) void this.push(action);
+    return pending.length;
   }
 
   /** Cuando vence una pausa: ejecuta el siguiente paso del flujo para esa persona. */
@@ -98,19 +124,27 @@ export class Sender {
     return { next: actions.map((action) => action.dedupKey) };
   }
 
-  /** Espera a que la cola quede vacía (para pruebas y apagado ordenado). */
+  /** Espera a que las dos colas queden vacías (para pruebas y apagado ordenado). */
   async idle(): Promise<void> {
-    let current: Promise<void>;
+    let snapshot: Promise<void>[];
     do {
-      current = this.chain;
-      await current;
-    } while (current !== this.chain);
+      snapshot = [this.chains.comments, this.chains.followups];
+      await Promise.all(snapshot);
+    } while (snapshot[0] !== this.chains.comments || snapshot[1] !== this.chains.followups);
+  }
+
+  private push(action: Action): Promise<void> {
+    const lane = laneOf(action);
+    const run = this.chains[lane].then(() => this.runSafely(action));
+    this.chains[lane] = run.catch(() => undefined);
+    return run;
   }
 
   private async runSafely(action: Action): Promise<void> {
     try {
       await this.run(action);
     } catch (error) {
+      await this.options.store.finishAction(action.dedupKey, false, describeError(error)).catch(() => undefined);
       await this.options.store.logEvent('error', `Fallo inesperado ejecutando ${action.type}.`, describeError(error));
     }
   }
@@ -121,31 +155,65 @@ export class Sender {
     return date && date.getTime() > this.now().getTime() ? date : null;
   }
 
+  /** Si hay pausa (error 368), espera a que termine. No descarta nada. */
+  private async waitWhilePaused(action: Action): Promise<void> {
+    let logged = false;
+    for (let paused = await this.pausedUntil(); paused; paused = await this.pausedUntil()) {
+      if (!logged) {
+        await this.options.store.logEvent('pausado', `Envíos pausados hasta ${paused.toISOString()}: ${action.type} espera.`, { dedupKey: action.dedupKey });
+        logged = true;
+      }
+      await this.sleep(this.throttleCheckMs);
+    }
+  }
+
+  private limitFor(type: Action['type']): { readonly types: readonly string[]; readonly limit: number } | null {
+    const { limits } = this.options;
+    if (type === 'private_reply') return { types: ['private_reply'], limit: limits.privateReplies };
+    if (type === 'reply_comment') return { types: ['reply_comment'], limit: limits.publicReplies };
+    if (type === 'send_message') return { types: ['send_message', 'send_dm'], limit: limits.followUps };
+    return null;
+  }
+
+  /** Si se alcanzó el límite por hora de este tipo, espera a que haya hueco. No descarta nada. */
+  private async waitForCapacity(action: Action): Promise<void> {
+    const rule = this.limitFor(action.type);
+    if (!rule) return;
+    let logged = false;
+    // La acción actual ya está reservada y cuenta en el total: hay hueco mientras total <= límite.
+    while ((await this.options.store.countSendsSince(new Date(this.now().getTime() - HOUR_MS), rule.types)) > rule.limit) {
+      if (!logged) {
+        await this.options.store.logEvent('limite', `Límite de ${rule.limit}/h de ${action.type} alcanzado: en espera (no se pierde).`, { dedupKey: action.dedupKey });
+        logged = true;
+      }
+      await this.sleep(this.throttleCheckMs);
+    }
+  }
+
+  private async randomDelay(action: Action): Promise<void> {
+    if (!this.limitFor(action.type)) return; // condiciones y pausas no envían nada a la persona
+    const { delays } = this.options;
+    const [min, max] = laneOf(action) === 'comments' ? [delays.commentMin, delays.commentMax] : [delays.followUpMin, delays.followUpMax];
+    await this.sleep(min + Math.floor(this.random() * Math.max(0, max - min)));
+  }
+
   private async run(action: Action): Promise<void> {
     const { store, client } = this.options;
     if (!client) {
+      await store.finishAction(action.dedupKey, false, { error: 'Falta el token de Instagram' });
       await store.logEvent('error', 'No se envió nada: falta el token de Instagram.', action);
       return;
     }
-    const paused = await this.pausedUntil();
-    if (paused) {
-      await store.logEvent('pausado', `Envíos pausados hasta ${paused.toISOString()}: no se envía ${action.type}.`, action);
-      return;
-    }
-    if (!(await store.claimAction(action.dedupKey, action.type, action))) {
-      await store.logEvent('duplicado', 'Acción ya hecha antes: no se repite.', action);
-      return;
-    }
-    if (SEND_TYPES.has(action.type)) {
-      // La acción actual ya está reservada y cuenta en el total.
-      const sent = await store.countSendsSince(new Date(this.now().getTime() - HOUR_MS));
-      if (sent > this.options.limitPerHour) {
-        await store.finishAction(action.dedupKey, false, { skipped: `Límite de ${this.options.limitPerHour} envíos por hora alcanzado` });
+    await this.waitWhilePaused(action);
+    if (action.type === 'reply_comment' && action.requires) {
+      const required = await store.getAction(action.requires);
+      if (required?.ok !== true) {
+        await store.finishAction(action.dedupKey, false, { skipped: 'El DM no salió: no se publica "mira tus DMs".' });
         return;
       }
-      const { minDelayMs, maxDelayMs } = this.options;
-      await this.sleep(minDelayMs + Math.floor(this.random() * Math.max(0, maxDelayMs - minDelayMs)));
     }
+    await this.waitForCapacity(action);
+    await this.randomDelay(action);
     try {
       const result = await this.execute(action, client);
       await store.finishAction(action.dedupKey, true, result);
@@ -195,7 +263,9 @@ export class Sender {
         error instanceof MetaApiError &&
         error.status >= 400 &&
         error.status < 500 &&
-        error.code !== POLICY_BLOCK_CODE;
+        error.code !== POLICY_BLOCK_CODE &&
+        // 2534025 = "el comentario no es válido para una respuesta privada": tampoco saldría como texto.
+        error.subcode !== 2534025;
       if (!canFallBack) throw error;
       // Meta no aceptó los botones en la respuesta privada: se manda solo texto (con los enlaces) y se deja constancia.
       const result = await client.sendPrivateReply(action.commentId, toPlainFallback(action.message, this.signer));

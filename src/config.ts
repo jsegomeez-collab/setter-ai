@@ -2,10 +2,30 @@ const MIN_PASSWORD_LENGTH = 12;
 const MIN_ENCRYPTION_KEY_LENGTH = 16;
 const DEFAULT_PORT = 3000;
 const DEFAULT_API_VERSION = 'v25.0';
-/** Muy por debajo de los ~750/h que citan terceros para respuestas privadas (no verificado en doc oficial). */
-const DEFAULT_SEND_LIMIT_PER_HOUR = 120;
-const DEFAULT_DELAY_MIN_MS = 2000;
-const DEFAULT_DELAY_MAX_MS = 5000;
+
+/**
+ * Límites por hora, pegados a los oficiales de Meta con margen
+ * (doc Instagram Platform › Overview › Rate limits, consultada 2026-10-16):
+ *  - respuestas privadas a comentarios de posts/reels: 750/h por cuenta → usamos 700;
+ *  - Send API (texto): 100/s por cuenta → 3000/h es muy conservador;
+ *  - respuestas públicas: cuentan en el límite general (4800 × impresiones / 24 h) → 700/h.
+ */
+const DEFAULT_LIMITS = { privateReplies: 700, publicReplies: 700, followUps: 3000 } as const;
+/** Esperas aleatorias (ms): comentarios más pausados; seguimientos casi inmediatos (la persona acaba de pulsar). */
+const DEFAULT_DELAYS = { commentMin: 1000, commentMax: 2000, followUpMin: 300, followUpMax: 800 } as const;
+
+export interface SendLimits {
+  readonly privateReplies: number;
+  readonly publicReplies: number;
+  readonly followUps: number;
+}
+
+export interface SendDelays {
+  readonly commentMin: number;
+  readonly commentMax: number;
+  readonly followUpMin: number;
+  readonly followUpMax: number;
+}
 
 export interface Config {
   readonly port: number;
@@ -18,9 +38,8 @@ export interface Config {
   readonly igApiVersion: string;
   /** Clave para guardar cifrado el token renovado. Sin ella no hay renovación automática. */
   readonly tokenEncryptionKey: string | null;
-  readonly sendLimitPerHour: number;
-  readonly sendDelayMinMs: number;
-  readonly sendDelayMaxMs: number;
+  readonly limits: SendLimits;
+  readonly delays: SendDelays;
   /** URL pública del servidor (para los enlaces con seguimiento). Render la da en RENDER_EXTERNAL_URL. */
   readonly publicBaseUrl: string | null;
 }
@@ -40,6 +59,18 @@ function positiveInt(env: Env, key: string, fallback: number): number {
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 0) throw new Error(`${key} no es un número entero válido: ${raw}`);
   return value;
+}
+
+function loadDelays(env: Env): SendDelays {
+  const delays = {
+    commentMin: positiveInt(env, 'SEND_DELAY_COMMENT_MIN_MS', DEFAULT_DELAYS.commentMin),
+    commentMax: positiveInt(env, 'SEND_DELAY_COMMENT_MAX_MS', DEFAULT_DELAYS.commentMax),
+    followUpMin: positiveInt(env, 'SEND_DELAY_FOLLOWUP_MIN_MS', DEFAULT_DELAYS.followUpMin),
+    followUpMax: positiveInt(env, 'SEND_DELAY_FOLLOWUP_MAX_MS', DEFAULT_DELAYS.followUpMax),
+  };
+  if (delays.commentMax < delays.commentMin) throw new Error('SEND_DELAY_COMMENT_MAX_MS no puede ser menor que el mínimo');
+  if (delays.followUpMax < delays.followUpMin) throw new Error('SEND_DELAY_FOLLOWUP_MAX_MS no puede ser menor que el mínimo');
+  return delays;
 }
 
 export function loadConfig(env: Env = process.env): Config {
@@ -63,10 +94,6 @@ export function loadConfig(env: Env = process.env): Config {
     throw new Error(`TOKEN_ENCRYPTION_KEY debe tener al menos ${MIN_ENCRYPTION_KEY_LENGTH} caracteres`);
   }
 
-  const sendDelayMinMs = positiveInt(env, 'SEND_DELAY_MIN_MS', DEFAULT_DELAY_MIN_MS);
-  const sendDelayMaxMs = positiveInt(env, 'SEND_DELAY_MAX_MS', DEFAULT_DELAY_MAX_MS);
-  if (sendDelayMaxMs < sendDelayMinMs) throw new Error('SEND_DELAY_MAX_MS no puede ser menor que SEND_DELAY_MIN_MS');
-
   const appSecrets = [clean(env.META_APP_SECRET), clean(env.META_APP_SECRET_ALT)].filter(
     (secret): secret is string => secret !== null,
   );
@@ -80,9 +107,12 @@ export function loadConfig(env: Env = process.env): Config {
     igAccessToken: clean(env.IG_ACCESS_TOKEN),
     igApiVersion: clean(env.IG_API_VERSION) ?? DEFAULT_API_VERSION,
     tokenEncryptionKey,
-    sendLimitPerHour: positiveInt(env, 'SEND_LIMIT_PER_HOUR', DEFAULT_SEND_LIMIT_PER_HOUR),
-    sendDelayMinMs,
-    sendDelayMaxMs,
+    limits: {
+      privateReplies: positiveInt(env, 'SEND_LIMIT_PRIVATE_PER_HOUR', DEFAULT_LIMITS.privateReplies),
+      publicReplies: positiveInt(env, 'SEND_LIMIT_PUBLIC_PER_HOUR', DEFAULT_LIMITS.publicReplies),
+      followUps: positiveInt(env, 'SEND_LIMIT_FOLLOWUP_PER_HOUR', DEFAULT_LIMITS.followUps),
+    },
+    delays: loadDelays(env),
     publicBaseUrl: clean(env.PUBLIC_BASE_URL) ?? clean(env.RENDER_EXTERNAL_URL),
   };
 }
