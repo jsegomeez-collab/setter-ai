@@ -26,6 +26,15 @@ const TLDS = [
 const LINK_PATTERN = new RegExp(`https?://|www\\.|\\b[a-z0-9-]+(\\.[a-z0-9-]+)*\\.(${TLDS.join('|')})\\b`, 'i');
 const EMAIL_PATTERN = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
 const PLACEHOLDER_PATTERN = /\[(LINK|CONFIRMAR|COMPLETAR)[^\]]*\]/i;
+/** Precios del grupal (1.997) y del VIP (4.997): decisión de Jose, nunca por chat. */
+const FORBIDDEN_PRICE_PATTERN = /\b[14][.,\s]?997\b/;
+
+/** Limpia los mensajitos y, si vienen más de MAX_MESSAGES, junta los sobrantes en el último (es formato, no un riesgo). */
+export function normalizeMessages(messages: readonly string[]): string[] {
+  const clean = messages.map((m) => m.trim()).filter((m) => m.length > 0);
+  if (clean.length <= MAX_MESSAGES) return clean;
+  return [...clean.slice(0, MAX_MESSAGES - 1), clean.slice(MAX_MESSAGES - 1).join(' ')];
+}
 
 /** Quita del texto los enlaces y correos permitidos; lo que quede con pinta de enlace o correo está prohibido. */
 function stripAllowed(text: string, allowed: AllowedContacts): string {
@@ -39,6 +48,7 @@ export function checkReply(text: string, allowed: AllowedContacts): GuardResult 
   if (trimmed.length === 0) reasons.push('Respuesta vacía');
   if (trimmed.length > MAX_REPLY_CHARS) reasons.push(`Respuesta demasiado larga (${trimmed.length} caracteres, máximo ${MAX_REPLY_CHARS})`);
   if (PLACEHOLDER_PATTERN.test(trimmed)) reasons.push('Contiene un hueco sin rellenar del documento');
+  if (FORBIDDEN_PRICE_PATTERN.test(trimmed)) reasons.push('Da el precio del grupal o del VIP (prohibido por chat)');
   const rest = stripAllowed(trimmed, allowed);
   const emails = rest.match(EMAIL_PATTERN) ?? [];
   if (emails.length > 0) reasons.push(`Correo no permitido: ${emails.join(', ')}`);

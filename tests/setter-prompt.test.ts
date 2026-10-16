@@ -16,10 +16,19 @@ describe('prompt del setter', () => {
   it('el prompt lleva el documento, las reglas de huecos y los únicos enlaces y correo permitidos', () => {
     const prompt = buildSystemPrompt('ROL: setter de Jose. Garantía [CONFIRMAR CONDICIONES EXACTAS]', TEST_SETTER_LINKS);
     expect(prompt.startsWith('ROL: setter de Jose.')).toBe(true);
-    expect(prompt).toContain('[CONFIRMAR …] o [COMPLETAR] NO están confirmadas');
+    expect(prompt).toContain('[CONFIRMAR …] o [COMPLETAR] no están confirmadas');
     expect(prompt).toContain(TEST_SETTER_LINKS.agenda);
     expect(prompt).toContain(TEST_SETTER_LINKS.membership);
     expect(prompt).toContain(TEST_SETTER_LINKS.contactEmail);
+  });
+
+  it('el marco técnico lleva las decisiones de Jose: 3ª persona, idioma, precios y cuándo pasar a Jose', () => {
+    const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
+    expect(prompt).toContain('NO Jose. Habla de Jose en tercera persona');
+    expect(prompt).toContain('contesta en el idioma en que escribe la persona');
+    expect(prompt).toContain('Nunca digas por chat el precio del grupal ni del VIP');
+    expect(prompt).toContain('Una pregunta que el documento no responde NO es motivo');
+    expect(prompt).toContain('Nunca partas una frase');
   });
 
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {

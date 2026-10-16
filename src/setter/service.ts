@@ -2,7 +2,7 @@ import type { Action } from '../flows/engine.js';
 import type { InstagramEvent } from '../meta/parse.js';
 import { SETTINGS, type Store } from '../store.js';
 import type { BrainUsage, SetterBrain } from './brain.js';
-import { checkMessages } from './guards.js';
+import { checkMessages, normalizeMessages } from './guards.js';
 import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks } from './prompt.js';
 import type { SetterOutput } from './schema.js';
 
@@ -168,7 +168,7 @@ export class SetterService {
 
   private async deliver(igId: string, dedupKey: string, output: SetterOutput, usage: BrainUsage): Promise<void> {
     const { store, links } = this.options;
-    const messages = output.messages.map((m) => m.trim()).filter((m) => m.length > 0);
+    const messages = normalizeMessages(output.messages);
     const facts = { igId, usage, messages: messages.length, siguientePaso: output.lead.siguiente_paso, needsHuman: output.needs_human };
     if (messages.length === 0) {
       await this.log('La IA decidió no responder.', facts);

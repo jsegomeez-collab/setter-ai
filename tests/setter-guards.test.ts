@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_MESSAGE_CHARS, MAX_REPLY_CHARS, checkMessages, checkReply } from '../src/setter/guards.js';
+import { MAX_MESSAGE_CHARS, MAX_REPLY_CHARS, checkMessages, checkReply, normalizeMessages } from '../src/setter/guards.js';
 import { TEST_SETTER_LINKS } from './helpers.js';
 
 const allowed = { urls: [TEST_SETTER_LINKS.agenda, TEST_SETTER_LINKS.membership], emails: [TEST_SETTER_LINKS.contactEmail] };
@@ -43,6 +43,16 @@ describe('checkReply', () => {
     expect(checkMessages(['a'.repeat(MAX_MESSAGE_CHARS + 1)], allowed).ok).toBe(false);
     const link = checkMessages(['genial', 'mira https://otra-web.com'], allowed);
     expect(!link.ok && link.reasons.join(' ')).toContain('Enlace no permitido');
+  });
+
+  it('bloquea los precios del grupal y del VIP en cualquier formato, pero no los 47 $ ni otras cifras', () => {
+    for (const text of ['son $1.997', 'el VIP 4997 dólares', 'cuesta 4,997', '1 997 €']) expect(checkReply(text, allowed).ok).toBe(false);
+    for (const text of ['desde $47 al mes', 'un dashboard de $3.000', '64 repositorios', '19970']) expect(checkReply(text, allowed).ok).toBe(true);
+  });
+
+  it('normalizeMessages: limpia vacíos y junta los sobrantes en el cuarto', () => {
+    expect(normalizeMessages([' hola ', '', 'qué tal'])).toEqual(['hola', 'qué tal']);
+    expect(normalizeMessages(['1', '2', '3', '4', '5', '6'])).toEqual(['1', '2', '3', '4 5 6']);
   });
 
   it('bloquea respuestas vacías o demasiado largas', () => {

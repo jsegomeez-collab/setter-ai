@@ -228,9 +228,19 @@ describe('SetterService', () => {
     expect(store.events.some((e) => e.note.includes('No se pudo mostrar "escribiendo…"'))).toBe(true);
   });
 
+  it('más de 4 mensajitos: junta los sobrantes en el último y los envía (no retiene)', async () => {
+    const { store, decide, enqueue, service, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({ messages: ['uno', 'dos', 'tres', 'cuatro', 'cinco'] })));
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(enqueue).toHaveBeenCalledTimes(4);
+    expect(store.messages.at(-1)).toMatchObject({ text: 'cuatro cinco', status: 'sent' });
+    expect((await store.getContact(STRANGER_ID))?.aiPaused).toBeFalsy();
+  });
+
   it.each([
-    ['demasiados mensajitos', ['uno', 'dos', 'tres', 'cuatro', 'cinco'], 'Demasiados mensajes'],
     ['un mensajito larguísimo', ['a'.repeat(301)], 'demasiado largo'],
+    ['el precio del VIP', ['el VIP son $4.997 por 6 meses'], 'precio del grupal o del VIP'],
   ])('%s: no sale nada, se retiene y la IA se para', async (_name, bubbles, reason) => {
     const { store, decide, enqueue, service, flush } = await setup();
     decide.mockResolvedValue(ok(sampleOutput({ messages: bubbles })));

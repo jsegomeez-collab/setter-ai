@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { BrainUsage, SetterBrain } from './brain.js';
-import { checkMessages } from './guards.js';
+import { checkMessages, normalizeMessages } from './guards.js';
 import { buildSystemPrompt, type SetterLinks } from './prompt.js';
 import type { Scenario } from './scenarios.js';
 import type { Lead } from './schema.js';
@@ -87,7 +87,7 @@ export async function runSimulation(deps: SimulatorDeps, scenario: Pick<Scenario
     }
     usage = addUsage(usage, result.usage);
     lead = result.output.lead;
-    const messages = result.output.messages.map((m) => m.trim()).filter((m) => m.length > 0);
+    const messages = normalizeMessages(result.output.messages);
     // Igual que service.ts: sin mensajitos no se pasa el filtro (la IA decidió no responder).
     const guard = messages.length === 0 ? ({ ok: true } as const) : checkMessages(messages, { urls: [deps.links.agenda, deps.links.membership], emails: [deps.links.contactEmail] });
     turns.push({ who: 'setter', texts: messages, note: guard.ok ? undefined : `RETENIDO: ${guard.reasons.join(' · ')}` });
