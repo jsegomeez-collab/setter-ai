@@ -74,6 +74,12 @@ Leyenda: ✅ hecha · 🔄 en curso · ⏳ pendiente · ❌ bloqueada
 6. **Panel sencillo** (el bonito es la Fase 6): lista de flujos, formulario "plantilla tipo ManyChat" (reel, palabras, respuestas públicas, mensaje, botón, condición de seguir, recurso), activar/desactivar. Más: quitar reel de prueba, reconocer avisos `read`/`seen`.
 7. **Prueba real** con @josegomezlife en un reel de poco tráfico (ManyChat pausado un momento).
 
+Progreso:
+- [x] 1-6 hechos (2026-10-16, commit 86c1dbf): tipos + motor + formulario + emisor anti-ban + token cifrado/renovable + panel `/flujos`. 97 pruebas (incl. Postgres real con PGlite), 92,6 % líneas. Desplegado; `TOKEN_ENCRYPTION_KEY` creada por el Blueprint.
+- [x] Flujo de prueba creado en producción: "PRUEBA Fase 2 - reel agente n8n" (id PlNFjBYQ), solo @josegomezlife, condición de seguir, recurso de prueba = perfil de Jose.
+- [ ] 7: prueba real (comentario → DM con botón → ¿sigue? → recurso / "sígueme" → "Ya te sigo").
+- [ ] Renovación de token: primera posible el 2026-10-17 (el token tiene que tener ≥ 24 h).
+
 **Necesito de Jose (al final de la fase):** cómo es hoy su flujo de ManyChat (textos, botones, condición de seguir, recurso) para replicarlo.
 
 **Hecha cuando:** un reel real funciona igual que con ManyChat → Jose decide apagar ManyChat.
