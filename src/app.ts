@@ -10,6 +10,7 @@ import type { TokenManager } from './meta/token.js';
 import { readLinkToken } from './links.js';
 import { flowFormPage, flowJsonPage, flowsListPage } from './pages-flows.js';
 import { contactsPage, dashboardPage, legalPage } from './pages.js';
+import { registerSetter } from './routes-setter.js';
 import { SETTINGS, type Store } from './store.js';
 
 const ADMIN_USER = 'jose';
@@ -289,12 +290,14 @@ export function createApp(deps: AppDeps): Hono {
 
   // Panel privado: contraseña + protección contra formularios enviados desde otras webs.
   const auth = basicAuth({ username: ADMIN_USER, password: deps.config.adminPassword });
-  for (const path of ['/eventos', '/eventos/*', '/flujos', '/flujos/*', '/contactos']) app.use(path, auth);
-  app.use('/eventos/*', csrf());
-  app.use('/flujos/*', csrf());
+  for (const path of ['/eventos', '/eventos/*', '/flujos', '/flujos/*', '/contactos', '/setter', '/setter/*', '/conversaciones', '/conversaciones/*']) {
+    app.use(path, auth);
+  }
+  for (const path of ['/eventos/*', '/flujos/*', '/setter/*', '/conversaciones/*']) app.use(path, csrf());
 
   registerDashboard(app, deps);
   registerFlows(app, deps);
+  registerSetter(app, deps);
   app.get('/contactos', async (c) => {
     const [contacts, stats, media] = await Promise.all([
       deps.store.listContacts(CONTACTS_ROWS),

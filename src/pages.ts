@@ -23,7 +23,7 @@ export function status(ok: boolean, yes: string, no: string): string {
   return ok ? `<span class="ok">✔ ${escapeHtml(yes)}</span>` : `<span class="bad">✘ ${escapeHtml(no)}</span>`;
 }
 
-const NAV = `<nav><a href="/eventos">Estado y eventos</a> · <a href="/flujos">Flujos</a> · <a href="/contactos">Contactos</a></nav>`;
+const NAV = `<nav><a href="/eventos">Estado y eventos</a> · <a href="/flujos">Flujos</a> · <a href="/contactos">Contactos</a> · <a href="/setter">Setter IA</a> · <a href="/conversaciones">Conversaciones</a></nav>`;
 
 export function layout(title: string, body: string): string {
   return `<!doctype html>

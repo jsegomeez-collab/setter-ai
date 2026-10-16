@@ -131,8 +131,9 @@ Pasos (en orden, comprobando cada uno):
 - `@anthropic-ai/sdk` 0.135.0 instalado (helper `zodOutputFormat` en `@anthropic-ai/sdk/helpers/zod`, `client.messages.parse` + `output_config: {effort, format}`).
 - `src/store.ts`: añadidas tablas `messages`, `knowledge_versions`, columnas de contacto `ai_paused`, `ai_paused_reason`, `lead` y métodos (addMessage, setMessageStatus, listMessages, listConversations, getContact, setAiPaused, saveLead, findActionByMessageId, saveKnowledge, getKnowledge, listKnowledgeVersions). ✅ Store en memoria de pruebas completo; `npm run typecheck` ahora revisa también `tests/` (`tsconfig.test.json`); 140 pruebas pasando.
 - ✅ `src/setter/` (2026-10-16, sin conectar todavía): `schema.ts` (respuesta + ficha), `prompt.ts` (documento con enlaces + marco técnico + historial), `brain.ts` (Haiku, `effort: low`, JSON validado tras mirar `stop_reason`), `guards.ts` (solo los 2 enlaces y el correo, ≤1000 caracteres, sin huecos), `service.ts` (espera 8 s, modos `off`/`test`/`live` en `settings`, borrador, pausa por conversación, envío por la cola con clave `ai:<mid>`). Config: `ANTHROPIC_API_KEY`, `SETTER_MODEL`, `SETTER_LINK_*`. `client.getUsername`. 177 pruebas; prueba de sabotaje hecha.
-- ✅ `src/setter/echoes.ts` (2026-10-16, sin conectar): eco cuyo `mid` no es de un envío nuestro tras mirar a los 5, 15 y 30 s → Jose escribió a mano → IA parada en esa conversación; los ecos del flujo se guardan en el historial. **Sin verificar con datos reales:** (1) que Meta mande eco de lo que Jose escribe a mano desde la app (la doc solo dice "when the message was sent by your app user"); (2) que el `mid` del eco sea igual al `message_id` que devuelve el envío. Si (2) fallara, la IA se pararía tras cada respuesta suya.
-- Pendiente de escribir: rutas `/setter` (documento + versiones + activar + usuarios de prueba) y `/conversaciones` (lista, hilo, pausar/reanudar, ficha), cableado en `index.ts`/`process.ts`, pruebas, desconectar ManyChat, prueba con @josegomezlife.
+- ✅ `src/setter/echoes.ts` (2026-10-16, sin conectar): eco cuyo `mid` no es de un envío nuestro tras mirar a los 5, 15 y 30 s → Jose escribió a mano → IA parada en esa conversación; los ecos del flujo se guardan en el historial. **Sin verificar con datos reales:** (1) que Meta mande eco de lo que Jose escribe a mano desde la app (la doc solo dice "when the message was sent by your app user"); (2) ✅ VERIFICADO 2026-10-16 con producción: en los últimos 60 eventos, los 7 `message_id` de nuestros envíos aparecen como `mid` de un eco (7/7).
+- ✅ Panel (2026-10-16): `/setter` (modo off/test/live, borrador, usuarios de prueba, estado de la clave y el modelo, documento con avisos de huecos, versiones y restaurar) y `/conversaciones` (lista, hilo con retenidos, ficha, parar/reanudar). Con contraseña y CSRF. 193 pruebas. No visto aún en un navegador real.
+- Pendiente de escribir: cableado en `index.ts`/`process.ts`, pruebas, desconectar ManyChat, prueba con @josegomezlife.
 - El documento de Jose (temporal) está en la conversación; se cargará en la BD desde el panel, no en el repo.
 
 ### Fase 4 — Fichas de leads, análisis masivo y medición ⏳
@@ -207,6 +208,8 @@ Pasos (en orden, comprobando cada uno):
 - [ ] `/data-deletion` promete borrar datos si escriben "BORRAR": hoy es **manual**. Automatizar (Fase 4).
 - [ ] Prueba automática de `store.ts` contra una base de datos real.
 - [ ] `listConversations` (store.ts) lee todos los mensajes y corta después: irá lenta con miles. Pasar el límite a la consulta SQL.
+- [ ] Panel: aprobar y enviar un borrador retenido (hoy el modo borrador solo deja leer lo que diría la IA). Fuera del paso 4; ¿Fase 4/6?
+- [ ] Panel: al reanudar la IA no contesta al mensaje que quedó pendiente; espera al siguiente mensaje de la persona.
 - [ ] Setter: la espera de 8 s vive en memoria. Si el servidor se reinicia en esos segundos, el DM queda guardado pero sin respuesta. Arreglo propuesto (paso 5): al arrancar, responder a las conversaciones cuyo último mensaje sea de la persona y reciente.
 
 ## Registro de cambios
