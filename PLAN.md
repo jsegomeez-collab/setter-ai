@@ -1,8 +1,8 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-16
-> Estado general: **Fase 2 en curso** (réplica de ManyChat probada; falta pasarla a producción). Fase 1 terminada ✅.
-> En producción solo hay flujos en **modo prueba** (@josegomezlife). ManyChat sigue atendiendo al público.
+> Estado general: **Fase 2 casi terminada**: la réplica de ManyChat está EN PRODUCCIÓN desde el 2026-10-16 (ManyChat #59 apagado). Falta vigilar las primeras horas. Siguiente: Fase 3 (setter IA).
+> ManyChat sigue conectado a Instagram (sin disparador). Para la Fase 3 Jose autoriza desconectarlo.
 
 ## Objetivo
 
@@ -88,7 +88,8 @@ Progreso:
 - [x] 8b: prueba real 14:15-14:17 UTC: rama "no sigue" ✅ (×2), "Ya te seguí" → sí ✅, biblioteca ✅, clic → etiqueta "biblioteca" ✅, pausa 2 min → mensaje del grupo ✅. Sin registrar: clic en "UNIRME AL GRUPO" (¿no se pulsó?).
 - [x] Datos reales recibidos: biblioteca https://biblioteca.codigomaestria.com, grupo https://chat.whatsapp.com/B7CxsuLbf82IyJmT6LJ2BE (ambos responden 200), 5 respuestas públicas de ManyChat, disparador = todos los posts + cualquier comentario.
 - [x] Origen por reel (petición de Jose): tabla `comments` + reel de origen/último en contactos + resumen por reel en /contactos. Se registra en TODOS los comentarios, salte o no un flujo. 132 pruebas.
-- [ ] 8c: pasar la réplica a producción (todos los reels, sin modo prueba) y apagar ManyChat a la vez (decide Jose cuándo).
+- [x] 8c (2026-10-16 ~14:35 UTC): Jose apagó el disparador #59 de ManyChat → réplica **EN PRODUCCIÓN** (todos los reels, cualquier comentario, sin modo prueba, una vez por persona **y por reel** = opción B de Jose, commit e0bd013). Enlaces reales.
+- [ ] 8d: confirmar con el primer comentario real/de prueba en producción y vigilar las primeras horas (errores, límite por hora, pausas 368).
 - [x] Renovación de token: funcionó el mismo día (Meta no exigió las 24 h que dice la doc).
 
 **Necesito de Jose (al final de la fase):** cómo es hoy su flujo de ManyChat (textos, botones, condición de seguir, recurso) para replicarlo.
@@ -183,3 +184,4 @@ Progreso:
 - 2026-10-16 — Fase 1: código subido (48c4377), app de Meta publicada y conectada, prueba punta a punta OK.
 - 2026-10-16 — Plan reorganizado: el setter IA es el corazón; nueva Fase 6 final = constructor visual de flujos. Empieza la Fase 2.
 - 2026-10-16 — Plan ampliado (Jose): Fase 4 = análisis masivo de conversaciones (objeciones, mercado, ángulos de contenido) + medición 100 %; Fase 6 = software de gestión completo. Origen por reel implementado.
+- 2026-10-16 — Réplica de ManyChat en producción (opción B: una vez por persona y por reel). Jose autoriza desconectar ManyChat en la Fase 3.
