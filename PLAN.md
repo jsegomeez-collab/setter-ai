@@ -150,7 +150,15 @@ Lectura de producción (2026-10-17, solo lectura, panel): 99 comentarios en 16 r
 Hallazgos fuera del plan (decisión de Jose 2026-10-17: arreglar **antes** del paso 1):
 - [ ] A. Si la persona contesta con **texto** ("si") al mensaje del flujo en vez de pulsar el botón, se queda colgada (caso real @mg_grela, 3 × "si"). Arreglar.
   - [x] Código (2026-10-17, `src/flows/text-reply.ts`): si lo último que recibió es un mensaje del flujo con **un** botón de acción y contesta un "sí" corto (lista de Jose: si, dale, ok, vale, listo, ya, quiero, porfa, mándamelo, ya te seguí/sigo + el texto del botón; ≤5 palabras), cuenta como pulsarlo. Varios "sí" al mismo mensaje = **una** vez. El DM se guarda en la conversación y el setter no contesta. Cualquier otro texto → setter, como antes. 271 pruebas.
-  - [ ] Desplegar (con OK de Jose) y probar con @josegomezlife: comentar → escribir "si" en vez de pulsar.
+  - [x] Desplegado 2026-10-17 (`main` = bfc7083, Render "Live").
+  - [ ] Probar con @josegomezlife: comentar → escribir "si" en vez de pulsar.
+- B. Investigación (2026-10-17, doc oficial + 16 respuestas privadas reales de /eventos):
+  - Doc de Meta: 100/2534025 = "The comment is invalid for a private reply"; solución: "Make sure that the type of data you are sending in your private reply is allowed" ([error codes](https://developers.facebook.com/documentation/business-messaging/messenger-platform/error-codes)). La guía de private replies no lo explica.
+  - Datos: mismo flujo, mismo mensaje con botón y **mismo texto de comentario** ("Bolsa") → a uno le llega (@ion_hantig) y a otros dos no. Todos texto normal, sin GIF; todos comentarios principales; casi todos personas nuevas en ambos grupos. **Conclusión: depende de la persona, no del comentario ni de lo que mandamos en general.** La causa exacta (ajustes de mensajes de esa persona, edad, otra cosa) **no se puede ver** con nuestros datos ni está en la doc.
+  - Decisión de Jose (2026-10-17): **1) reintento con solo texto** + **2) plan B público** si también falla.
+  - [x] 1. Hecho: el respaldo de solo texto ya existía pero yo lo había excluido para 2534025 con una suposición sin comprobar ("tampoco saldría como texto"). Quitada la excepción. 272 pruebas. Sin desplegar.
+  - [ ] 2. Plan B público: falta el texto de Jose.
+  - [ ] Medir tras desplegar: cuántos 2534025 se salvan con el texto (si casi ninguno, la causa no es el botón).
 - [ ] B. **Error 2534025**: 9 de 16 DMs a comentarios rechazados por Meta entre 21:23 y 23:04 UTC del 16-10 (56 %). Investigar la causa con la doc oficial (solo lectura) y traerla a Jose antes de cambiar nada.
 
 Progreso:

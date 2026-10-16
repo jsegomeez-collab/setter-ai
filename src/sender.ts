@@ -263,9 +263,9 @@ export class Sender {
         error instanceof MetaApiError &&
         error.status >= 400 &&
         error.status < 500 &&
-        error.code !== POLICY_BLOCK_CODE &&
-        // 2534025 = "el comentario no es válido para una respuesta privada": tampoco saldría como texto.
-        error.subcode !== 2534025;
+        // 2534025 también se reintenta: con datos reales (2026-10-16) el mismo comentario y el mismo mensaje
+        // salen para unas personas y no para otras, así que no está demostrado que el texto también falle.
+        error.code !== POLICY_BLOCK_CODE;
       if (!canFallBack) throw error;
       // Meta no aceptó los botones en la respuesta privada: se manda solo texto (con los enlaces) y se deja constancia.
       const result = await client.sendPrivateReply(action.commentId, toPlainFallback(action.message, this.signer));

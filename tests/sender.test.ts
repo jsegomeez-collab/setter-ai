@@ -66,13 +66,24 @@ describe('Sender', () => {
     expect([...store.actions.values()].map((a) => a.ok)).toEqual([true, true]);
   });
 
-  it('si el DM falla, NO se publica "mira tus DMs"', async () => {
+  it('si el DM falla (también como solo texto), NO se publica "mira tus DMs"', async () => {
     const invalid = new MetaApiError('Comentario no válido', 400, { error: { code: 100, error_subcode: 2534025 } });
     const { client, sender, store } = setup(fakeClient({ sendPrivateReply: vi.fn().mockRejectedValue(invalid) }));
     await sender.enqueue([privateReply, reply]);
-    expect(client.sendPrivateReply).toHaveBeenCalledTimes(1); // sin respaldo de texto para 2534025
+    expect(client.sendPrivateReply).toHaveBeenCalledTimes(2); // con botones y, de respaldo, solo texto
     expect(client.replyToComment).not.toHaveBeenCalled();
     expect(store.actions.get('reply:c1')).toMatchObject({ ok: false, response: { skipped: expect.stringContaining('DM no salió') } });
+  });
+
+  it('2534025 con botones → se reintenta una vez con solo texto; si sale, se publica "mira tus DMs"', async () => {
+    // Datos reales 2026-10-16: el mismo comentario ("Bolsa") y el mismo mensaje salen para unas personas y no para otras.
+    const invalid = new MetaApiError('Comentario no válido', 400, { error: { code: 100, error_subcode: 2534025 } });
+    const sendPrivateReply = vi.fn().mockRejectedValueOnce(invalid).mockResolvedValueOnce({ recipientId: STRANGER_ID, messageId: 'm-txt' });
+    const { client, sender, store } = setup(fakeClient({ sendPrivateReply }));
+    await sender.enqueue([privateReply, reply]);
+    expect(sendPrivateReply).toHaveBeenLastCalledWith('c1', 'Hola\n\nAbrir: https://e.com');
+    expect(store.actions.get('private:c1')).toMatchObject({ ok: true, response: { fallback: expect.any(String) } });
+    expect(client.replyToComment).toHaveBeenCalledWith('c1', 'Te escribí');
   });
 
   it('los seguimientos usan esperas cortas (0,3-0,8 s)', async () => {
