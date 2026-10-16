@@ -160,7 +160,8 @@ Hallazgos fuera del plan (decisión de Jose 2026-10-17: arreglar **antes** del p
   - [x] 1b. Desplegado (57a2386).
   - [x] 2. Plan B público + rescate por DM (Jose: "crealo tu" → 3 textos aprobados). Campo `dmFailedReplies` del flujo; la respuesta pública solo se encola si el DM falla del todo (nunca con 368), una vez por comentario; si esa persona escribe en 7 días y no le mandamos nada desde el fallo, el flujo le manda su primer mensaje (una vez). 285 pruebas.
     - Encontrado antes de desplegar: `listFlows` devolvía el JSON sin pasar por el esquema → los flujos antiguos no tendrían el campo nuevo y **todos** los comentarios habrían fallado. Arreglado (se pasa por el esquema) + protección en el motor + prueba con Postgres real.
-  - [ ] 2b. Desplegar y activar: añadir los 3 textos al flujo `manychat` en producción.
+  - [x] 2b. Desplegado (ffad1df, Render "Live", /healthz 200) y **activado** 2026-10-17: flujo "Réplica ManyChat" guardado con los 3 textos; el resto del flujo comprobado sin cambios.
+  - [ ] Ver con tráfico real: primer 2534025 → ¿sale el texto? si no, ¿sale el plan B? y si la persona escribe, ¿le llega el primer mensaje?
   - [ ] Medir tras desplegar: cuántos 2534025 se salvan con el texto (si casi ninguno, la causa no es el botón).
 - [ ] B. **Error 2534025**: 9 de 16 DMs a comentarios rechazados por Meta entre 21:23 y 23:04 UTC del 16-10 (56 %). Investigar la causa con la doc oficial (solo lectura) y traerla a Jose antes de cambiar nada.
 
