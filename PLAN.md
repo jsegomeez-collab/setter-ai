@@ -80,8 +80,12 @@ Progreso:
 - [x] 7: prueba real 2026-10-16 13:52-13:53 UTC con @josegomezlife (ManyChat pausado): comentario → respuesta pública ✅ → **DM privado CON botones** ✅ (Meta los acepta; sin respaldo) → botón llega a nuestra app ✅ → `is_user_follow_business=true` ✅ → recurso ✅.
   - Sin probar: rama "no sigue" y consentimiento con alguien que NUNCA ha escrito (@josegomezlife ya había escrito "Hola").
   - Observado: con ManyChat activo, los DMs nos llegan como **standby** (R2 confirmado).
-- [ ] 8: replicar el flujo real de ManyChat de Jose (necesito sus textos/botones/recurso) → prueba → quitar modo prueba y apagar ManyChat a la vez.
-- [ ] Renovación de token: primera posible el 2026-10-17 (el token tiene que tener ≥ 24 h).
+- [x] 8a (2026-10-16, commit 6495937): para igualar el flujo de ManyChat de Jose (captura) se añadieron: nodo **pausa** (máx. 23 h), **siguiente paso** automático, **etiquetas al pulsar enlaces** (enlaces con seguimiento firmados `/l/…`), tabla **contactos**, pausas persistentes (`scheduled_jobs`, sin sondear la BD), **editor JSON** de flujos avanzados y página **/contactos**. 129 pruebas, 92,75 % líneas.
+- [x] Renovación automática del token **comprobada en producción** (13:40 UTC: origen BD, caduca 2026-12-15).
+- [x] Réplica del flujo de ManyChat creada en producción (id `manychat`, modo prueba @josegomezlife, reel de prueba). URLs de biblioteca y WhatsApp = **provisionales** (faltan las reales).
+- [ ] 8b: prueba real de la réplica (incl. rama "no sigue", clic en enlaces → etiquetas, pausa de 2 min → mensaje del grupo).
+- [ ] 8c: con las URLs/respuestas reales de Jose → quitar modo prueba, pasar a "todos los reels" y apagar ManyChat a la vez (decide Jose).
+- [x] Renovación de token: funcionó el mismo día (Meta no exigió las 24 h que dice la doc).
 
 **Necesito de Jose (al final de la fase):** cómo es hoy su flujo de ManyChat (textos, botones, condición de seguir, recurso) para replicarlo.
 
