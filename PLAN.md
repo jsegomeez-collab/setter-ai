@@ -157,7 +157,10 @@ Hallazgos fuera del plan (decisión de Jose 2026-10-17: arreglar **antes** del p
   - Datos: mismo flujo, mismo mensaje con botón y **mismo texto de comentario** ("Bolsa") → a uno le llega (@ion_hantig) y a otros dos no. Todos texto normal, sin GIF; todos comentarios principales; casi todos personas nuevas en ambos grupos. **Conclusión: depende de la persona, no del comentario ni de lo que mandamos en general.** La causa exacta (ajustes de mensajes de esa persona, edad, otra cosa) **no se puede ver** con nuestros datos ni está en la doc.
   - Decisión de Jose (2026-10-17): **1) reintento con solo texto** + **2) plan B público** si también falla.
   - [x] 1. Hecho: el respaldo de solo texto ya existía pero yo lo había excluido para 2534025 con una suposición sin comprobar ("tampoco saldría como texto"). Quitada la excepción. 272 pruebas. Sin desplegar.
-  - [ ] 2. Plan B público: falta el texto de Jose.
+  - [x] 1b. Desplegado (57a2386).
+  - [x] 2. Plan B público + rescate por DM (Jose: "crealo tu" → 3 textos aprobados). Campo `dmFailedReplies` del flujo; la respuesta pública solo se encola si el DM falla del todo (nunca con 368), una vez por comentario; si esa persona escribe en 7 días y no le mandamos nada desde el fallo, el flujo le manda su primer mensaje (una vez). 285 pruebas.
+    - Encontrado antes de desplegar: `listFlows` devolvía el JSON sin pasar por el esquema → los flujos antiguos no tendrían el campo nuevo y **todos** los comentarios habrían fallado. Arreglado (se pasa por el esquema) + protección en el motor + prueba con Postgres real.
+  - [ ] 2b. Desplegar y activar: añadir los 3 textos al flujo `manychat` en producción.
   - [ ] Medir tras desplegar: cuántos 2534025 se salvan con el texto (si casi ninguno, la causa no es el botón).
 - [ ] B. **Error 2534025**: 9 de 16 DMs a comentarios rechazados por Meta entre 21:23 y 23:04 UTC del 16-10 (56 %). Investigar la causa con la doc oficial (solo lectura) y traerla a Jose antes de cambiar nada.
 

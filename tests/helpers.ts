@@ -195,6 +195,13 @@ export function createMemoryStore(): Store & {
       const allowed = types ? new Set<string>(types) : sendTypes;
       return [...actions.values()].filter((a) => a.createdAt >= since && allowed.has(a.type) && a.ok !== false).length;
     },
+    async failedPrivateReply(igId, since) {
+      const found = [...actions.values()]
+        .filter((a) => a.type === 'private_reply' && a.ok === false && a.createdAt >= since)
+        .filter((a) => (a.request as { message?: { recipientId?: unknown } } | null)?.message?.recipientId === igId)
+        .at(-1);
+      return found ? { dedupKey: found.dedupKey, request: found.request, createdAt: found.createdAt } : null;
+    },
     async getAction(dedupKey) {
       const action = actions.get(dedupKey);
       return action ? { ok: action.ok, request: action.request, response: action.response } : null;
@@ -307,6 +314,7 @@ export function followFlow(overrides: Partial<Flow> = {}): Flow {
     enabled: true,
     trigger: { mediaIds: [TEST_MEDIA_ID], keywords: [] },
     publicReplies: ['¡Te escribí por DM! 📩'],
+    dmFailedReplies: [],
     startNodeId: 'start',
     nodes: [
       { id: 'start', type: 'message', text: 'Hola, pulsa el botón', buttons: [{ type: 'postback', title: 'Lo quiero', next: 'gate' }] },

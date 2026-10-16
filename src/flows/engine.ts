@@ -24,7 +24,14 @@ export type Action =
       /** Solo se publica si esta otra acción (el DM) salió bien: así nunca decimos "mira tus DMs" sin DM. */
       readonly requires?: string;
     }
-  | { readonly type: 'private_reply'; readonly dedupKey: string; readonly commentId: string; readonly message: OutMessage }
+  | {
+      readonly type: 'private_reply';
+      readonly dedupKey: string;
+      readonly commentId: string;
+      readonly message: OutMessage;
+      /** Plan B: respuesta pública que se publica SOLO si Meta rechaza este DM (también como solo texto). */
+      readonly failReply?: string;
+    }
   | { readonly type: 'send_message'; readonly dedupKey: string; readonly recipientId: string; readonly message: OutMessage }
   | {
       readonly type: 'check_follow';
@@ -116,6 +123,12 @@ export function onceKeyFor(flow: Flow, event: CommentEvent): string {
   return flow.onceScope === 'flow' ? base : `${base}:${event.mediaId ?? 'sin-reel'}`;
 }
 
+/** Una al azar (respuestas públicas variadas). undefined si la lista está vacía o no existe (flujo antiguo). */
+function pickOne(options: readonly string[] | undefined, random: () => number): string | undefined {
+  if (!options || options.length === 0) return undefined;
+  return options[Math.min(options.length - 1, Math.floor(random() * options.length))];
+}
+
 export function planComment(flows: readonly Flow[], event: CommentEvent, random: () => number = Math.random): Plan {
   if (event.fromId === event.accountId) return none('Ignorado: comentario de tu propia cuenta.');
   if (event.parentId) return none('Solo registro: es una respuesta a otro comentario.');
@@ -124,20 +137,21 @@ export function planComment(flows: readonly Flow[], event: CommentEvent, random:
   const start = findNode(flow, flow.startNodeId);
   if (!start || start.type !== 'message') return none(`Flujo "${flow.name}" mal configurado: el inicio no es un mensaje.`);
 
-  // Primero el DM; la respuesta pública solo si el DM salió bien.
+  // Primero el DM; la respuesta pública solo si el DM salió bien (y la del plan B solo si falló).
   const privateKey = `private:${event.commentId}`;
+  const failReply = pickOne(flow.dmFailedReplies, random);
   const actions: Action[] = [
-    { type: 'private_reply', dedupKey: privateKey, commentId: event.commentId, message: toOutMessage(flow, start, event.fromId) },
-  ];
-  if (flow.publicReplies.length > 0) {
-    const index = Math.min(flow.publicReplies.length - 1, Math.floor(random() * flow.publicReplies.length));
-    actions.push({
-      type: 'reply_comment',
-      dedupKey: `reply:${event.commentId}`,
+    {
+      type: 'private_reply',
+      dedupKey: privateKey,
       commentId: event.commentId,
-      text: flow.publicReplies[index] as string,
-      requires: privateKey,
-    });
+      message: toOutMessage(flow, start, event.fromId),
+      ...(failReply ? { failReply } : {}),
+    },
+  ];
+  const publicReply = pickOne(flow.publicReplies, random);
+  if (publicReply) {
+    actions.push({ type: 'reply_comment', dedupKey: `reply:${event.commentId}`, commentId: event.commentId, text: publicReply, requires: privateKey });
   }
   return {
     actions,

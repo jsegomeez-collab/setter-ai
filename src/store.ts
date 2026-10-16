@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import type { Flow } from './flows/types.js';
+import { flowSchema, type Flow } from './flows/types.js';
 
 /** Todo lo que el servidor guarda o lee. La interfaz permite usar una versión en memoria en las pruebas. */
 export interface Store {
@@ -22,6 +22,8 @@ export interface Store {
   getContact(igId: string): Promise<ContactRow | null>;
   setAiPaused(igId: string, paused: boolean, reason: string | null): Promise<void>;
   saveLead(igId: string, lead: unknown): Promise<void>;
+  /** Último DM a un comentario de esta persona que Meta rechazó desde `since` (plan B: rescate por DM). */
+  failedPrivateReply(igId: string, since: Date): Promise<{ readonly dedupKey: string; readonly request: unknown; readonly createdAt: Date } | null>;
   /** Acción que produjo un mensaje enviado (por su message_id de Meta), para distinguir ecos propios de mensajes a mano. */
   findActionByMessageId(mid: string): Promise<{ readonly dedupKey: string; readonly request: unknown } | null>;
   /** Base de conocimiento del setter, con historial de versiones. */
@@ -285,7 +287,12 @@ export async function createPostgresStore(
   return {
     async listFlows() {
       const rows = await sql<{ data: Flow }[]>`SELECT data FROM flows ORDER BY updated_at DESC`;
-      return rows.map((row) => row.data);
+      // Se pasan por el esquema para rellenar los campos nuevos con su valor por defecto (flujos guardados antes).
+      // Si uno antiguo no pasara la validación, se devuelve tal cual (como antes) para no dejar de atender comentarios.
+      return rows.map((row) => {
+        const parsed = flowSchema.safeParse(row.data);
+        return parsed.success ? parsed.data : row.data;
+      });
     },
     async saveFlow(flow) {
       await sql`
@@ -385,6 +392,14 @@ export async function createPostgresStore(
       await sql`
         INSERT INTO contacts (ig_id, lead, lead_updated_at) VALUES (${igId}, ${toJson(sql, lead)}, now())
         ON CONFLICT (ig_id) DO UPDATE SET lead = EXCLUDED.lead, lead_updated_at = now()`;
+    },
+    async failedPrivateReply(igId, since) {
+      const rows = await sql<{ dedup_key: string; request: unknown; created_at: Date }[]>`
+        SELECT dedup_key, request, created_at FROM actions
+        WHERE type = 'private_reply' AND ok = false AND created_at >= ${since}
+          AND request->'message'->>'recipientId' = ${igId}
+        ORDER BY id DESC LIMIT 1`;
+      return rows[0] ? { dedupKey: rows[0].dedup_key, request: rows[0].request, createdAt: rows[0].created_at } : null;
     },
     async findActionByMessageId(mid) {
       const rows = await sql<{ dedup_key: string; request: unknown }[]>`

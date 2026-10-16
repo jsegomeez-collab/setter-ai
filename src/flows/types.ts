@@ -93,6 +93,11 @@ export const flowSchema = z
       keywords: z.array(z.string().trim().min(1).max(50)).max(30),
     }),
     publicReplies: z.array(z.string().trim().min(1).max(300)).max(20),
+    /**
+     * Plan B: respuestas públicas (una al azar) cuando Meta rechaza el DM al comentario, pidiendo que nos escriban.
+     * Si esa persona escribe en los 7 días siguientes, el flujo le manda su primer mensaje. Vacío = sin plan B.
+     */
+    dmFailedReplies: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
     startNodeId: id,
     nodes: z.array(nodeSchema).min(1).max(50),
     /** Si tiene usuarios, el flujo SOLO responde a ellos (modo prueba). */

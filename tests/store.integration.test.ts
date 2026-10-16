@@ -1,8 +1,10 @@
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { planComment } from '../src/flows/engine.js';
+import type { Flow } from '../src/flows/types.js';
 import { createPostgresStore, SETTINGS, type Store } from '../src/store.js';
-import { followFlow } from './helpers.js';
+import { TEST_MEDIA_ID, followFlow } from './helpers.js';
 
 /** Prueba el SQL de verdad contra un Postgres real (PGlite) en memoria. */
 
@@ -173,6 +175,30 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.findActionByMessageId('mid-out-2')).toMatchObject({ dedupKey: 'private:c-9' });
     expect(await store.findActionByMessageId('no-existe')).toBeNull();
     expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
+  });
+
+  it('un flujo guardado antes de existir un campo nuevo se lee con su valor por defecto (dmFailedReplies = [])', async () => {
+    const old = { ...followFlow({ id: 'antiguo' }), dmFailedReplies: undefined } as unknown as Flow;
+    await store.saveFlow(old);
+    const read = (await store.listFlows()).find((flow) => flow.id === 'antiguo');
+    expect(read?.dmFailedReplies).toEqual([]);
+    expect(planComment([read as Flow], { kind: 'comment', commentId: 'c-x', fromId: 'p1', fromUsername: 'a', mediaId: TEST_MEDIA_ID, parentId: null, accountId: 'acc', text: 'hola' }).actions).toHaveLength(2);
+    await store.deleteFlow('antiguo');
+  });
+
+  it('Plan B · último DM a comentario rechazado de una persona (solo fallidos, de esa persona y desde la fecha)', async () => {
+    const reply = (recipientId: string) => ({ type: 'private_reply', message: { flowId: 'flow1', nodeId: 'start', recipientId } });
+    await store.claimAction('private:f-1', 'private_reply', reply('p-fail'));
+    await store.finishAction('private:f-1', false, { code: 100 });
+    await store.claimAction('private:f-2', 'private_reply', reply('p-fail'));
+    await store.finishAction('private:f-2', false, { code: 100 });
+    await store.claimAction('private:ok-1', 'private_reply', reply('p-ok'));
+    await store.finishAction('private:ok-1', true, { messageId: 'x' });
+    const found = await store.failedPrivateReply('p-fail', new Date(Date.now() - 60_000));
+    expect(found).toMatchObject({ dedupKey: 'private:f-2', request: { message: { nodeId: 'start' } } });
+    expect(found?.createdAt).toBeInstanceOf(Date);
+    expect(await store.failedPrivateReply('p-ok', new Date(Date.now() - 60_000))).toBeNull();
+    expect(await store.failedPrivateReply('p-fail', new Date(Date.now() + 60_000))).toBeNull();
   });
 
   it('Fase 3 · documento del setter: versiones, la última manda', async () => {

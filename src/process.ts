@@ -1,4 +1,5 @@
 import { planComment, planPostback, type Plan } from './flows/engine.js';
+import { planDmRescue } from './flows/dm-rescue.js';
 import { planTextReply } from './flows/text-reply.js';
 import { MetaApiError } from './meta/client.js';
 import { parseWebhook, type InstagramEvent } from './meta/parse.js';
@@ -43,8 +44,11 @@ function logOnly(event: InstagramEvent): string {
 async function planFor(event: InstagramEvent, deps: ProcessDeps): Promise<Plan | null> {
   if (event.kind === 'comment') return planComment(await deps.store.listFlows(), event, deps.random);
   if (event.kind === 'postback') return planPostback(await deps.store.listFlows(), event);
-  // Un "sí" escrito al mensaje del flujo cuenta como pulsar su botón; cualquier otro texto es para el setter.
-  if (event.kind === 'message' && !event.isEcho && event.senderId !== event.accountId) return planTextReply(event, deps.store);
+  // DM de una persona: un "sí" al mensaje del flujo cuenta como pulsar su botón; si su DM al comentario
+  // no salió, el flujo le manda su primer mensaje (plan B); cualquier otro texto es para el setter.
+  if (event.kind === 'message' && !event.isEcho && event.senderId !== event.accountId) {
+    return (await planTextReply(event, deps.store)) ?? (await planDmRescue(event, deps.store));
+  }
   return null;
 }
 

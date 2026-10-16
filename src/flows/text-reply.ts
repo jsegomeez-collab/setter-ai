@@ -39,7 +39,7 @@ type MessageEvent = Extract<InstagramEvent, { kind: 'message' }>;
 type PostbackButton = Extract<Button, { type: 'postback' }>;
 
 /** Flujo y paso del mensaje que se envió (el emisor guarda la acción entera como `request`). */
-function sentFlowStep(request: unknown): { flowId: string; nodeId: string } | null {
+export function sentFlowStep(request: unknown): { flowId: string; nodeId: string } | null {
   const message = (request as { message?: { flowId?: unknown; nodeId?: unknown } } | null)?.message;
   return typeof message?.flowId === 'string' && typeof message.nodeId === 'string' ? { flowId: message.flowId, nodeId: message.nodeId } : null;
 }

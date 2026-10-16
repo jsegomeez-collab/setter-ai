@@ -219,7 +219,13 @@ export class Sender {
       await store.finishAction(action.dedupKey, true, result);
     } catch (error) {
       await store.finishAction(action.dedupKey, false, describeError(error));
-      if (error instanceof MetaApiError && error.code === POLICY_BLOCK_CODE) {
+      const policyBlock = error instanceof MetaApiError && error.code === POLICY_BLOCK_CODE;
+      if (action.type === 'private_reply' && action.failReply && !policyBlock) {
+        // Plan B: el DM no salió (ni como texto) → respuesta pública pidiendo que nos escriban. Una vez por comentario.
+        // Se encola detrás (no se espera aquí, para no bloquear la cola dentro de sí misma).
+        void this.enqueue([{ type: 'reply_comment', dedupKey: `reply-fail:${action.commentId}`, commentId: action.commentId, text: action.failReply }]);
+      }
+      if (policyBlock && error instanceof MetaApiError) {
         const until = new Date(this.now().getTime() + PAUSE_MS).toISOString();
         await store.setSetting(SETTINGS.pausedUntil, until);
         await store.setSetting(SETTINGS.pauseReason, `Error 368 de Meta: ${error.message}`);
