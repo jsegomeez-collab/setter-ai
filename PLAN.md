@@ -123,12 +123,13 @@ Pasos (en orden, comprobando cada uno):
 - **Sin aviso proactivo de IA** (solo decir la verdad si preguntan). Decisión de Jose, no reabrir.
 - Si Jose escribe a mano en una conversación → la IA se **para indefinidamente** en esa conversación hasta que Jose la reanude en el panel.
 - **Modelos:** responder mensajes = **Claude Haiku 5.5** (`claude-haiku-5-5`, configurable por variable). Analizar/extraer datos y conclusiones = **Claude Sonnet 5.5** (`claude-sonnet-5-5`). **Nunca Opus** (caro).
+- **Ficha del lead (2026-10-16):** la rellena **Haiku en la misma llamada** en la que responde (una llamada por mensaje). Sonnet queda para el análisis masivo de la Fase 4.
 - `ANTHROPIC_API_KEY`: Jose la pega en Render (pantalla preparada con Playwright).
 - Sin `fallbacks` de servidor (no documentado con salidas estructuradas): si Claude rechaza/falla → conversación parada y marcada para Jose.
 
 **Estado del código (trabajo en curso, NO desplegado):**
 - `@anthropic-ai/sdk` 0.135.0 instalado (helper `zodOutputFormat` en `@anthropic-ai/sdk/helpers/zod`, `client.messages.parse` + `output_config: {effort, format}`).
-- `src/store.ts`: añadidas tablas `messages`, `knowledge_versions`, columnas de contacto `ai_paused`, `ai_paused_reason`, `lead` y métodos (addMessage, setMessageStatus, listMessages, listConversations, getContact, setAiPaused, saveLead, findActionByMessageId, saveKnowledge, getKnowledge, listKnowledgeVersions). **Falta**: helpers de prueba, compilar.
+- `src/store.ts`: añadidas tablas `messages`, `knowledge_versions`, columnas de contacto `ai_paused`, `ai_paused_reason`, `lead` y métodos (addMessage, setMessageStatus, listMessages, listConversations, getContact, setAiPaused, saveLead, findActionByMessageId, saveKnowledge, getKnowledge, listKnowledgeVersions). ✅ Store en memoria de pruebas completo; `npm run typecheck` ahora revisa también `tests/` (`tsconfig.test.json`); 140 pruebas pasando.
 - Pendiente de escribir: `src/setter/` (esquema lead con zod, prompt con documento + enlaces, cerebro Haiku, guardas de enlaces/longitud, servicio con espera 8 s y "callarse si Jose escribe" vía ecos: si el `mid` del eco no está en `actions` tras ~5 s → humano → pausa), rutas `/setter` (documento + versiones + activar + usuarios de prueba) y `/conversaciones` (lista, hilo, pausar/reanudar, ficha), cableado en `index.ts`/`process.ts`, pruebas, desconectar ManyChat, prueba con @josegomezlife.
 - El documento de Jose (temporal) está en la conversación; se cargará en la BD desde el panel, no en el repo.
 
@@ -203,6 +204,7 @@ Pasos (en orden, comprobando cada uno):
 - [ ] Antes de producción: base de datos definitiva (Neon de pago o Render Postgres).
 - [ ] `/data-deletion` promete borrar datos si escriben "BORRAR": hoy es **manual**. Automatizar (Fase 4).
 - [ ] Prueba automática de `store.ts` contra una base de datos real.
+- [ ] `listConversations` (store.ts) lee todos los mensajes y corta después: irá lenta con miles. Pasar el límite a la consulta SQL.
 
 ## Registro de cambios
 

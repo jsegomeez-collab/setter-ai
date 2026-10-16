@@ -1,5 +1,16 @@
 import type { Flow } from '../src/flows/types.js';
-import { SEND_ACTION_TYPES, type ActionRow, type CommentRecord, type ContactRow, type EventRow, type JobRow, type Store } from '../src/store.js';
+import {
+  SEND_ACTION_TYPES,
+  type ActionRow,
+  type CommentRecord,
+  type ContactRow,
+  type ConversationRow,
+  type EventRow,
+  type JobRow,
+  type KnowledgeRow,
+  type MessageRow,
+  type Store,
+} from '../src/store.js';
 
 /** Base de datos falsa en memoria con el mismo comportamiento que la de Postgres. */
 export function createMemoryStore(): Store & {
@@ -11,8 +22,21 @@ export function createMemoryStore(): Store & {
   flows: Map<string, Flow>;
   contacts: Map<string, ContactRow>;
   jobs: Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>;
+  messages: MessageRow[];
+  knowledge: KnowledgeRow[];
 } {
   const contacts = new Map<string, ContactRow>();
+  const messages: MessageRow[] = [];
+  const knowledge: KnowledgeRow[] = [];
+  /** Contacto nuevo con los mismos valores por defecto que la tabla contacts. */
+  const blankContact = (igId: string): ContactRow => {
+    const now = new Date();
+    return { igId, username: null, tags: [], firstSeen: now, lastSeen: now, sourceMediaId: null, lastMediaId: null, aiPaused: false, aiPausedReason: null, lead: null };
+  };
+  const messageIdOf = (response: unknown): unknown => {
+    const r = response as { messageId?: unknown; result?: { messageId?: unknown } } | null;
+    return r?.messageId ?? r?.result?.messageId;
+  };
   const comments: CommentRecord[] = [];
   const jobs = new Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>();
   let nextJobId = 1;
@@ -33,6 +57,64 @@ export function createMemoryStore(): Store & {
     flows,
     contacts,
     jobs,
+    messages,
+    knowledge,
+    async addMessage(m) {
+      if (m.mid !== null && messages.some((existing) => existing.mid === m.mid)) return;
+      messages.push({ ...m, note: m.note ?? null, id: messages.length + 1, createdAt: new Date() });
+    },
+    async setMessageStatus(dedupKey, status, mid = null) {
+      messages.forEach((m, i) => {
+        if (m.dedupKey === dedupKey) messages[i] = { ...m, status, mid: mid ?? m.mid };
+      });
+    },
+    async listMessages(igId, limit) {
+      return limit > 0 ? messages.filter((m) => m.igId === igId).slice(-limit) : [];
+    },
+    async listConversations(limit) {
+      const last = new Map<string, MessageRow>();
+      for (const m of messages) last.set(m.igId, m);
+      return [...last.values()]
+        .map((m): ConversationRow => {
+          const contact = contacts.get(m.igId);
+          return {
+            igId: m.igId,
+            username: contact?.username ?? null,
+            lastText: m.text,
+            lastAt: m.createdAt,
+            lastDirection: m.direction,
+            aiPaused: contact?.aiPaused ?? false,
+            lead: contact?.lead ?? null,
+          };
+        })
+        .sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime())
+        .slice(0, limit);
+    },
+    async getContact(igId) {
+      const contact = contacts.get(igId);
+      return contact ? { ...blankContact(igId), ...contact } : null;
+    },
+    async setAiPaused(igId, paused, reason) {
+      contacts.set(igId, { ...(contacts.get(igId) ?? blankContact(igId)), aiPaused: paused, aiPausedReason: reason });
+    },
+    async saveLead(igId, lead) {
+      contacts.set(igId, { ...(contacts.get(igId) ?? blankContact(igId)), lead });
+    },
+    async findActionByMessageId(mid) {
+      const action = [...actions.values()].find((a) => messageIdOf(a.response) === mid);
+      return action ? { dedupKey: action.dedupKey, request: action.request } : null;
+    },
+    async saveKnowledge(text) {
+      const id = knowledge.length + 1;
+      knowledge.push({ id, text, createdAt: new Date() });
+      return id;
+    },
+    async getKnowledge() {
+      return knowledge.at(-1) ?? null;
+    },
+    async listKnowledgeVersions(limit) {
+      return [...knowledge].reverse().slice(0, limit);
+    },
     async touchContact(igId, username, mediaId = null) {
       const now = new Date();
       const current = contacts.get(igId);

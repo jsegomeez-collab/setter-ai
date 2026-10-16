@@ -38,7 +38,7 @@ describe('flujo real de Jose de punta a punta (con Instagram falso)', () => {
 
     await processWebhook(postbackPayload('F:manychat1:sigue'), { store, sender });
     await sender.idle();
-    const [, message] = client.sendMessage.mock.calls[0] as [string, { attachment: { payload: { text: string; buttons: { url: string }[] } } }];
+    const [, message] = vi.mocked(client.sendMessage).mock.calls[0] as [string, { attachment: { payload: { text: string; buttons: readonly { url: string }[] } } }];
     expect(message.attachment.payload.text).toContain('biblioteca de recursos');
     const link = message.attachment.payload.buttons[0]?.url as string;
     expect(link.startsWith('https://setter.example.com/l/')).toBe(true);
@@ -51,7 +51,7 @@ describe('flujo real de Jose de punta a punta (con Instagram falso)', () => {
     const result = await sender.continueFlow({ flowId: 'manychat1', nodeId: 'grupo', recipientId: STRANGER_ID, dedupKey: 'pb:x:espera', depth: 3 });
     await sender.idle();
     expect(result).toMatchObject({ next: [expect.stringContaining('grupo')] });
-    const [, message] = client.sendMessage.mock.calls[0] as [string, { attachment: { payload: { text: string } } }];
+    const [, message] = vi.mocked(client.sendMessage).mock.calls[0] as [string, { attachment: { payload: { text: string } } }];
     expect(message.attachment.payload.text).toContain('grupo de WhatsApp');
   });
 

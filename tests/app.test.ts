@@ -29,7 +29,7 @@ function setup(client: InstagramClient | null = null) {
   const store = createMemoryStore();
   const processPayload = vi.fn();
   const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
-  const app = createApp({ config, store, client, tokens, processPayload });
+  const app = createApp({ config, store, client, tokens, processPayload, linkSecret: null });
   return { app, store, processPayload };
 }
 

@@ -61,7 +61,7 @@ describe('Sender', () => {
   it('primero el DM y luego la respuesta pública, con esperas de 1-2 s en comentarios', async () => {
     const { store, client, sleep, sender } = setup();
     await sender.enqueue([privateReply, reply]);
-    expect(client.sendPrivateReply.mock.invocationCallOrder[0]).toBeLessThan(client.replyToComment.mock.invocationCallOrder[0] as number);
+    expect(vi.mocked(client.sendPrivateReply).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(client.replyToComment).mock.invocationCallOrder[0] as number);
     expect(sleep).toHaveBeenCalledWith(1500);
     expect([...store.actions.values()].map((a) => a.ok)).toEqual([true, true]);
   });
