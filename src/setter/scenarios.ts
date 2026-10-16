@@ -74,7 +74,7 @@ export const SCENARIOS: readonly Scenario[] = [
     group: 'Objeciones',
     title: '"Mándame la info por aquí"',
     persona: 'No te gustan las llamadas. Insistes en que te manden toda la información y los precios por aquí, por escrito.',
-    check: 'Resume en corto pero reconduce a la llamada (20-30 min) sin soltar toda la oferta ni los precios de golpe.',
+    check: 'Resume en corto pero reconduce a la llamada (unos 45 min) sin soltar toda la oferta ni los precios de golpe.',
   },
   {
     id: 'objecion-pareja',
