@@ -37,6 +37,14 @@ describe('reglas de conversación en código (Haiku se las saltaba en las simula
     expect(reasons(agenda, ctx({ previous: ['mira\n[Botón: Agendar llamada]'] }))).toHaveLength(1);
     expect(reasons(agenda, ctx({ previous: [`aquí: ${links.agenda}`] }))).toHaveLength(1);
     expect(reasons(agenda, ctx({ previous: ['[Botón: Agendar llamada]'], userTurns: ['me pasas otra vez el enlace?'] }))).toEqual([]);
+    expect(reasons(agenda, ctx({ previous: ['[Botón: Agendar llamada]'], userTurns: ['dónde reservo?'] }))).toEqual([]);
+  });
+
+  it('nombrar la agenda o decir "reservo" no es pedirla (simulación: la pasó 3 veces al nivel 2)', () => {
+    const agenda = [`el enlace es el mismo: ${links.agenda}`];
+    const sent = ['[Botón: Agendar llamada]'];
+    expect(reasons(agenda, ctx({ previous: sent, userTurns: ['la agenda la miro y te digo'] }))).toHaveLength(1);
+    expect(reasons(agenda, ctx({ previous: sent, userTurns: ['si no hay compromiso, reservo esta semana'] }))).toHaveLength(1);
   });
 
   it('seco: con 3 respuestas de 3 palabras o menos seguidas, no más preguntas', () => {

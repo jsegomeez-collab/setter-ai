@@ -39,7 +39,9 @@ const DRY_STREAK = 3;
 const TALKS_ABOUT_MONEY =
   /membres|\b47\b|barat|econ[oó]mic|\bcaro\b|precio|cu[aá]nto (cuesta|sale|vale|cobr)|no tengo (dinero|plata|presupuesto)|sin (dinero|plata|presupuesto)|poco (dinero|presupuesto)|no me alcanza/i;
 const MENTIONS_MEMBERSHIP = /membres|\$\s?47\b|\b47\s?(\$|d[oó]lares|usd|al mes)/i;
-const ASKS_FOR_AGENDA = /agenda|enlace|link|reserv|hueco|d[oó]nde|calendario/i;
+/** Pide la agenda de verdad ("pásame el enlace", "¿dónde reservo?"); nombrarla ("la agenda la miro", "reservo") no cuenta. */
+const ASKS_FOR_AGENDA =
+  /(p[aá]s|mand|env[ií]|reenv|dame|d[eé]jame|comparte).{0,25}(enlace|link|agenda|calendario)|d[oó]nde (reservo|agendo|me apunto|est[aá] (el|la))|(no (me )?(abre|funciona|carga|encuentro)).{0,25}(enlace|link|agenda)|(enlace|link) (otra vez|de nuevo)/i;
 const INVENTED_SLOTS = /(hay|tiene|quedan)\s+(\p{L}+\s+)?huecos|huecos\s+(entre\s+semana|por\s+la|disponibles|libres|esta\s+semana)/iu;
 
 function isDry(text: string): boolean {
