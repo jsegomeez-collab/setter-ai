@@ -5,7 +5,7 @@ import { MetaApiError } from './meta/client.js';
 import { parseWebhook, type InstagramEvent } from './meta/parse.js';
 import type { Sender } from './sender.js';
 import type { EchoWatcher } from './setter/echoes.js';
-import type { SetterService } from './setter/service.js';
+import { FLOW_HANDLED_NOTE, type SetterService } from './setter/service.js';
 import type { Store } from './store.js';
 
 export interface ProcessDeps {
@@ -90,7 +90,7 @@ async function handleEvent(event: InstagramEvent, deps: ProcessDeps): Promise<vo
   }
   await deps.store.logEvent(event.kind, plan.note, event);
   // Respondió el flujo: el DM se guarda en la conversación, pero el setter no contesta.
-  if (event.kind === 'message') await deps.setter?.record(event);
+  if (event.kind === 'message') await deps.setter?.record(event, FLOW_HANDLED_NOTE);
   if (plan.actions.length === 0) return;
   const commentId = event.kind === 'comment' ? event.commentId : null;
   if (!(await claimOnce(plan, deps.store, commentId))) return;

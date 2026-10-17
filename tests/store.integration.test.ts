@@ -177,6 +177,25 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
   });
 
+  it('Fase 4 · lista de conversaciones: la más reciente primero y con límite (el límite va en la consulta)', async () => {
+    for (const id of ['lc-1', 'lc-2', 'lc-3']) {
+      await store.addMessage({ igId: id, direction: 'in', source: 'user', text: `soy ${id}`, mid: `${id}-m`, status: 'sent', dedupKey: null });
+    }
+    const two = await store.listConversations(2);
+    expect(two.map((c) => c.igId)).toEqual(['lc-3', 'lc-2']);
+    expect(two[0]).toMatchObject({ lastText: 'soy lc-3', lastDirection: 'in', aiPaused: false });
+  });
+
+  it('Fase 4 · conversaciones que esperan respuesta: el último mensaje es de la persona y es reciente', async () => {
+    await store.addMessage({ igId: 'w1', direction: 'in', source: 'user', text: 'hola', mid: 'w1-1', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: 'w2', direction: 'in', source: 'user', text: 'hola', mid: 'w2-1', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: 'w2', direction: 'out', source: 'ai', text: 'hey', mid: 'w2-2', status: 'sent', dedupKey: 'ai:w2-1' });
+    const pending = await store.pendingConversations(new Date(Date.now() - 60_000));
+    expect(pending).toContain('w1');
+    expect(pending).not.toContain('w2');
+    expect(await store.pendingConversations(new Date(Date.now() + 60_000))).not.toContain('w1');
+  });
+
   it('Fase 4 · embudo: qué pasos cumplió cada persona en cada reel', async () => {
     const done = async (key: string, type: string, request: unknown, ok: boolean, response: unknown = {}) => {
       await store.claimAction(key, type, request);

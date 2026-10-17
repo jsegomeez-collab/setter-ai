@@ -20,6 +20,8 @@ export interface Store {
   setMessageStatus(dedupKey: string, status: MessageStatus, mid?: string | null): Promise<void>;
   listMessages(igId: string, limit: number): Promise<MessageRow[]>;
   listConversations(limit: number): Promise<ConversationRow[]>;
+  /** Personas cuyo último mensaje es suyo (sin contestar) y es de después de `since`. */
+  pendingConversations(since: Date): Promise<string[]>;
   getContact(igId: string): Promise<ContactRow | null>;
   setAiPaused(igId: string, paused: boolean, reason: string | null): Promise<void>;
   /** Guarda la ficha y, si cambió respecto a la última, la apunta en el historial (Fase 4). */
@@ -384,13 +386,13 @@ export async function createPostgresStore(
     async listConversations(limit) {
       const rows = await sql<
         { ig_id: string; username: string | null; text: string; created_at: Date; direction: MessageDirection; ai_paused: boolean | null; lead: unknown }[]
-      >`SELECT DISTINCT ON (m.ig_id) m.ig_id, c.username, m.text, m.created_at, m.direction, c.ai_paused, c.lead
-        FROM messages m LEFT JOIN contacts c ON c.ig_id = m.ig_id
-        ORDER BY m.ig_id, m.id DESC`;
-      return rows
-        .map((r) => ({ igId: r.ig_id, username: r.username, lastText: r.text, lastAt: r.created_at, lastDirection: r.direction, aiPaused: r.ai_paused ?? false, lead: r.lead }))
-        .sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime())
-        .slice(0, limit);
+      >`SELECT last.ig_id, c.username, last.text, last.created_at, last.direction, c.ai_paused, c.lead
+        FROM (
+          SELECT DISTINCT ON (ig_id) ig_id, id, text, created_at, direction FROM messages ORDER BY ig_id, id DESC
+        ) last
+        LEFT JOIN contacts c ON c.ig_id = last.ig_id
+        ORDER BY last.id DESC LIMIT ${limit}`;
+      return rows.map((r) => ({ igId: r.ig_id, username: r.username, lastText: r.text, lastAt: r.created_at, lastDirection: r.direction, aiPaused: r.ai_paused ?? false, lead: r.lead }));
     },
     async getContact(igId) {
       const rows = await sql<
@@ -447,6 +449,13 @@ export async function createPostgresStore(
         SELECT prev AS "from", step AS "to", count(*)::int AS n FROM h
         WHERE prev IS NOT NULL AND step IS NOT NULL AND prev <> step GROUP BY 1, 2 ORDER BY n DESC, 1, 2`;
       return { stages: [...stages], transitions: [...transitions] };
+    },
+    async pendingConversations(since) {
+      const rows = await sql<{ ig_id: string }[]>`
+        SELECT ig_id FROM (
+          SELECT DISTINCT ON (ig_id) ig_id, direction, created_at FROM messages ORDER BY ig_id, id DESC
+        ) last WHERE direction = 'in' AND created_at >= ${since}`;
+      return rows.map((row) => row.ig_id);
     },
     async failedPrivateReply(igId, since) {
       const rows = await sql<{ dedup_key: string; request: unknown; created_at: Date }[]>`

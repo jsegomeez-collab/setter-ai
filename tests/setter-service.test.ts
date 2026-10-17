@@ -3,7 +3,7 @@ import type { Action } from '../src/flows/engine.js';
 import type { InstagramEvent } from '../src/meta/parse.js';
 import type { BrainResult, SetterBrain } from '../src/setter/brain.js';
 import { NO_TEXT_PLACEHOLDER } from '../src/setter/prompt.js';
-import { SetterService, parseUsernames, typingDelayMs } from '../src/setter/service.js';
+import { FLOW_HANDLED_NOTE, SetterService, parseUsernames, typingDelayMs } from '../src/setter/service.js';
 import { SETTINGS } from '../src/store.js';
 import { ACCOUNT_ID, STRANGER_ID, TEST_SETTER_LINKS, createMemoryStore, sampleOutput } from './helpers.js';
 
@@ -279,6 +279,44 @@ describe('SetterService', () => {
     await noDoc.flush();
     expect(noDoc.decide).not.toHaveBeenCalled();
     expect(noDoc.store.events.at(-1)?.note).toContain('No hay documento');
+  });
+
+  it('al arrancar contesta las conversaciones que esperan respuesta y son recientes (no las viejas ni las ya contestadas)', async () => {
+    // Caso: el servidor se reinicia (despliegue) durante la espera de 8 s y el DM queda sin respuesta.
+    const { store, decide, service } = await setup();
+    await service.record(dm('hola, quiero info', 'm-1'));
+    await store.addMessage({ igId: 'viejo', direction: 'in', source: 'user', text: 'hace horas', mid: 'm-v', status: 'sent', dedupKey: null });
+    const old = store.messages.find((m) => m.mid === 'm-v');
+    if (old) store.messages[store.messages.indexOf(old)] = { ...old, createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) };
+    await store.addMessage({ igId: 'contestado', direction: 'in', source: 'user', text: 'hola', mid: 'm-c', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: 'contestado', direction: 'out', source: 'ai', text: 'hey', mid: 'm-c2', status: 'sent', dedupKey: 'ai:m-c' });
+    expect(await service.resumePending(new Date(Date.now() - 60 * 60 * 1000))).toBe(1);
+    await service.idle();
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
+  it('un "sí" que contestó el flujo NO lo contesta el setter (ni al arrancar ni al reanudar)', async () => {
+    const { decide, service } = await setup();
+    await service.record(dm('si', 'm-si'), FLOW_HANDLED_NOTE);
+    await service.resumePending(new Date(Date.now() - 60 * 60 * 1000));
+    await service.replyNow(STRANGER_ID);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('al apagarse (SIGTERM del despliegue) contesta ya lo que esperaba los 8 s en vez de perderlo', async () => {
+    const { decide, service } = await setup();
+    await service.onIncoming(dm('hola', 'm-1'));
+    service.flushPending(); // sin que pasen los 8 s
+    await service.idle();
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
+  it('al arrancar con el setter apagado no contesta nada', async () => {
+    const { decide, service } = await setup({ mode: 'off' });
+    await service.record(dm('hola', 'm-1'));
+    await service.resumePending(new Date(Date.now() - 60 * 60 * 1000));
+    await service.idle();
+    expect(decide).not.toHaveBeenCalled();
   });
 
   it('un DM sin texto (audio, foto) se guarda con un aviso que Claude entiende', async () => {

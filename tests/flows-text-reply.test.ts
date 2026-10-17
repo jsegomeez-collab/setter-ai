@@ -3,6 +3,7 @@ import { isAffirmativeReply } from '../src/flows/text-reply.js';
 import type { InstagramClient } from '../src/meta/client.js';
 import { processWebhook } from '../src/process.js';
 import { Sender } from '../src/sender.js';
+import { FLOW_HANDLED_NOTE } from '../src/setter/service.js';
 import { STRANGER_ID, createMemoryStore, followFlow, messagePayload } from './helpers.js';
 
 /**
@@ -74,7 +75,8 @@ describe('process.ts: "si" escrito al mensaje del flujo', () => {
       expect.objectContaining({ attachment: expect.objectContaining({ payload: expect.objectContaining({ text: 'Aquí lo tienes' }) }) }),
     );
     expect(setter.onIncoming).not.toHaveBeenCalled();
-    expect(setter.record).toHaveBeenCalledWith(expect.objectContaining({ mid: 'm-si', text: 'si' }));
+    // Se marca como contestado por el flujo: el setter no lo responderá ni al arrancar ni al reanudar.
+    expect(setter.record).toHaveBeenCalledWith(expect.objectContaining({ mid: 'm-si', text: 'si' }), FLOW_HANDLED_NOTE);
     expect(store.events.some((e) => e.note.includes('texto como botón'))).toBe(true);
   });
 

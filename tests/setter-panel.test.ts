@@ -147,4 +147,19 @@ describe('panel /conversaciones', () => {
     await post(`/conversaciones/${STRANGER_ID}/reanudar`);
     expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: false, aiPausedReason: null });
   });
+
+  it('al reanudar la IA, contesta ya si había un mensaje de la persona sin responder', async () => {
+    const store = createMemoryStore();
+    const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
+    const replyPending = vi.fn().mockResolvedValue(undefined);
+    const app = createApp({ config: config(), store, client: null, tokens, processPayload: vi.fn(), linkSecret: null, replyPending });
+    await store.setAiPaused(STRANGER_ID, true, 'Jose escribió a mano');
+    const res = await app.request(`${HOST}/conversaciones/${STRANGER_ID}/reanudar`, {
+      method: 'POST',
+      headers: { authorization: auth, origin: HOST, 'content-type': 'application/x-www-form-urlencoded' },
+      body: '',
+    });
+    expect(res.status).toBe(303);
+    expect(replyPending).toHaveBeenCalledWith(STRANGER_ID);
+  });
 });

@@ -72,6 +72,11 @@ export function createMemoryStore(): Store & {
         if (m.dedupKey === dedupKey) messages[i] = { ...m, status, mid: mid ?? m.mid };
       });
     },
+    async pendingConversations(since) {
+      const last = new Map<string, MessageRow>();
+      for (const m of messages) last.set(m.igId, m);
+      return [...last.values()].filter((m) => m.direction === 'in' && m.createdAt >= since).map((m) => m.igId);
+    },
     async listMessages(igId, limit) {
       return limit > 0 ? messages.filter((m) => m.igId === igId).slice(-limit) : [];
     },

@@ -16,6 +16,8 @@ import { createPostgresStore } from './store.js';
 
 const TOKEN_CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const FIRST_TOKEN_CHECK_MS = 60 * 1000;
+/** Al arrancar se contestan los DMs sin respuesta de la última hora (más antiguos ya no parecen una conversación viva). */
+const PENDING_REPLY_WINDOW_MS = 60 * 60 * 1000;
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -63,6 +65,9 @@ async function main(): Promise<void> {
     showTyping: client ? (igId) => client.sendTypingOn(igId) : undefined,
   });
   const echoes = new EchoWatcher({ store });
+  // Si el servidor se reinició durante la espera de 8 s, esos DMs quedaron sin respuesta: se contestan ahora.
+  const pendingReplies = await setter.resumePending(new Date(Date.now() - PENDING_REPLY_WINDOW_MS));
+  if (pendingReplies > 0) await store.logEvent('setter', `Al arrancar: ${pendingReplies} conversación(es) esperaban respuesta; se revisan ahora.`, null);
 
   const app = createApp({
     config,
@@ -72,6 +77,7 @@ async function main(): Promise<void> {
     linkSecret: linkSigner ? linkSecret : null,
     processPayload: (payload) => processInBackground(payload, { store, sender: activeSender, setter, echoes }),
     rescue: (since) => rescueComments(since, { store, sender: activeSender }),
+    replyPending: (igId) => setter.replyNow(igId),
     simulator,
   });
 
@@ -93,6 +99,7 @@ async function main(): Promise<void> {
     clearInterval(periodicCheck);
     scheduler.stop();
     server.close();
+    setter.flushPending();
     Promise.all([setter.idle(), echoes.idle()])
       .then(() => activeSender.idle())
       .then(() => store.close())

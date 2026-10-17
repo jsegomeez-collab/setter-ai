@@ -3,6 +3,7 @@ import { planComment, type Action } from '../src/flows/engine.js';
 import { MetaApiError, type InstagramClient } from '../src/meta/client.js';
 import { processWebhook } from '../src/process.js';
 import { Sender } from '../src/sender.js';
+import { FLOW_HANDLED_NOTE } from '../src/setter/service.js';
 import { STRANGER_ID, createMemoryStore, followFlow, messagePayload } from './helpers.js';
 
 /**
@@ -101,7 +102,7 @@ describe('process.ts: rescate por DM tras un DM fallido', () => {
       expect.objectContaining({ attachment: expect.objectContaining({ payload: expect.objectContaining({ text: 'Hola, pulsa el botón' }) }) }),
     );
     expect(setter.onIncoming).not.toHaveBeenCalled();
-    expect(setter.record).toHaveBeenCalledWith(expect.objectContaining({ mid: 'm-in' }));
+    expect(setter.record).toHaveBeenCalledWith(expect.objectContaining({ mid: 'm-in' }), FLOW_HANDLED_NOTE);
     expect(store.events.some((e) => e.note.includes('rescate por DM'))).toBe(true);
   });
 

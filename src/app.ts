@@ -59,6 +59,8 @@ export interface AppDeps {
   readonly processPayload: (payload: unknown) => void;
   /** Rescata comentarios sin respuesta desde una fecha (pone en cola sus DMs). */
   readonly rescue?: (since: Date) => Promise<{ queued: number; skipped: number; since: string }>;
+  /** Contesta ya si el último mensaje de esa persona está sin responder (al reanudar la IA). */
+  readonly replyPending?: (igId: string) => Promise<void>;
   /** Simulador del setter (null = sin ANTHROPIC_API_KEY). */
   readonly simulator?: { readonly brain: SetterBrain; readonly lead: LeadPlayer } | null;
 }

@@ -17,6 +17,8 @@ import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks
 export const DEFAULT_DEBOUNCE_MS = 8000;
 const HISTORY_LIMIT = 40;
 export const SETTER_FLOW_ID = 'setter';
+/** Nota de un DM que ya contestó el flujo ("sí" escrito o rescate por DM): el setter no lo responde. */
+export const FLOW_HANDLED_NOTE = 'Lo contestó el flujo';
 const LOG_KIND = 'setter';
 
 export type SetterMode = 'off' | 'test' | 'live';
@@ -89,8 +91,18 @@ export class SetterService {
     this.scheduleReply(event.senderId);
   }
 
-  /** Solo guarda el DM en la conversación, sin responder (p. ej. cuando el "sí" lo contesta el flujo). */
-  async record(event: MessageEvent): Promise<void> {
+  /**
+   * Al arrancar: contesta las conversaciones cuyo último mensaje es de la persona y es de después de `since`
+   * (p. ej. el servidor se reinició durante la espera de 8 s). Pasa por las mismas reglas que siempre. Devuelve cuántas.
+   */
+  async resumePending(since: Date): Promise<number> {
+    const igIds = await this.options.store.pendingConversations(since);
+    for (const igId of igIds) void this.replyNow(igId);
+    return igIds.length;
+  }
+
+  /** Solo guarda el DM en la conversación, sin responder (p. ej. cuando el "sí" lo contesta el flujo: `FLOW_HANDLED_NOTE`). */
+  async record(event: MessageEvent, note: string | null = null): Promise<void> {
     await this.options.store.addMessage({
       igId: event.senderId,
       direction: 'in',
@@ -99,6 +111,7 @@ export class SetterService {
       mid: event.mid,
       status: 'sent',
       dedupKey: null,
+      note,
     });
   }
 
@@ -111,6 +124,15 @@ export class SetterService {
       .catch(() => undefined);
     this.chains.set(igId, run);
     return run;
+  }
+
+  /** Al apagarse (SIGTERM del despliegue): contesta ya lo que esperaba los 8 s; si no, se perdería con el reinicio. */
+  flushPending(): void {
+    for (const [igId, handle] of this.timers) {
+      this.clearTimer(handle);
+      this.timers.delete(igId);
+      void this.replyNow(igId);
+    }
   }
 
   /** Espera a que terminen las respuestas en curso (pruebas y apagado). */
@@ -139,7 +161,7 @@ export class SetterService {
     const last = history.at(-1);
     // Ya se contestó (o escribió Jose) después. La respuesta se guarda antes de enviarse, así que esto
     // evita contestar dos veces; además la cola nunca envía dos veces la misma clave ai:<mid>.
-    if (!last || last.direction !== 'in') return;
+    if (!last || last.direction !== 'in' || last.note === FLOW_HANDLED_NOTE) return;
     const dedupKey = `ai:${last.mid ?? last.id}`;
     const turns = toClaudeTurns(history);
     const system = buildSystemPrompt(knowledge.text, links, turns.earlyAccountMessages);

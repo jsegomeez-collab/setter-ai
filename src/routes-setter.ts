@@ -98,8 +98,11 @@ function registerConversations(app: Hono, deps: AppDeps): void {
     const igId = c.req.param('igId') ?? '';
     await store.setAiPaused(igId, paused, paused ? 'Parada a mano por Jose desde el panel' : null);
     await store.logEvent('setter', `IA ${paused ? 'parada' : 'reanudada'} a mano en la conversación.`, { igId });
+    // Al reanudar, si quedó un mensaje de la persona sin responder, se contesta ya (sin esperar a que vuelva a escribir).
+    // No se espera: la respuesta tarda unos segundos y el panel vuelve enseguida.
+    if (!paused) void deps.replyPending?.(igId);
     const path = `/conversaciones/${encodeURIComponent(igId)}`;
-    return c.redirect(withMsg(path, paused ? 'IA parada en esta conversación.' : 'IA reanudada: responderá al próximo mensaje de la persona.'), 303);
+    return c.redirect(withMsg(path, paused ? 'IA parada en esta conversación.' : 'IA reanudada: si había un mensaje sin responder, lo contesta ya.'), 303);
   };
   app.post('/conversaciones/:igId/pausar', setPaused(true));
   app.post('/conversaciones/:igId/reanudar', setPaused(false));
