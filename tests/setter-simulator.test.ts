@@ -5,7 +5,7 @@ import { TokenManager } from '../src/meta/token.js';
 import type { BrainResult, SetterBrain } from '../src/setter/brain.js';
 import { NO_TEXT_PLACEHOLDER } from '../src/setter/prompt.js';
 import { SCENARIOS } from '../src/setter/scenarios.js';
-import { ClaudeLeadPlayer, estimateCostUsd, runSimulation, verdict, type LeadPlayer } from '../src/setter/simulator.js';
+import { ClaudeLeadPlayer, LEAD_MODEL, estimateCostUsd, runSimulation, verdict, type LeadPlayer } from '../src/setter/simulator.js';
 import { TEST_SETTER_CONFIG, TEST_SETTER_LINKS, createMemoryStore, sampleOutput } from './helpers.js';
 
 const USAGE = { inputTokens: 100, outputTokens: 200, cacheReadTokens: 5000, cacheCreationTokens: 0 };
@@ -130,6 +130,16 @@ describe('verdict y coste', () => {
   it('coste con precios de Haiku 5.5 (entrada 0,10 $/M, salida 0,50 $/M, lectura de caché ×0,1, escritura ×1,25)', () => {
     expect(estimateCostUsd({ inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 })).toBeCloseTo(0.1);
     expect(estimateCostUsd({ inputTokens: 0, outputTokens: 1_000_000, cacheReadTokens: 1_000_000, cacheCreationTokens: 1_000_000 })).toBeCloseTo(0.5 + 0.01 + 0.125);
+  });
+
+  it('coste con precios de Sonnet 5.5 si el setter usa Sonnet (2 $/M, 10 $/M, lectura de caché 0,20 $/M, la más cara publicada)', () => {
+    const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000, cacheReadTokens: 1_000_000, cacheCreationTokens: 1_000_000 };
+    expect(estimateCostUsd(usage, 'claude-sonnet-5-5')).toBeCloseTo(2 + 10 + 0.2 + 2.5);
+    expect(estimateCostUsd(usage, 'claude-haiku-5-5')).toBeCloseTo(0.1 + 0.5 + 0.01 + 0.125);
+  });
+
+  it('la IA que hace de lead es siempre Haiku, aunque el setter use otro modelo (prueba justa y barata)', () => {
+    expect(LEAD_MODEL).toBe('claude-haiku-5-5');
   });
 
   it('todos los escenarios tienen id único y perfil', () => {

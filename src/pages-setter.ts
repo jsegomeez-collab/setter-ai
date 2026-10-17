@@ -90,6 +90,7 @@ ${custom}<h2>Escenarios</h2><table><tr><th>Grupo</th><th>Perfil</th><th>Qué deb
 
 export function simulationResultPage(scenario: Pick<Scenario, 'title' | 'persona' | 'check' | 'expectStep' | 'expectStop'>, result: SimulationResult): string {
   const auto = verdict(scenario, result);
+  const setterCost = estimateCostUsd(result.usage, result.setterModel);
   const thread = result.turns
     .map((t) => {
       const who = t.who === 'lead' ? '⬅ Lead (simulado)' : '➡ Setter IA';
@@ -101,8 +102,8 @@ export function simulationResultPage(scenario: Pick<Scenario, 'title' | 'persona
 <div class="card"><small>${escapeHtml(scenario.persona)}</small></div>
 <div class="card"><strong>Qué debería pasar:</strong> ${escapeHtml(scenario.check)}<br>
 ${auto ? `<strong>Comprobación automática:</strong> <span class="${auto.ok ? 'ok' : 'bad'}">${escapeHtml(auto.detail)}</span><br>` : ''}
-<strong>Final:</strong> ${escapeHtml(result.endReason)} · <strong>Coste:</strong> setter ${estimateCostUsd(result.usage).toFixed(4)} $${
-    result.leadUsage ? ` + IA que hace de lead ${estimateCostUsd(result.leadUsage).toFixed(4)} $ = <strong>${(estimateCostUsd(result.usage) + estimateCostUsd(result.leadUsage)).toFixed(4)} $</strong>` : ''
+<strong>Final:</strong> ${escapeHtml(result.endReason)} · <strong>Coste:</strong> setter${result.setterModel ? ` (${escapeHtml(result.setterModel)})` : ''} ${setterCost.toFixed(4)} $${
+    result.leadUsage ? ` + IA que hace de lead ${estimateCostUsd(result.leadUsage).toFixed(4)} $ = <strong>${(setterCost + estimateCostUsd(result.leadUsage)).toFixed(4)} $</strong>` : ''
   }</div>
 <h2>Conversación</h2><table>${thread}</table>
 <h2>Ficha final</h2>${leadTable(result.lead)}`;

@@ -30,6 +30,8 @@ export interface SimulationResult {
   readonly usage: BrainUsage;
   /** Lo que gastó la IA que hace de lead (para dar el coste real completo). null si no se sabe. */
   readonly leadUsage?: BrainUsage | null;
+  /** Modelo del setter en esta simulación (para el coste). Sin él se calcula como Haiku. */
+  readonly setterModel?: string;
 }
 
 /** Quien hace de lead: devuelve su siguiente mensaje, o null si la conversación terminó para él. */
@@ -107,14 +109,29 @@ async function simulate(deps: SimulatorDeps, scenario: Pick<Scenario, 'persona' 
   return { turns, lead, endReason: `Límite de ${deps.maxTurns ?? MAX_SIM_TURNS} turnos`, stopped: false, usage };
 }
 
+/** La IA que hace de lead es siempre Haiku: barata, y así comparar modelos del setter es justo. */
+export const LEAD_MODEL = 'claude-haiku-5-5';
+
 /**
- * Coste estimado del setter con los precios de Claude Haiku 5.5 (guía oficial claude-api, tabla del 2026-10-06):
- * entrada 0,10 $/M · escritura en caché ×1,25 · lectura de caché ×0,1 · salida 0,50 $/M. No incluye la IA que hace de lead.
+ * Precios en $ por millón de tokens; escritura en caché = entrada ×1,25.
+ * Haiku 5.5: guía oficial claude-api (tabla del 2026-10-06). Sonnet 5.5: platform.claude.com/docs/en/about-claude/pricing
+ * (2026-10-17); la lectura de caché sale a 0,10 o 0,20 según la página: se usa 0,20 para no quedarse corto.
  */
-export function estimateCostUsd(usage: BrainUsage): number {
-  const PER_TOKEN_IN = 0.1 / 1_000_000;
-  const PER_TOKEN_OUT = 0.5 / 1_000_000;
-  return usage.inputTokens * PER_TOKEN_IN + usage.cacheCreationTokens * PER_TOKEN_IN * 1.25 + usage.cacheReadTokens * PER_TOKEN_IN * 0.1 + usage.outputTokens * PER_TOKEN_OUT;
+const PRICES = {
+  haiku: { input: 0.1, output: 0.5, cacheRead: 0.01 },
+  sonnet: { input: 2, output: 10, cacheRead: 0.2 },
+} as const;
+
+/** Coste estimado de un consumo con el modelo dado (por defecto, el del lead). */
+export function estimateCostUsd(usage: BrainUsage, model: string = LEAD_MODEL): number {
+  const price = model.includes('sonnet') ? PRICES.sonnet : PRICES.haiku;
+  const perMillion = (tokens: number, dollars: number): number => (tokens * dollars) / 1_000_000;
+  return (
+    perMillion(usage.inputTokens, price.input) +
+    perMillion(usage.cacheCreationTokens, price.input * 1.25) +
+    perMillion(usage.cacheReadTokens, price.cacheRead) +
+    perMillion(usage.outputTokens, price.output)
+  );
 }
 
 /** ¿Pasó lo esperado? null = no hay nada automático que comprobar. */

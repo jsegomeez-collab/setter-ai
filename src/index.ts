@@ -11,7 +11,7 @@ import { processEvent, processInBackground, rescueComments } from './process.js'
 import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { ClaudeBrain } from './setter/brain.js';
-import { ClaudeLeadPlayer } from './setter/simulator.js';
+import { ClaudeLeadPlayer, LEAD_MODEL } from './setter/simulator.js';
 import { EchoWatcher } from './setter/echoes.js';
 import { SetterService } from './setter/service.js';
 import { createPostgresStore } from './store.js';
@@ -63,8 +63,8 @@ async function main(): Promise<void> {
   const { anthropicApiKey, model, links } = config.setter;
   const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey }) : null;
   const brain = anthropic ? new ClaudeBrain(anthropic, model) : null;
-  // Simulador del panel: el lead lo hace Haiku (barato), con el mismo modelo configurado para el setter.
-  const simulator = anthropic && brain ? { brain, lead: new ClaudeLeadPlayer(anthropic, model) } : null;
+  // Simulador del panel: el lead lo hace siempre Haiku (barato y justo para comparar modelos del setter).
+  const simulator = anthropic && brain ? { brain, lead: new ClaudeLeadPlayer(anthropic, LEAD_MODEL) } : null;
   const setter = new SetterService({
     store,
     brain,

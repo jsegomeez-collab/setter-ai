@@ -150,7 +150,8 @@ function registerSimulator(app: Hono, deps: AppDeps): void {
     const knowledge = await store.getKnowledge();
     if (!deps.simulator || !knowledge) return c.html(simulatorPage(SCENARIOS, await unavailable()), 400);
     try {
-      const result = await runSimulation({ ...deps.simulator, knowledge: knowledge.text, links: config.setter.links }, scenario);
+      const simulated = await runSimulation({ ...deps.simulator, knowledge: knowledge.text, links: config.setter.links }, scenario);
+      const result = { ...simulated, setterModel: config.setter.model };
       await store.logEvent('simulacion', `Simulación "${scenario.title}": ${result.endReason}.`, { scenario: id, turns: result.turns.length, usage: result.usage });
       return c.html(simulationResultPage(scenario, result));
     } catch (error) {
