@@ -54,18 +54,31 @@ function periodLinks(period: MetricsPeriod): string {
 }
 
 /** Setter IA (Fase 4, paso 2): en qué etapa está cada conversación y cuántas cambiaron de etapa (historial de la ficha). */
-function setterBlock(stats: SetterStageStats): string {
+function setterBlock(stats: SetterStageStats, agenda: AgendaStats): string {
   const stages = stats.stages.map((s) => `<tr><td>${escapeHtml(s.step)}</td><td>${s.n}</td></tr>`).join('');
+  const clickPct = percent(agenda.clicked, agenda.offered);
+  const agendaTable = `<h3>Agenda (Fase 5)</h3>
+<table><tr><th>Paso</th><th>Personas</th></tr>
+<tr><td>Agenda ofrecida</td><td>${agenda.offered}</td></tr>
+<tr><td>Clic en la agenda</td><td>${agenda.clicked}${clickPct === null ? '' : ` <small>(${clickPct} %)</small>`}</td></tr></table>
+<p><small>Ofrecida = la IA le mandó el enlace de agenda (corto, con seguimiento). Reservas: cuando conectemos GoHighLevel (5.3).</small></p>`;
   const moves = stats.transitions.map((t) => `<tr><td>${escapeHtml(t.from)} → ${escapeHtml(t.to)}</td><td>${t.n}</td></tr>`).join('');
   return `<h2>Setter IA</h2>
 <p><small>Etapa = "siguiente paso" de la ficha. Todo el periodo (no depende del filtro de arriba). Con el setter en modo prueba casi solo hay conversaciones de prueba.</small></p>
 <h3>Conversaciones por etapa actual</h3>
 <table><tr><th>Etapa</th><th>Conversaciones</th></tr>${stages || '<tr><td colspan="2">Todavía no hay fichas.</td></tr>'}</table>
 <h3>Cambios de etapa</h3>
-<table><tr><th>De → a</th><th>Veces</th></tr>${moves || '<tr><td colspan="2">Todavía no hay cambios de etapa.</td></tr>'}</table>`;
+<table><tr><th>De → a</th><th>Veces</th></tr>${moves || '<tr><td colspan="2">Todavía no hay cambios de etapa.</td></tr>'}</table>
+${agendaTable}`;
 }
 
-export function metricsPage(funnel: Funnel, media: readonly Media[], period: MetricsPeriod, setter: SetterStageStats): string {
+export interface AgendaStats {
+  readonly offered: number;
+  readonly clicked: number;
+}
+const NO_AGENDA: AgendaStats = { offered: 0, clicked: 0 };
+
+export function metricsPage(funnel: Funnel, media: readonly Media[], period: MetricsPeriod, setter: SetterStageStats, agenda: AgendaStats = NO_AGENDA): string {
   const periodText = period === 'all' ? 'todo' : `últimos ${period} días`;
   return layout(
     'Métricas',
@@ -86,6 +99,6 @@ ${table('Día (UTC)', funnel.byDay, funnel.total, escapeHtml)}
 <li>Pidieron, siguen, clic, escribieron y cualificados son de la persona (no de un reel concreto).</li>
 <li><strong>Llamadas</strong>: todavía no se miden (Fase 5).</li>
 </ul>
-${setterBlock(setter)}`,
+${setterBlock(setter, agenda)}`,
   );
 }

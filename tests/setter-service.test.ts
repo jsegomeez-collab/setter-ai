@@ -20,6 +20,7 @@ interface SetupOptions {
   readonly brain?: SetterBrain | null;
   readonly sendOk?: boolean;
   readonly username?: string | null;
+  readonly trackLinks?: (igId: string, text: string) => Promise<string>;
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -48,6 +49,7 @@ async function setup(options: SetupOptions = {}) {
     showTyping,
     sleep,
     random: () => 0,
+    trackLinks: options.trackLinks,
     setTimer: (fn) => timers.push(fn) - 1,
     clearTimer: (handle) => {
       timers[handle as number] = () => undefined;
@@ -219,6 +221,26 @@ describe('SetterService', () => {
       ['held', 'ai:m-1:1'],
       ['held', 'ai:m-1:2'],
     ]);
+  });
+
+  it('el enlace de agenda sale como enlace corto con seguimiento (lo enviado y lo guardado llevan el corto)', async () => {
+    const trackLinks = vi.fn(async (_igId: string, text: string) => text.split(TEST_SETTER_LINKS.agenda).join('https://s.example.com/l/Ab3dEf9'));
+    const { store, decide, enqueue, service, flush } = await setup({ trackLinks });
+    decide.mockResolvedValue(ok(sampleOutput({ messages: [`Reserva aquí: ${TEST_SETTER_LINKS.agenda}`] })));
+    await service.onIncoming(dm('quiero la llamada', 'm-1'));
+    await flush();
+    expect(trackLinks).toHaveBeenCalledWith(STRANGER_ID, `Reserva aquí: ${TEST_SETTER_LINKS.agenda}`);
+    expect(enqueue.mock.calls[0]?.[0][0]).toMatchObject({ message: { text: 'Reserva aquí: https://s.example.com/l/Ab3dEf9' } });
+    expect(store.messages.at(-1)?.text).toBe('Reserva aquí: https://s.example.com/l/Ab3dEf9');
+  });
+
+  it('si falla crear el enlace corto, el mensaje sale igual con el enlace normal', async () => {
+    const trackLinks = vi.fn().mockRejectedValue(new Error('BD caída'));
+    const { decide, enqueue, service, flush } = await setup({ trackLinks });
+    decide.mockResolvedValue(ok(sampleOutput({ messages: [`Reserva aquí: ${TEST_SETTER_LINKS.agenda}`] })));
+    await service.onIncoming(dm('quiero la llamada', 'm-1'));
+    await flush();
+    expect(enqueue.mock.calls[0]?.[0][0]).toMatchObject({ message: { text: `Reserva aquí: ${TEST_SETTER_LINKS.agenda}` } });
   });
 
   it('aprobar el borrador: envía los mensajitos retenidos en orden, con "escribiendo…", y quedan como enviados (sin duplicar filas)', async () => {

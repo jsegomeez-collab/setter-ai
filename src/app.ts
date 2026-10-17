@@ -7,7 +7,7 @@ import { validateFlow } from './flows/types.js';
 import { InstagramClient, MetaApiError, type Account, type Media } from './meta/client.js';
 import { isValidSignature } from './meta/signature.js';
 import type { TokenManager } from './meta/token.js';
-import { readLinkToken } from './links.js';
+import { isShortCode, readLinkToken } from './links.js';
 import { buildFunnel } from './funnel.js';
 import { flowFormPage, flowJsonPage, flowsListPage } from './pages-flows.js';
 import { metricsPage, parsePeriod, periodStart } from './pages-metrics.js';
@@ -117,7 +117,13 @@ function registerWebhook(app: Hono, deps: AppDeps): void {
 /** Enlaces con seguimiento: registra el clic, añade etiquetas y redirige al destino real. */
 function registerLinks(app: Hono, deps: AppDeps): void {
   app.get('/l/:token', async (c) => {
-    const data = deps.linkSecret ? readLinkToken(deps.linkSecret, c.req.param('token')) : null;
+    const token = c.req.param('token');
+    // Corto (agenda en texto, guardado en la BD) o firmado (botones). Nunca se redirige a algo que no hayamos creado.
+    const data = isShortCode(token)
+      ? await deps.store.getShortLink(token).catch(() => null)
+      : deps.linkSecret
+        ? readLinkToken(deps.linkSecret, token)
+        : null;
     if (!data) return c.text('Enlace no válido', 404);
     try {
       await deps.store.logEvent('click', `Clic en enlace del flujo ${data.f} (paso ${data.n}).`, data);
@@ -321,12 +327,13 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.get('/metricas', async (c) => {
     const period = parsePeriod(c.req.query('dias'));
-    const [rows, media, setter] = await Promise.all([
+    const [rows, media, setter, agenda] = await Promise.all([
       deps.store.funnelRows(periodStart(period)),
       loadMedia(deps.client, MEDIA_FOR_STATS),
       deps.store.setterStageStats(),
+      deps.store.agendaStats(),
     ]);
-    return c.html(metricsPage(buildFunnel(rows), media, period, setter));
+    return c.html(metricsPage(buildFunnel(rows), media, period, setter, agenda));
   });
   return app;
 }

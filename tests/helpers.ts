@@ -1,5 +1,6 @@
 import type { SetterConfig } from '../src/config.js';
 import type { Flow } from '../src/flows/types.js';
+import type { LinkData } from '../src/links.js';
 import type { SetterOutput } from '../src/setter/schema.js';
 import {
   SEND_ACTION_TYPES,
@@ -42,6 +43,7 @@ export function createMemoryStore(): Store & {
   const comments: CommentRecord[] = [];
   const commentDates = new Map<string, Date>();
   const leadHistory: { igId: string; lead: unknown; createdAt: Date }[] = [];
+  const shortLinks = new Map<string, LinkData>();
   const jobs = new Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>();
   let nextJobId = 1;
   const requests: { signatureOk: boolean; payload: unknown }[] = [];
@@ -72,6 +74,20 @@ export function createMemoryStore(): Store & {
         if (m.dedupKey === dedupKey) messages[i] = { ...m, status, mid: mid ?? m.mid };
       });
     },
+    async saveShortLink(code, data) {
+      if (shortLinks.has(code)) return false;
+      shortLinks.set(code, data);
+      return true;
+    },
+    async getShortLink(code) {
+      return shortLinks.get(code) ?? null;
+    },
+    async agendaStats() {
+      const isAgenda = (data: unknown) => Array.isArray((data as { t?: unknown } | null)?.t) && ((data as { t: unknown[] }).t).includes('agenda');
+      const offered = new Set([...shortLinks.values()].filter(isAgenda).map((d) => d.r));
+      const clicked = new Set(events.filter((e) => e.kind === 'click' && isAgenda(e.data)).map((e) => (e.data as { r: string }).r));
+      return { offered: offered.size, clicked: clicked.size };
+    },
     async existingCommentIds(commentIds) {
       return new Set(comments.map((c) => c.commentId).filter((id) => commentIds.includes(id)));
     },
@@ -96,6 +112,9 @@ export function createMemoryStore(): Store & {
       const doomedJobs = [...jobs.entries()].filter(([, job]) => (job.payload as { recipientId?: unknown } | null)?.recipientId === igId);
       doomedJobs.forEach(([id]) => jobs.delete(id));
       counts.scheduled_jobs = doomedJobs.length;
+      const doomedLinks = [...shortLinks.entries()].filter(([, data]) => data.r === igId);
+      doomedLinks.forEach(([code]) => shortLinks.delete(code));
+      counts.short_links = doomedLinks.length;
       counts.event_log = drop(events, (e) => JSON.stringify(e.data ?? null).includes(quoted));
       counts.webhook_requests = drop(requests, (r) => JSON.stringify(r.payload ?? null).includes(quoted));
       counts.comments = drop(comments, (c) => c.igId === igId);

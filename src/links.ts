@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { OutMessage } from './flows/engine.js';
 
 /**
@@ -51,6 +51,43 @@ export function readLinkToken(secret: string, token: string): LinkData | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Enlaces cortos (Fase 5): la agenda va en mensajes de texto de la IA, donde el enlace firmado (>200 caracteres)
+ * quedaría mal. Se guarda en la BD un código de 7 caracteres → destino, persona y etiquetas.
+ */
+const SHORT_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const SHORT_LENGTH = 7;
+/** Si un código ya existía (casualidad), se prueba con otro hasta 3 veces. */
+const MAX_CODE_TRIES = 3;
+
+export function newShortCode(): string {
+  return [...randomBytes(SHORT_LENGTH)].map((byte) => SHORT_ALPHABET[byte % SHORT_ALPHABET.length]).join('');
+}
+
+export interface AgendaLinkDeps {
+  readonly store: { saveShortLink(code: string, data: LinkData): Promise<boolean> };
+  /** Base pública (PUBLIC_BASE_URL): hoy setter-ai-vfle.onrender.com, más adelante el dominio de Jose. */
+  readonly baseUrl: string;
+  readonly agendaUrl: string;
+}
+
+/** Cambia el enlace de agenda del texto por uno corto con seguimiento; el destino lleva utm_content=<código> (para GHL). */
+export async function trackAgendaLinks(text: string, recipientId: string, deps: AgendaLinkDeps): Promise<string> {
+  if (!text.includes(deps.agendaUrl)) return text;
+  for (let attempt = 0; attempt < MAX_CODE_TRIES; attempt += 1) {
+    const code = newShortCode();
+    const target = new URL(deps.agendaUrl);
+    target.searchParams.set('utm_content', code);
+    const data: LinkData = { f: 'setter', n: 'agenda', b: 0, r: recipientId, u: target.toString(), t: ['agenda'] };
+    if (await deps.store.saveShortLink(code, data)) return text.split(deps.agendaUrl).join(`${deps.baseUrl.replace(/\/$/, '')}/l/${code}`);
+  }
+  throw new Error('No se pudo crear un código de enlace corto');
+}
+
+export function isShortCode(value: string): boolean {
+  return new RegExp(`^[A-Za-z0-9]{${SHORT_LENGTH}}$`).test(value);
 }
 
 /** URL que se pone en el botón: la de seguimiento si hay firmante, si no la real. */

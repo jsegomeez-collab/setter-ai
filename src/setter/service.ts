@@ -53,6 +53,8 @@ export interface SetterServiceOptions {
   readonly clearTimer?: (handle: unknown) => void;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly random?: () => number;
+  /** Cambia el enlace de agenda por uno corto con seguimiento (Fase 5). Sin él, el texto sale tal cual. */
+  readonly trackLinks?: (igId: string, text: string) => Promise<string>;
 }
 
 /** Pausa antes de cada mensajito: unos 3-4 s según lo largo que sea, con algo de azar (lo pidió Jose). */
@@ -291,8 +293,9 @@ export class SetterService {
    * Envía un mensajito por la cola y apunta cómo terminó. Devuelve true si Instagram lo aceptó.
    * `saved`: el mensajito ya está guardado (borrador aprobado) y solo cambia su estado, sin duplicar la fila.
    */
-  private async send(igId: string, dedupKey: string, text: string, saved = false): Promise<boolean> {
+  private async send(igId: string, dedupKey: string, original: string, saved = false): Promise<boolean> {
     const { store } = this.options;
+    const text = await this.withTrackedLinks(igId, original);
     if (saved) await store.setMessageStatus(dedupKey, 'queued');
     else await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'queued', dedupKey });
     const action: Action = {
@@ -306,6 +309,17 @@ export class SetterService {
     if (done?.ok === true) await store.setMessageStatus(dedupKey, 'sent', messageIdOf(done.response));
     else if (done?.ok === false) await store.setMessageStatus(dedupKey, 'failed');
     return done?.ok === true;
+  }
+
+  /** Enlace de agenda → corto con seguimiento. Si falla, el mensaje sale igual con el enlace normal (y se apunta). */
+  private async withTrackedLinks(igId: string, text: string): Promise<string> {
+    if (!this.options.trackLinks) return text;
+    try {
+      return await this.options.trackLinks(igId, text);
+    } catch (error) {
+      await this.log('No se pudo crear el enlace corto: sale el enlace normal.', { igId, error: error instanceof Error ? error.message : String(error) });
+      return text;
+    }
   }
 
   private async stop(igId: string, reason: string): Promise<void> {

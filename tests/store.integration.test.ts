@@ -177,6 +177,18 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
   });
 
+  it('Fase 5 · enlaces cortos: guardar, leer, no pisar un código repetido y medir agenda ofrecida → clic', async () => {
+    const data = (r: string) => ({ f: 'setter', n: 'agenda', b: 0, r, u: 'https://codigomaestria.com/agenda?utm_content=x', t: ['agenda'] });
+    expect(await store.saveShortLink('Qq1Qq1Q', data('s1'))).toBe(true);
+    expect(await store.saveShortLink('Qq1Qq1Q', data('otro'))).toBe(false);
+    expect(await store.getShortLink('Qq1Qq1Q')).toEqual(data('s1'));
+    expect(await store.getShortLink('NoExiste')).toBeNull();
+    await store.saveShortLink('Qq2Qq2Q', data('s1'));
+    await store.saveShortLink('Qq3Qq3Q', data('s2'));
+    await store.logEvent('click', 'Clic', data('s1'));
+    expect(await store.agendaStats()).toEqual({ offered: 2, clicked: 1 });
+  });
+
   it('Fase 4 · de una lista de comentarios, cuáles ya tenemos guardados', async () => {
     await store.recordComment({ commentId: 'ex-1', igId: 'e1', username: 'e', mediaId: '7770009', text: 'x' });
     expect(await store.existingCommentIds(['ex-1', 'ex-2'])).toEqual(new Set(['ex-1']));

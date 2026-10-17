@@ -209,9 +209,18 @@ Lista original (referencia):
   - Rendimiento del setter IA: respuestas, tiempos, conversaciones que avanzan de etapa.
 - Panel (provisional hasta la Fase 6): conversaciones, fichas, objeciones, ángulos, estadísticas, pausar la IA por conversación, aprobar borradores.
 
-### Fase 5 — Ofrecer llamadas ⏳
+### Fase 5 — Ofrecer llamadas 🔄 (empezada 2026-10-17)
 
-- Enlace de agenda solo a cualificados, medido (ofrecidas → reservadas). Se detalla al llegar.
+- Enlace de agenda solo a cualificados, medido (ofrecidas → reservadas).
+
+**Decisiones de Jose (2026-10-17):** agenda en **GoHighLevel** (u otra CRM); **enlace con seguimiento** (más adelante con su dominio: basta cambiar `PUBLIC_BASE_URL`); "solo a cualificados" **lo decide la IA** (se mide y, si hace falta, se endurece).
+
+Plan (orden aprobado):
+- [x] 5.1 + 5.2 hechos (2026-10-17, 351 pruebas): tabla `short_links`; el setter cambia el enlace de agenda por `…/l/<7 caracteres>` al enviar cada mensajito (si falla, sale el normal); `/l/<código>` registra el clic, etiqueta "agenda" y redirige con `utm_content=<código>`; /metricas → bloque "Agenda (Fase 5)": ofrecida → clic. BORRAR también borra los enlaces cortos de esa persona. Sin probar con datos reales.
+- [x] 5.1 Enlace **corto** a la agenda con seguimiento (`…/l/<7 caracteres>`; el firmado de los botones mide >200 caracteres y en texto queda mal): se pone en lugar del enlace de agenda en los mensajes de la IA (después de los filtros); clic → registro + etiqueta "agenda" + redirección a la agenda con `utm_content=<código>`.
+- [x] 5.2 /metricas: agenda **ofrecida** a N personas → **clic** de M.
+- [ ] 5.3 Reservas desde GHL (con Jose): workflow "cita reservada → webhook" a nuestro servidor y cruce por el código. Sin verificar que GHL guarde el `utm_content`.
+- Sin datos reales hasta que el setter sea público (se prueba con la cuenta de prueba).
 
 ### Fase 6 (FINAL) — Software de gestión completo (frontend) ⏳
 
