@@ -97,6 +97,8 @@ describe('SetterService.openConversation', () => {
     await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'hola, una duda', mid: 'm-1', status: 'sent', dedupKey: null });
     expect(await service.openConversation(STRANGER_ID, TEXTS, 'k')).toMatchObject({ skipped: expect.stringContaining('ya está hablando') });
     expect(enqueue).not.toHaveBeenCalled();
+    // Caso real 2026-10-17 02:13: se omitió sin dejar rastro y no se sabía por qué → ahora queda registrado.
+    expect(store.events.some((e) => e.kind === 'setter' && e.note.includes('ya está hablando'))).toBe(true);
   });
 
   it('un "sí" que contestó el flujo no cuenta como estar hablando con el setter', async () => {

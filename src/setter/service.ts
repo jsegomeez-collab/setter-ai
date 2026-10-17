@@ -188,7 +188,11 @@ export class SetterService {
     const talking = (await this.options.store.listMessages(igId, HISTORY_LIMIT)).some(
       (m) => m.createdAt.getTime() >= since && ((m.direction === 'out' && m.source === 'ai') || (m.direction === 'in' && m.note !== FLOW_HANDLED_NOTE)),
     );
-    if (talking) return { skipped: 'Inicio del setter omitido: ya está hablando con el setter.' };
+    if (talking) {
+      const reason = 'Inicio del setter omitido: ya está hablando con el setter (escribió o la IA le respondió en las últimas 24 h).';
+      await this.log(reason, { igId });
+      return { skipped: reason };
+    }
     const text = texts[Math.min(texts.length - 1, Math.floor(this.random() * texts.length))] as string;
     await this.typeLikeHuman(igId, text);
     const sent = await this.send(igId, `opener:${key}`, text);
