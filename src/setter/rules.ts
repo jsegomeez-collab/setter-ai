@@ -44,6 +44,22 @@ const ASKS_FOR_AGENDA =
   /(p[aá]s|mand|env[ií]|reenv|dame|d[eé]jame|comparte).{0,25}(enlace|link|agenda|calendario)|d[oó]nde (reservo|agendo|me apunto|est[aá] (el|la))|(no (me )?(abre|funciona|carga|encuentro)).{0,25}(enlace|link|agenda)|(enlace|link) (otra vez|de nuevo)/i;
 const INVENTED_SLOTS = /(hay|tiene|quedan)\s+(\p{L}+\s+)?huecos|huecos\s+(entre\s+semana|por\s+la|disponibles|libres|esta\s+semana)/iu;
 
+/** Palabras de pregunta con tilde (sin tilde, "que"/"como" son otra cosa). "qué bien/bueno…" es exclamación, no pregunta. */
+const QUESTION_WORDS = /(?<![\p{L}])(qué|dónde|cuánt[oa]s?|cómo|cuál(es)?|quién(es)?|cuándo)(?![\p{L}])/giu;
+const EXCLAMATION = /qué\s+(bien|buen[oa]?|interesante|genial|lind[oa]|suerte|pena|ric[oa]|chévere|padre|gusto)/giu;
+
+/** Dos "?" en la respuesta, o dos palabras de pregunta en la misma pregunta ("¿a qué te dedicas, desde dónde trabajas?"). */
+function asksTwoThings(messages: readonly string[]): boolean {
+  const text = messages.join('\n');
+  const parts = text.split('?');
+  if (parts.length > 2) return true;
+  if (parts.length < 2) return false;
+  const before = parts[0] ?? '';
+  const start = Math.max(before.lastIndexOf('¿'), before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('\n')) + 1;
+  const question = before.slice(start).replace(EXCLAMATION, '');
+  return (question.match(QUESTION_WORDS) ?? []).length > 1;
+}
+
 function isDry(text: string): boolean {
   return text.trim().split(/\s+/).filter(Boolean).length <= DRY_MAX_WORDS;
 }
@@ -72,6 +88,9 @@ export function ruleIssues(messages: readonly string[], ctx: RuleContext): RuleI
     issues.push({ reason: 'Lleva 3 respuestas secas seguidas: no preguntes más, despídete en un mensajito corto y amable dejándole la puerta abierta' });
   }
   if (INVENTED_SLOTS.test(text)) issues.push({ reason: 'Dices qué huecos tiene la agenda, pero no lo sabes: no lo digas' });
+  if (asksTwoThings(messages)) {
+    issues.push({ reason: 'Preguntas dos cosas a la vez: haz UNA sola pregunta, sobre un solo tema, que salga de lo último que te contó' });
+  }
   if (messages.length > MAX_RULE_MESSAGES) issues.push({ reason: `Demasiados mensajitos (${messages.length}): usa 1 o 2, máximo ${MAX_RULE_MESSAGES}` });
   return issues;
 }

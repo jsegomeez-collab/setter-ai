@@ -64,6 +64,12 @@ describe('prompt del setter', () => {
     expect(prompt).toContain('No uses palabras con género');
   });
 
+  it('pregunta de una en una y siguiendo el hilo (prueba real de Jose del 17-10)', () => {
+    const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
+    expect(prompt).toContain('Una pregunta = un solo tema');
+    expect(prompt).toContain('la siguiente pregunta sale de lo último que te contó');
+  });
+
   it('no inventa cosas de la persona ni dice que estará en la llamada', () => {
     const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
     expect(prompt).toContain('No supongas nada de la persona que no te haya dicho');

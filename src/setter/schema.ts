@@ -10,7 +10,10 @@ const UNKNOWN = 'desconocido';
 export const LeadSchema = z.object({
   usa_ia: z.string().nullable().describe('Pregunta 1: si usa alguna IA y para qué, resumido con sus palabras. null si aún no lo ha dicho.'),
   gano_dinero: z.string().nullable().describe('Pregunta 2: si ya ganó dinero con IA o vendió algún servicio. null si aún no lo ha dicho.'),
-  dedicacion_ubicacion: z.string().nullable().describe('Pregunta 3: a qué se dedica y desde dónde trabaja. null si aún no lo ha dicho.'),
+  dedicacion_ubicacion: z
+    .string()
+    .nullable()
+    .describe('A qué se dedica y, si lo dijo, desde dónde trabaja (son dos cosas distintas: nunca las preguntes juntas). null si aún no lo ha dicho.'),
   objetivo_6_meses: z.string().nullable().describe('Pregunta 4: qué quiere conseguir con la IA en 6 meses. null si aún no lo ha dicho.'),
   puede_invertir: z.enum(['si', 'no', 'duda', UNKNOWN]).describe('Pregunta 5: si está en posición de invertir ahora.'),
   nivel: z.enum(['nivel_1', 'nivel_2', 'no_encaja', UNKNOWN]).describe('Nivel según el perfil ideal del documento.'),

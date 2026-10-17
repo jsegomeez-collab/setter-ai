@@ -60,6 +60,14 @@ describe('reglas de conversación en código (Haiku se las saltaba en las simula
     expect(reasons(['elige el hueco que te venga bien'], ctx())).toEqual([]);
   });
 
+  it('una pregunta = un solo tema (prueba real de Jose: "¿y a qué te dedicas hoy, desde dónde estás trabajando?")', () => {
+    expect(reasons(['¿y a qué te dedicas hoy, desde dónde estás trabajando?'], ctx())).toHaveLength(1);
+    expect(reasons(['a qué te dedicas?', 'y desde dónde trabajas?'], ctx())).toHaveLength(1);
+    expect(reasons(['qué bueno, y desde dónde trabajas?'], ctx())).toEqual([]);
+    expect(reasons(['entiendo.', '¿cómo lo estás buscando ahora?'], ctx())).toEqual([]);
+    expect(reasons(['¿qué has probado para conseguirlo?'], ctx())).toEqual([]);
+  });
+
   it('como mucho 3 mensajitos', () => {
     expect(reasons(['a', 'b', 'c', 'd'], ctx())).toHaveLength(1);
     expect(reasons(['a', 'b', 'c'], ctx())).toEqual([]);
