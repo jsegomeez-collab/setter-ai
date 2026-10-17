@@ -233,6 +233,33 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.listLeadHistory('keep-1', 50)).toHaveLength(1);
   });
 
+  it('BORRAR · segundo barrido: solo el rastro de la confirmación (por su clave y su message_id); lo demás sigue', async () => {
+    await store.claimAction('borrar:mb', 'send_message', { type: 'send_message', recipientId: 'tr-1', message: { text: 'Listo' } });
+    await store.finishAction('borrar:mb', true, { messageId: 'mid-conf' });
+    await store.addMessage({ igId: 'tr-1', direction: 'out', source: 'flow', text: 'Listo', mid: 'mid-conf', status: 'sent', dedupKey: 'borrar:mb' });
+    await store.logEvent('message', 'eco', { mid: 'mid-conf', recipientId: 'tr-1', isEcho: true });
+    await store.recordRequest(true, { entry: [{ messaging: [{ recipient: { id: 'tr-1' }, message: { mid: 'mid-conf', is_echo: true } }] }] });
+    // Actividad nueva de la persona tras el borrado: no se toca.
+    await store.recordComment({ commentId: 'tr-c', igId: 'tr-1', username: 't', mediaId: '7770010', text: '🔥' });
+    await store.logEvent('comment', 'nuevo', { kind: 'comment', fromId: 'tr-1', text: '🔥' });
+
+    await store.deleteDeletionTraces('tr-1', 'borrar:mb', 'mid-conf');
+
+    expect(await store.getAction('borrar:mb')).toBeNull();
+    expect(await store.listMessages('tr-1', 50)).toEqual([]);
+    const events = JSON.stringify(await store.recentEvents(500));
+    expect(events).not.toContain('mid-conf');
+    expect(events).toContain('"fromId":"tr-1"'); // el comentario nuevo sigue registrado
+    expect(await store.existingCommentIds(['tr-c'])).toEqual(new Set(['tr-c']));
+  });
+
+  it('BORRAR · huella del borrado (hash, no el id) durante 24 h', async () => {
+    expect(await store.deletedAt('hz-1')).toBeNull();
+    await store.markDeleted('hz-1');
+    expect(await store.deletedAt('hz-1')).toBeInstanceOf(Date);
+    expect(await store.deletedAt('hz-2')).toBeNull();
+  });
+
   it('Fase 4 · lista de conversaciones: la más reciente primero y con límite (el límite va en la consulta)', async () => {
     for (const id of ['lc-1', 'lc-2', 'lc-3']) {
       await store.addMessage({ igId: id, direction: 'in', source: 'user', text: `soy ${id}`, mid: `${id}-m`, status: 'sent', dedupKey: null });

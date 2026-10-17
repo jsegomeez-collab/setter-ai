@@ -2,6 +2,7 @@ import type { SetterConfig } from '../src/config.js';
 import type { Flow } from '../src/flows/types.js';
 import type { SetterOutput } from '../src/setter/schema.js';
 import {
+  deletionHash,
   SEND_ACTION_TYPES,
   type ActionRow,
   type CommentRecord,
@@ -42,6 +43,7 @@ export function createMemoryStore(): Store & {
   const comments: CommentRecord[] = [];
   const commentDates = new Map<string, Date>();
   const leadHistory: { igId: string; lead: unknown; createdAt: Date }[] = [];
+  const deleted = new Map<string, Date>();
   const jobs = new Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>();
   let nextJobId = 1;
   const requests: { signatureOk: boolean; payload: unknown }[] = [];
@@ -116,6 +118,22 @@ export function createMemoryStore(): Store & {
       counts.allowed_senders = drop(allowed, (id) => id === igId);
       counts.contacts = contacts.delete(igId) ? 1 : 0;
       return counts;
+    },
+    async deleteDeletionTraces(igId, dedupKey, messageId) {
+      actions.delete(dedupKey);
+      const isTrace = (m: MessageRow) => m.igId === igId && (m.dedupKey === dedupKey || (messageId !== null && m.mid === messageId));
+      messages.splice(0, messages.length, ...messages.filter((m) => !isTrace(m)));
+      const quoted = `"${igId}"`;
+      const isTraceEvent = (e: EventRow) => (e.kind === 'receipt' && JSON.stringify(e.data ?? null).includes(quoted)) || (messageId !== null && JSON.stringify(e.data ?? null).includes(messageId));
+      events.splice(0, events.length, ...events.filter((e) => !isTraceEvent(e)));
+      if (messageId) requests.splice(0, requests.length, ...requests.filter((r) => !JSON.stringify(r.payload ?? null).includes(messageId)));
+    },
+    async markDeleted(igId) {
+      deleted.set(deletionHash(igId), new Date());
+    },
+    async deletedAt(igId) {
+      const at = deleted.get(deletionHash(igId));
+      return at && at.getTime() >= Date.now() - 24 * 60 * 60 * 1000 ? at : null;
     },
     async pendingConversations(since) {
       const last = new Map<string, MessageRow>();

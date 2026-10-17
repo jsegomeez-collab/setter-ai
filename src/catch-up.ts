@@ -16,7 +16,7 @@ const MEDIA_TO_CHECK = 25;
 type CommentEvent = Extract<InstagramEvent, { kind: 'comment' }>;
 
 export interface CatchUpDeps {
-  readonly store: Pick<Store, 'existingCommentIds'>;
+  readonly store: Pick<Store, 'existingCommentIds' | 'deletedAt'>;
   readonly client: Pick<InstagramClient, 'getAccount' | 'listMedia' | 'listComments'>;
   /** El mismo procesamiento que un aviso de Meta (process.ts → processEvent). */
   readonly processEvent: (event: CommentEvent) => Promise<void>;
@@ -46,6 +46,9 @@ export async function catchUpComments(deps: CatchUpDeps, since: Date): Promise<C
       );
       const known = await store.existingCommentIds(recent.map((c) => c.id));
       for (const c of recent.filter((candidate) => !known.has(candidate.id))) {
+        // Quien pidió BORRAR: sus comentarios anteriores al borrado no se vuelven a atender (los posteriores sí).
+        const deletedAt = await store.deletedAt(c.fromId as string);
+        if (deletedAt && Date.parse(c.timestamp ?? '') < deletedAt.getTime()) continue;
         await processEvent({
           kind: 'comment',
           accountId: account.userId,

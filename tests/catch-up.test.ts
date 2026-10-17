@@ -64,6 +64,15 @@ describe('catchUpComments', () => {
     expect(result).toEqual({ media: 2, recovered: 2, failedMedia: 0 });
   });
 
+  it('se salta los comentarios de quien pidió BORRAR anteriores al borrado; los posteriores sí (actividad nueva)', async () => {
+    const { store, client, processEvent } = setup({
+      m1: [comment('antes', '2026-10-17T00:50:00+0000', '9'), comment('despues', '2026-10-17T01:10:00+0000', '9')],
+    });
+    store.deletedAt = vi.fn(async (igId: string) => (igId === '9' ? new Date('2026-10-17T01:00:00Z') : null));
+    await catchUpComments({ store, client, processEvent }, SINCE);
+    expect(processEvent.mock.calls.map(([event]) => event.commentId)).toEqual(['despues']);
+  });
+
   it('si falla un reel, sigue con los demás', async () => {
     const { store, client, processEvent } = setup({ m1: new Error('Meta caída'), m2: [comment('nuevo', '2026-10-17T00:50:00+0000')] });
     const result = await catchUpComments({ store, client, processEvent }, SINCE);

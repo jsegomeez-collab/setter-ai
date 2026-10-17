@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import postgres from 'postgres';
 import { flowSchema, type Flow } from './flows/types.js';
 import type { FunnelPersonRow } from './funnel.js';
@@ -25,6 +26,12 @@ export interface Store {
    * acciones y registros técnicos donde aparece su id). Todo o nada. Devuelve cuántas filas se borraron por tabla.
    */
   deletePersonData(igId: string): Promise<Readonly<Record<string, number>>>;
+  /** Segundo barrido de BORRAR: solo el rastro de la confirmación (su acción, su mensaje, su eco y avisos de "leído"). */
+  deleteDeletionTraces(igId: string, dedupKey: string, messageId: string | null): Promise<void>;
+  /** Huella del borrado: un hash del id (no el id) durante 24 h, para no volver a escribirle por comentarios anteriores. */
+  markDeleted(igId: string): Promise<void>;
+  /** Cuándo pidió BORRAR esa persona en las últimas 24 h (null si no). */
+  deletedAt(igId: string): Promise<Date | null>;
   /** Personas cuyo último mensaje es suyo (sin contestar) y es de después de `since`. */
   pendingConversations(since: Date): Promise<string[]>;
   getContact(igId: string): Promise<ContactRow | null>;
@@ -289,6 +296,11 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
 CREATE INDEX IF NOT EXISTS scheduled_jobs_pending_idx ON scheduled_jobs (status, run_at);
 -- Enlaces cortos en texto (17-10, sustituidos por el botón de agenda): la tabla se quita (llevaba ids de personas).
 DROP TABLE IF EXISTS short_links;
+-- Huella de quien pidió BORRAR (hash del id, nunca el id), 24 h: para no volver a escribirle por comentarios anteriores.
+CREATE TABLE IF NOT EXISTS deleted_people (
+  hash TEXT PRIMARY KEY,
+  deleted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS lead_history (
   id BIGSERIAL PRIMARY KEY,
   ig_id TEXT NOT NULL,
@@ -303,6 +315,11 @@ WHERE c.lead IS NOT NULL AND NOT EXISTS (SELECT 1 FROM lead_history h WHERE h.ig
 `;
 
 type Sql = ReturnType<typeof postgres>;
+
+/** Huella de un borrado: hash del id (no se guarda el id). */
+export function deletionHash(igId: string): string {
+  return createHash('sha256').update(`borrado:${igId}`).digest('hex');
+}
 
 /** Pasa el valor por JSON para guardarlo siempre como JSON válido (sin undefined ni tipos raros). */
 function toJson(sql: Sql, value: unknown) {
@@ -499,6 +516,26 @@ export async function createPostgresStore(
         counts.contacts = (await tx`DELETE FROM contacts WHERE ig_id = ${igId}`).count;
         return counts;
       });
+    },
+    async deleteDeletionTraces(igId, dedupKey, messageId) {
+      await sql.begin(async (tx) => {
+        await tx`DELETE FROM actions WHERE dedup_key = ${dedupKey}`;
+        await tx`DELETE FROM messages WHERE ig_id = ${igId} AND (dedup_key = ${dedupKey} OR (${messageId}::text IS NOT NULL AND mid = ${messageId}))`;
+        await tx`DELETE FROM event_log WHERE kind = 'receipt' AND data::text LIKE ${`%"${igId}"%`}`;
+        if (messageId) {
+          await tx`DELETE FROM event_log WHERE data::text LIKE ${`%${messageId}%`}`;
+          await tx`DELETE FROM webhook_requests WHERE payload::text LIKE ${`%${messageId}%`}`;
+        }
+      });
+    },
+    async markDeleted(igId) {
+      await sql`DELETE FROM deleted_people WHERE deleted_at < now() - interval '24 hours'`;
+      await sql`INSERT INTO deleted_people (hash) VALUES (${deletionHash(igId)}) ON CONFLICT (hash) DO UPDATE SET deleted_at = now()`;
+    },
+    async deletedAt(igId) {
+      const rows = await sql<{ deleted_at: Date }[]>`
+        SELECT deleted_at FROM deleted_people WHERE hash = ${deletionHash(igId)} AND deleted_at >= now() - interval '24 hours'`;
+      return rows[0]?.deleted_at ?? null;
     },
     async pendingConversations(since) {
       const rows = await sql<{ ig_id: string }[]>`

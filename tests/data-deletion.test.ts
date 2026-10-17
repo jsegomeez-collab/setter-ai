@@ -58,15 +58,39 @@ describe('process.ts: BORRAR por DM', () => {
     expect(JSON.stringify(store.events.filter((e) => e.kind === 'borrado'))).not.toContain(STRANGER_ID);
   });
 
-  it('al minuto hace un segundo barrido (borra también el rastro técnico de la propia confirmación)', async () => {
+  it('al minuto hace un segundo barrido SOLO del rastro de la confirmación (su envío y su eco)', async () => {
     const { store, sender, deps, timers } = setup();
-    const spy = vi.spyOn(store, 'deletePersonData');
+    const full = vi.spyOn(store, 'deletePersonData');
+    const traces = vi.spyOn(store, 'deleteDeletionTraces');
     await processWebhook(messagePayload('borrar', { mid: 'm-borrar' }), deps);
     await sender.idle();
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(full).toHaveBeenCalledTimes(1);
     expect(timers).toHaveLength(1);
     timers[0]?.();
-    await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(traces).toHaveBeenCalledWith(STRANGER_ID, 'borrar:m-borrar', 'm2'));
+    expect(full).toHaveBeenCalledTimes(1); // no se repite el borrado completo
+  });
+
+  it('el segundo barrido NO borra lo que la persona hace después de pedir el borrado (caso real 02:16-02:18)', async () => {
+    const { store, sender, deps, timers } = setup();
+    await processWebhook(messagePayload('BORRAR', { mid: 'm-borrar' }), deps);
+    await sender.idle();
+    await processWebhook(commentPayload({ id: 'c-nuevo' }), deps); // comenta otra vez a los pocos segundos
+    await sender.idle();
+    timers[0]?.();
+    await vi.waitFor(async () => expect(await store.getAction('borrar:m-borrar')).toBeNull());
+    // Lo nuevo sigue: su contacto, su comentario y su DM (para no volver a mandárselo).
+    expect(await store.getContact(STRANGER_ID)).not.toBeNull();
+    expect(await store.existingCommentIds(['c-nuevo'])).toEqual(new Set(['c-nuevo']));
+    expect(await store.getAction('private:c-nuevo')).not.toBeNull();
+  });
+
+  it('apunta una huella (hash) del borrado, sin su id, para no volver a escribirle por comentarios anteriores', async () => {
+    const { store, sender, deps } = setup();
+    await processWebhook(messagePayload('BORRAR', { mid: 'm-borrar' }), deps);
+    await sender.idle();
+    expect(await store.deletedAt(STRANGER_ID)).toBeInstanceOf(Date);
+    expect(await store.deletedAt('otra-persona')).toBeNull();
   });
 
   it('un mensaje normal que contiene "borrar" sigue yendo al setter', async () => {
