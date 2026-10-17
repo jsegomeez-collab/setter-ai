@@ -1,4 +1,5 @@
 import { planComment, planPostback, type Plan } from './flows/engine.js';
+import { handleDeleteRequest, isDeleteRequest } from './data-deletion.js';
 import { planDmRescue } from './flows/dm-rescue.js';
 import { planTextReply } from './flows/text-reply.js';
 import { MetaApiError } from './meta/client.js';
@@ -16,6 +17,8 @@ export interface ProcessDeps {
   readonly setter?: Pick<SetterService, 'onIncoming' | 'record'>;
   /** Ecos de lo que sale de la cuenta: si no es nuestro, Jose escribió a mano y la IA se para. */
   readonly echoes?: Pick<EchoWatcher, 'onEcho'>;
+  /** Para el segundo barrido del borrado (pruebas). Por defecto setTimeout. */
+  readonly setTimer?: (fn: () => void, ms: number) => unknown;
 }
 
 function describeError(error: unknown): Record<string, unknown> {
@@ -81,6 +84,11 @@ async function routeMessage(event: InstagramEvent, deps: ProcessDeps): Promise<v
 }
 
 async function handleEvent(event: InstagramEvent, deps: ProcessDeps): Promise<void> {
+  // "BORRAR" va antes que nada: no se guarda, no responde el setter y se borra todo lo de esa persona.
+  if (event.kind === 'message' && !event.isEcho && event.senderId !== event.accountId && isDeleteRequest(event.text)) {
+    await handleDeleteRequest(event, deps);
+    return;
+  }
   await touchContact(event, deps.store);
   const plan = await planFor(event, deps);
   if (!plan) {

@@ -72,6 +72,36 @@ export function createMemoryStore(): Store & {
         if (m.dedupKey === dedupKey) messages[i] = { ...m, status, mid: mid ?? m.mid };
       });
     },
+    async deletePersonData(igId) {
+      // Misma lógica que el SQL de store.ts (Postgres), en memoria.
+      const commentIds = comments.filter((c) => c.igId === igId).map((c) => c.commentId);
+      const quoted = `"${igId}"`;
+      const req = (a: { request: unknown }) => (a.request ?? {}) as { recipientId?: string; commentId?: string; message?: { recipientId?: string } };
+      const counts: Record<string, number> = {};
+      const drop = <T>(list: T[], test: (item: T) => boolean) => {
+        const before = list.length;
+        const kept = list.filter((item) => !test(item));
+        list.splice(0, list.length, ...kept);
+        return before - kept.length;
+      };
+      const doomed = [...actions.values()].filter((a) => {
+        const r = req(a);
+        return r.recipientId === igId || r.message?.recipientId === igId || commentIds.includes(r.commentId ?? '') || a.dedupKey.startsWith('once:') && (a.dedupKey.endsWith(`:${igId}`) || a.dedupKey.includes(`:${igId}:`));
+      });
+      doomed.forEach((a) => actions.delete(a.dedupKey));
+      counts.actions = doomed.length;
+      const doomedJobs = [...jobs.entries()].filter(([, job]) => (job.payload as { recipientId?: unknown } | null)?.recipientId === igId);
+      doomedJobs.forEach(([id]) => jobs.delete(id));
+      counts.scheduled_jobs = doomedJobs.length;
+      counts.event_log = drop(events, (e) => JSON.stringify(e.data ?? null).includes(quoted));
+      counts.webhook_requests = drop(requests, (r) => JSON.stringify(r.payload ?? null).includes(quoted));
+      counts.comments = drop(comments, (c) => c.igId === igId);
+      counts.messages = drop(messages, (m) => m.igId === igId);
+      counts.lead_history = drop(leadHistory, (h) => h.igId === igId);
+      counts.allowed_senders = drop(allowed, (id) => id === igId);
+      counts.contacts = contacts.delete(igId) ? 1 : 0;
+      return counts;
+    },
     async pendingConversations(since) {
       const last = new Map<string, MessageRow>();
       for (const m of messages) last.set(m.igId, m);

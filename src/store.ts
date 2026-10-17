@@ -20,6 +20,11 @@ export interface Store {
   setMessageStatus(dedupKey: string, status: MessageStatus, mid?: string | null): Promise<void>;
   listMessages(igId: string, limit: number): Promise<MessageRow[]>;
   listConversations(limit: number): Promise<ConversationRow[]>;
+  /**
+   * "BORRAR": borra todo lo de esa persona (contacto, ficha, historial, mensajes, comentarios, pausas pendientes,
+   * acciones y registros técnicos donde aparece su id). Todo o nada. Devuelve cuántas filas se borraron por tabla.
+   */
+  deletePersonData(igId: string): Promise<Readonly<Record<string, number>>>;
   /** Personas cuyo último mensaje es suyo (sin contestar) y es de después de `since`. */
   pendingConversations(since: Date): Promise<string[]>;
   getContact(igId: string): Promise<ContactRow | null>;
@@ -449,6 +454,29 @@ export async function createPostgresStore(
         SELECT prev AS "from", step AS "to", count(*)::int AS n FROM h
         WHERE prev IS NOT NULL AND step IS NOT NULL AND prev <> step GROUP BY 1, 2 ORDER BY n DESC, 1, 2`;
       return { stages: [...stages], transitions: [...transitions] };
+    },
+    async deletePersonData(igId) {
+      return sql.begin(async (tx) => {
+        const comments = await tx<{ comment_id: string }[]>`SELECT comment_id FROM comments WHERE ig_id = ${igId}`;
+        const commentIds = sql.array(comments.map((row) => row.comment_id));
+        // En los JSON los ids van entre comillas: buscar "<id>" evita tocar otros ids que lo contengan.
+        const quoted = `%"${igId}"%`;
+        const counts: Record<string, number> = {};
+        counts.actions = (
+          await tx`DELETE FROM actions WHERE request->>'recipientId' = ${igId} OR request->'message'->>'recipientId' = ${igId}
+            OR request->>'commentId' = ANY(${commentIds}::text[])
+            OR dedup_key LIKE ${`once:%:${igId}`} OR dedup_key LIKE ${`once:%:${igId}:%`}`
+        ).count;
+        counts.scheduled_jobs = (await tx`DELETE FROM scheduled_jobs WHERE payload->>'recipientId' = ${igId}`).count;
+        counts.event_log = (await tx`DELETE FROM event_log WHERE data::text LIKE ${quoted}`).count;
+        counts.webhook_requests = (await tx`DELETE FROM webhook_requests WHERE payload::text LIKE ${quoted}`).count;
+        counts.comments = (await tx`DELETE FROM comments WHERE ig_id = ${igId}`).count;
+        counts.messages = (await tx`DELETE FROM messages WHERE ig_id = ${igId}`).count;
+        counts.lead_history = (await tx`DELETE FROM lead_history WHERE ig_id = ${igId}`).count;
+        counts.allowed_senders = (await tx`DELETE FROM allowed_senders WHERE ig_id = ${igId}`).count;
+        counts.contacts = (await tx`DELETE FROM contacts WHERE ig_id = ${igId}`).count;
+        return counts;
+      });
     },
     async pendingConversations(since) {
       const rows = await sql<{ ig_id: string }[]>`

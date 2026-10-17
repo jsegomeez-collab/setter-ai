@@ -177,6 +177,41 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
   });
 
+  it('BORRAR · borra todo lo de una persona (personal + registros técnicos) y nada de otra', async () => {
+    const seed = async (igId: string, commentId: string) => {
+      await store.touchContact(igId, `u-${igId}`, '7770001');
+      await store.recordComment({ commentId, igId, username: `u-${igId}`, mediaId: '7770001', text: 'Bolsa' });
+      await store.addMessage({ igId, direction: 'in', source: 'user', text: `soy ${igId}`, mid: `${igId}-m`, status: 'sent', dedupKey: null });
+      await store.saveLead(igId, { siguiente_paso: 'seguir_calificando' });
+      await store.claimAction(`private:${commentId}`, 'private_reply', { type: 'private_reply', commentId, message: { recipientId: igId } });
+      await store.claimAction(`reply-fail:${commentId}`, 'reply_comment', { type: 'reply_comment', commentId });
+      await store.claimAction(`once:manychat:${igId}:7770001`, 'once', { flowId: 'manychat', commentId });
+      await store.claimAction(`pb:${igId}-x:sigue`, 'check_follow', { type: 'check_follow', recipientId: igId });
+      await store.logEvent('comment', 'comentario', { kind: 'comment', fromId: igId, text: 'Bolsa' });
+      await store.recordRequest(true, { entry: [{ messaging: [{ sender: { id: igId }, message: { text: `soy ${igId}` } }] }] });
+      await store.scheduleJob(`job-${igId}`, new Date(Date.now() + 60_000), { flowId: 'manychat', nodeId: 'grupo', recipientId: igId, dedupKey: 'x', depth: 1 });
+    };
+    await seed('del-1', 'dc-1');
+    await seed('keep-1', 'kc-1');
+
+    const counts = await store.deletePersonData('del-1');
+
+    expect(counts).toMatchObject({ contacts: 1, comments: 1, messages: 1, lead_history: 1, scheduled_jobs: 1 });
+    expect(counts.actions).toBe(4);
+    expect(counts.event_log).toBeGreaterThanOrEqual(1);
+    expect(counts.webhook_requests).toBeGreaterThanOrEqual(1);
+    expect(await store.getContact('del-1')).toBeNull();
+    expect(await store.listMessages('del-1', 50)).toEqual([]);
+    expect(await store.getAction('private:dc-1')).toBeNull();
+    expect(await store.getAction('reply-fail:dc-1')).toBeNull();
+    expect(JSON.stringify(await store.recentEvents(500))).not.toContain('"del-1"');
+    // La otra persona sigue intacta.
+    expect(await store.getContact('keep-1')).not.toBeNull();
+    expect(await store.listMessages('keep-1', 50)).toHaveLength(1);
+    expect(await store.getAction('private:kc-1')).not.toBeNull();
+    expect(await store.listLeadHistory('keep-1', 50)).toHaveLength(1);
+  });
+
   it('Fase 4 · lista de conversaciones: la más reciente primero y con límite (el límite va en la consulta)', async () => {
     for (const id of ['lc-1', 'lc-2', 'lc-3']) {
       await store.addMessage({ igId: id, direction: 'in', source: 'user', text: `soy ${id}`, mid: `${id}-m`, status: 'sent', dedupKey: null });

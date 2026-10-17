@@ -182,7 +182,15 @@ Progreso:
   - Precios oficiales (tabla del SDK, 2026-10-06): Sonnet 5.5 $2/$10 por millón (entrada/salida); Haiku 5.5 $0,10/$0,50; Batch API al 50 %. Estimación sin medir: ~0,08 $ por 100 conversaciones con Sonnet en Batch.
   - Propuesta: "tipo de tráfico por reel" = suma de las fichas (sin IA, gratis); la IA solo para dolores, lenguaje e ideas de reels.
   - **Bloqueo:** con el setter en modo prueba no hay conversaciones de cualificación reales → no se puede probar con datos reales hasta que el setter sea público (y eso espera a que Jose pula el marketing).
-- [ ] 4. Pendientes técnicos.
+- [ ] 4. Pendientes técnicos (Jose: los 7, en este orden).
+  - [x] 4.1 DMs sin respuesta tras un reinicio: al arrancar se contestan las conversaciones de la última hora que esperan respuesta; al apagarse (SIGTERM) se contesta ya lo que esperaba los 8 s.
+  - [x] 4.2 BORRAR por DM (Jose: todo lo de esa persona, también el texto en los registros técnicos; confirmación "Listo, he borrado tus datos de nuestro sistema 🙏 Si vuelves a escribir o comentar, empezaremos de cero."). Solo la palabra BORRAR. Segundo barrido al minuto (rastro del eco de la confirmación). Lo que queda del borrado en el registro no lleva su id.
+  - [x] 4.3 Al reanudar la IA se contesta lo pendiente. Los "sí"/rescates que contesta el flujo quedan marcados y el setter no los responde.
+  - [x] 4.4 `listConversations` ordena y limita en SQL.
+  - [ ] 4.5 Comentarios perdidos al desplegar (502).
+  - [ ] 4.6 Aprobar borradores desde el panel.
+  - [ ] 4.7 BD definitiva / consumo de Neon (con Jose).
+  - 328 pruebas. Sin probar con datos reales: BORRAR (necesita que Jose lo pruebe) y el reinicio con un DM a medias.
 
 Lista original (referencia):
 - **Ficha por lead** (extraída por IA de cada conversación): ~~tiene negocio, tipo/nicho, facturación aproximada, problema principal,~~ objeciones, interés, etapa, resumen, reel de origen. (Sustituida por la ficha actual, decisión 2026-10-17.)
