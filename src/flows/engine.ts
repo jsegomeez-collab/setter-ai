@@ -42,6 +42,13 @@ export type Action =
       readonly depth: number;
     }
   | {
+      /** Inicio del setter (Fase 5.4): la IA escribe primero uno de estos textos, si sus reglas lo permiten. */
+      readonly type: 'setter_opener';
+      readonly dedupKey: string;
+      readonly recipientId: string;
+      readonly texts: readonly string[];
+    }
+  | {
       /** Pausa: dentro de `delaySeconds`, ejecutar el nodo `nodeId` para esta persona. */
       readonly type: 'schedule';
       readonly dedupKey: string;
@@ -175,6 +182,8 @@ export function planNode(flow: Flow, nodeId: string, recipientId: string, dedupB
       return [{ type: 'check_follow', dedupKey, recipientId, flowId: flow.id, nodeId: node.id, depth }];
     case 'delay':
       return [{ type: 'schedule', dedupKey, recipientId, flowId: flow.id, nodeId: node.next, delaySeconds: node.seconds, depth: depth + 1 }];
+    case 'setter_opener':
+      return [{ type: 'setter_opener', dedupKey, recipientId, texts: node.texts }];
   }
 }
 

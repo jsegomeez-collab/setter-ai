@@ -34,6 +34,8 @@ export interface SenderOptions {
   readonly delays: SendDelays;
   /** Firma de enlaces con seguimiento. null = los botones llevan la URL real (sin registrar clics ni etiquetas). */
   readonly linkSigner?: LinkSigner | null;
+  /** Inicio del setter (SetterService.openConversation). Sin él, el paso se omite. */
+  readonly openSetter?: (recipientId: string, texts: readonly string[], dedupKey: string) => Promise<unknown>;
   /** Programa una pausa (Scheduler.add). */
   readonly schedule?: (payload: JobPayload, delaySeconds: number) => Promise<boolean>;
   /** Cada cuánto se vuelve a mirar si ya hay hueco (límite por hora o pausa). */
@@ -246,6 +248,8 @@ export class Sender {
         return this.checkFollow(action, client);
       case 'schedule':
         return this.schedule(action);
+      case 'setter_opener':
+        return this.openSetter(action);
     }
   }
 
@@ -286,6 +290,16 @@ export class Sender {
         throw fallbackError;
       }
     }
+  }
+
+  private openSetter(action: Extract<Action, { type: 'setter_opener' }>): unknown {
+    const { openSetter } = this.options;
+    if (!openSetter) return { skipped: 'Setter sin conectar' };
+    // No se espera: el setter envía por esta misma cola y esperarle aquí la bloquearía (igual que checkFollow).
+    void openSetter(action.recipientId, action.texts, action.dedupKey).catch((error: unknown) =>
+      this.options.store.logEvent('error', 'Fallo en el inicio del setter.', { message: error instanceof Error ? error.message : String(error) }).catch(() => undefined),
+    );
+    return { started: true };
   }
 
   private async checkFollow(action: Extract<Action, { type: 'check_follow' }>, client: InstagramClient): Promise<unknown> {

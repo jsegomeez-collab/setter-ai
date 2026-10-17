@@ -26,6 +26,7 @@ export const DRAFT_NOTE = 'Modo borrador: pendiente de aprobar';
 const META_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type DraftResult = { readonly ok: true; readonly sent: number } | { readonly ok: false; readonly reason: string };
+export type OpenResult = { readonly sent: boolean } | { readonly skipped: string };
 export type DiscardResult = { readonly ok: true; readonly discarded: number } | { readonly ok: false; readonly reason: string };
 
 /** El borrador pendiente: los mensajitos retenidos en modo borrador después del último mensaje de la persona. */
@@ -165,6 +166,34 @@ export class SetterService {
     const run = (this.chains.get(igId) ?? Promise.resolve()).then(() => this.sendDraft(igId));
     this.chains.set(igId, run.then(() => undefined, () => undefined));
     return run;
+  }
+
+  /**
+   * Inicio del setter (paso del flujo, Fase 5.4): la IA escribe primero uno de los textos fijos que aprobó Jose
+   * (sin gastar en Claude). Mismas reglas que siempre y nunca a quien ya está hablando con el setter. Va en fila.
+   */
+  openConversation(igId: string, texts: readonly string[], key: string): Promise<OpenResult> {
+    const run = (this.chains.get(igId) ?? Promise.resolve()).then(() => this.open(igId, texts, key));
+    this.chains.set(igId, run.then(() => undefined, () => undefined));
+    return run;
+  }
+
+  private async open(igId: string, texts: readonly string[], key: string): Promise<OpenResult> {
+    const blocked = await this.blockedReason(igId);
+    if (blocked) {
+      if (blocked !== 'off') await this.log(`Inicio del setter omitido: ${blocked}`, { igId });
+      return { skipped: blocked === 'off' ? 'Setter apagado.' : blocked };
+    }
+    const since = Date.now() - META_REPLY_WINDOW_MS;
+    const talking = (await this.options.store.listMessages(igId, HISTORY_LIMIT)).some(
+      (m) => m.createdAt.getTime() >= since && ((m.direction === 'out' && m.source === 'ai') || (m.direction === 'in' && m.note !== FLOW_HANDLED_NOTE)),
+    );
+    if (talking) return { skipped: 'Inicio del setter omitido: ya está hablando con el setter.' };
+    const text = texts[Math.min(texts.length - 1, Math.floor(this.random() * texts.length))] as string;
+    await this.typeLikeHuman(igId, text);
+    const sent = await this.send(igId, `opener:${key}`, text);
+    await this.log(sent ? 'Inicio del setter enviado.' : 'Inicio del setter: Instagram no lo aceptó.', { igId });
+    return { sent };
   }
 
   /** Jose descarta el borrador: no se envía. */

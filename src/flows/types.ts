@@ -8,6 +8,7 @@ import { z } from 'zod';
  *  - message:     texto + hasta 3 botones (enlace o acción) + "siguiente paso" automático opcional.
  *  - follow_gate: condición "¿me sigue?" con tres salidas (sí / no / no se sabe).
  *  - delay:       pausa (p. ej. 2 minutos) y luego el siguiente paso.
+ *  - setter_opener: la IA empieza la conversación con un texto de inicio (Fase 5.4).
  */
 
 export const MAX_BUTTONS = 3; // Límite de Meta para el button template.
@@ -57,7 +58,17 @@ export const delayNodeSchema = z.object({
   next: id,
 });
 
-export const nodeSchema = z.discriminatedUnion('type', [messageNodeSchema, followGateNodeSchema, delayNodeSchema]);
+/**
+ * Inicio del setter IA (Fase 5.4): la IA escribe primero uno de estos textos (al azar) y a partir de ahí conversa.
+ * Va al final del flujo (sin siguiente paso). El setter comprueba antes sus reglas (modo, pausa, si ya están hablando).
+ */
+export const setterOpenerNodeSchema = z.object({
+  id,
+  type: z.literal('setter_opener'),
+  texts: z.array(z.string().trim().min(1).max(MAX_PLAIN_TEXT)).min(1).max(20),
+});
+
+export const nodeSchema = z.discriminatedUnion('type', [messageNodeSchema, followGateNodeSchema, delayNodeSchema, setterOpenerNodeSchema]);
 
 type NodeShape = z.infer<typeof nodeSchema>;
 
@@ -142,7 +153,7 @@ export const flowSchema = z
         mustExist(node.ifFollowing, `Condición ${node.id} (sí sigue)`);
         mustExist(node.ifNotFollowing, `Condición ${node.id} (no sigue)`);
         mustExist(node.ifUnknown, `Condición ${node.id} (no se sabe)`);
-      } else {
+      } else if (node.type === 'delay') {
         mustExist(node.next, `Pausa ${node.id}`);
       }
     }

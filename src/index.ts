@@ -37,6 +37,7 @@ async function main(): Promise<void> {
 
   // El programador avisa al emisor cuando vence una pausa; el emisor programa pausas en el programador.
   let sender: Sender | null = null;
+  let setterRef: SetterService | null = null;
   const scheduler = new Scheduler({ store, onDue: (payload) => (sender ? sender.continueFlow(payload) : Promise.resolve({ skipped: 'sin emisor' })) });
   sender = new Sender(
     {
@@ -46,6 +47,9 @@ async function main(): Promise<void> {
       delays: config.delays,
       linkSigner,
       schedule: (payload, delaySeconds) => scheduler.add(payload, delaySeconds),
+      // El setter se crea después (necesita el emisor): se enlaza en cuanto existe.
+      openSetter: (recipientId, texts, dedupKey) =>
+        setterRef ? setterRef.openConversation(recipientId, texts, dedupKey) : Promise.resolve({ skipped: 'Setter sin arrancar' }),
     },
     async (flowId) => (await store.listFlows()).find((flow) => flow.id === flowId),
   );
@@ -69,6 +73,7 @@ async function main(): Promise<void> {
     getUsername: async (igId) => (client ? client.getUsername(igId) : null),
     showTyping: client ? (igId) => client.sendTypingOn(igId) : undefined,
   });
+  setterRef = setter;
   const echoes = new EchoWatcher({ store });
   // Si el servidor se reinició durante la espera de 8 s, esos DMs quedaron sin respuesta: se contestan ahora.
   const pendingReplies = await setter.resumePending(new Date(Date.now() - PENDING_REPLY_WINDOW_MS));
