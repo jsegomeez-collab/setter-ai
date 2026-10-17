@@ -4,6 +4,7 @@ import type { InstagramEvent } from '../meta/parse.js';
 import { SETTINGS, type MessageRow, type Store } from '../store.js';
 import type { SetterBrain } from './brain.js';
 import { decideChecked, type CheckedReply } from './reply.js';
+import { AGENDA_BUTTON_TITLE } from './rules.js';
 import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks } from './prompt.js';
 
 /**
@@ -62,7 +63,7 @@ export interface SetterServiceOptions {
  * con el enlace en texto (508/2534122 "Link can't be shared") mientras los botones con enlace salían bien.
  * El botón pasa por el seguimiento de siempre (clic + etiqueta "agenda").
  */
-const AGENDA_BUTTON_TITLE = 'Agendar llamada';
+
 const MEMBERSHIP_BUTTON_TITLE = 'Ver membresía';
 const AGENDA_ONLY_TEXT = 'Aquí puedes elegir el hueco que mejor te venga 👇';
 const MEMBERSHIP_ONLY_TEXT = 'Aquí tienes la membresía 👇';
@@ -270,7 +271,7 @@ export class SetterService {
     const dedupKey = `ai:${last.mid ?? last.id}`;
     const turns = toClaudeTurns(history);
     const system = buildSystemPrompt(knowledge.text, links, turns.earlyAccountMessages);
-    const result = await decideChecked(brain, system, turns.messages, { urls: [links.agenda, links.membership], emails: [links.contactEmail] });
+    const result = await decideChecked(brain, system, turns.messages, { urls: [links.agenda, links.membership], emails: [links.contactEmail] }, links);
     if (result.kind !== 'ok') {
       return this.stop(igId, `${result.kind === 'refusal' ? 'Claude rechazó responder' : 'Fallo al llamar a Claude'}: ${result.detail}`);
     }

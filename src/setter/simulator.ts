@@ -92,7 +92,7 @@ async function simulate(deps: SimulatorDeps, scenario: Pick<Scenario, 'persona' 
   for (let turn = 0; turn < (deps.maxTurns ?? MAX_SIM_TURNS); turn += 1) {
     if (incoming === null) return { turns, lead, endReason: 'El lead dio la conversación por terminada', stopped: false, usage };
     turns.push({ who: 'lead', texts: [incoming] });
-    const result = await decideChecked(deps.brain, system, setterView(turns), { urls: [deps.links.agenda, deps.links.membership], emails: [deps.links.contactEmail] });
+    const result = await decideChecked(deps.brain, system, setterView(turns), { urls: [deps.links.agenda, deps.links.membership], emails: [deps.links.contactEmail] }, deps.links);
     if (result.kind !== 'ok') {
       turns.push({ who: 'setter', texts: [], note: result.detail });
       return { turns, lead, endReason: `${result.kind === 'refusal' ? 'Claude rechazó' : 'Fallo de Claude'} → la IA se para`, stopped: true, usage };
