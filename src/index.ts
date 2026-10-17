@@ -5,7 +5,8 @@ import { loadConfig } from './config.js';
 import { deriveLinkSecret } from './links.js';
 import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
-import { processInBackground, rescueComments } from './process.js';
+import { catchUpComments } from './catch-up.js';
+import { processEvent, processInBackground, rescueComments } from './process.js';
 import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { ClaudeBrain } from './setter/brain.js';
@@ -18,6 +19,9 @@ const TOKEN_CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const FIRST_TOKEN_CHECK_MS = 60 * 1000;
 /** Al arrancar se contestan los DMs sin respuesta de la última hora (más antiguos ya no parecen una conversación viva). */
 const PENDING_REPLY_WINDOW_MS = 60 * 60 * 1000;
+/** Recuperar comentarios: 2 min tras arrancar (la versión anterior ya se apagó) mirando los 15 min anteriores al arranque. */
+const CATCH_UP_DELAY_MS = 2 * 60 * 1000;
+const CATCH_UP_WINDOW_MS = 15 * 60 * 1000;
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -68,6 +72,22 @@ async function main(): Promise<void> {
   // Si el servidor se reinició durante la espera de 8 s, esos DMs quedaron sin respuesta: se contestan ahora.
   const pendingReplies = await setter.resumePending(new Date(Date.now() - PENDING_REPLY_WINDOW_MS));
   if (pendingReplies > 0) await store.logEvent('setter', `Al arrancar: ${pendingReplies} conversación(es) esperaban respuesta; se revisan ahora.`, null);
+  const processDeps = { store, sender: activeSender, setter, echoes };
+
+  // Comentarios que Meta avisó durante el cambio de versión (502) y no nos llegaron. Se espera a que la versión
+  // anterior se haya apagado (Render la para 60 s después del cambio) y se miran los 15 min anteriores al arranque.
+  const startedAt = Date.now();
+  const catchUp = client
+    ? setTimeout(() => {
+        catchUpComments({ store, client, processEvent: (event) => processEvent(event, processDeps) }, new Date(startedAt - CATCH_UP_WINDOW_MS))
+          .then((result) =>
+            store.logEvent('recuperacion', `Tras arrancar: ${result.recovered} comentario(s) recuperado(s); reels revisados ${result.media}, con error ${result.failedMedia}.`, result),
+          )
+          .catch((error: unknown) =>
+            store.logEvent('error', 'Fallo recuperando comentarios tras arrancar.', { message: error instanceof Error ? error.message : String(error) }).catch(() => undefined),
+          );
+      }, CATCH_UP_DELAY_MS)
+    : null;
 
   const app = createApp({
     config,
@@ -75,7 +95,7 @@ async function main(): Promise<void> {
     client,
     tokens,
     linkSecret: linkSigner ? linkSecret : null,
-    processPayload: (payload) => processInBackground(payload, { store, sender: activeSender, setter, echoes }),
+    processPayload: (payload) => processInBackground(payload, processDeps),
     rescue: (since) => rescueComments(since, { store, sender: activeSender }),
     replyPending: (igId) => setter.replyNow(igId),
     simulator,
@@ -96,6 +116,7 @@ async function main(): Promise<void> {
 
   const shutdown = () => {
     clearTimeout(firstCheck);
+    if (catchUp) clearTimeout(catchUp);
     clearInterval(periodicCheck);
     scheduler.stop();
     server.close();

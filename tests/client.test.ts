@@ -44,6 +44,22 @@ describe('InstagramClient', () => {
     expect(lastCall(sub)[0]).toContain('subscribed_fields=comments,messages');
   });
 
+  it('lee los comentarios principales de un reel con su autor (doc: /<media>/comments, más nuevos primero, máx. 50)', async () => {
+    const fetchFn = fetchReturning(200, {
+      data: [
+        { id: 'c2', text: 'Bolsa', timestamp: '2026-10-17T00:50:00+0000', from: { id: '9', username: 'ana' } },
+        { id: 'c1', text: 'hola', timestamp: '2026-10-17T00:40:00+0000', from: { id: '8' }, parent_id: 'c0' },
+        { text: 'sin id' },
+      ],
+    });
+    const comments = await new InstagramClient('t', 'v25.0', fetchFn).listComments('m1');
+    expect(lastCall(fetchFn)[0]).toBe('https://graph.instagram.com/v25.0/m1/comments?fields=id,text,timestamp,from,parent_id&limit=50');
+    expect(comments).toEqual([
+      { id: 'c2', text: 'Bolsa', timestamp: '2026-10-17T00:50:00+0000', fromId: '9', fromUsername: 'ana', parentId: null },
+      { id: 'c1', text: 'hola', timestamp: '2026-10-17T00:40:00+0000', fromId: '8', fromUsername: null, parentId: 'c0' },
+    ]);
+  });
+
   it('getFollowStatus: sí / no / no se sabe (falta de consentimiento) / error de servidor', async () => {
     const yes = await new InstagramClient('t', 'v25.0', fetchReturning(200, { is_user_follow_business: true })).getFollowStatus('9');
     const no = await new InstagramClient('t', 'v25.0', fetchReturning(200, { is_user_follow_business: false })).getFollowStatus('9');

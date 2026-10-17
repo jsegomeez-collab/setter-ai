@@ -72,6 +72,9 @@ export function createMemoryStore(): Store & {
         if (m.dedupKey === dedupKey) messages[i] = { ...m, status, mid: mid ?? m.mid };
       });
     },
+    async existingCommentIds(commentIds) {
+      return new Set(comments.map((c) => c.commentId).filter((id) => commentIds.includes(id)));
+    },
     async deletePersonData(igId) {
       // Misma lógica que el SQL de store.ts (Postgres), en memoria.
       const commentIds = comments.filter((c) => c.igId === igId).map((c) => c.commentId);

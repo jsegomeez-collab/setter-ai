@@ -177,6 +177,12 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
   });
 
+  it('Fase 4 · de una lista de comentarios, cuáles ya tenemos guardados', async () => {
+    await store.recordComment({ commentId: 'ex-1', igId: 'e1', username: 'e', mediaId: '7770009', text: 'x' });
+    expect(await store.existingCommentIds(['ex-1', 'ex-2'])).toEqual(new Set(['ex-1']));
+    expect(await store.existingCommentIds([])).toEqual(new Set());
+  });
+
   it('BORRAR · borra todo lo de una persona (personal + registros técnicos) y nada de otra', async () => {
     const seed = async (igId: string, commentId: string) => {
       await store.touchContact(igId, `u-${igId}`, '7770001');

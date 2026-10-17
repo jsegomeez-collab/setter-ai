@@ -45,6 +45,8 @@ export interface Store {
   listKnowledgeVersions(limit: number): Promise<KnowledgeRow[]>;
   /** Comentarios registrados desde una fecha que NO recibieron respuesta privada (para rescatarlos). */
   unansweredCommentEvents(since: Date): Promise<unknown[]>;
+  /** De estos comentarios, cuáles ya tenemos guardados (para recuperar solo los que no nos llegaron). */
+  existingCommentIds(commentIds: readonly string[]): Promise<Set<string>>;
   /** Guarda cada comentario (de qué reel viene cada persona). Repetidos se ignoran. */
   recordComment(comment: CommentRecord): Promise<void>;
   /** Resumen por reel: comentarios, personas distintas y personas con cada etiqueta. */
@@ -454,6 +456,12 @@ export async function createPostgresStore(
         SELECT prev AS "from", step AS "to", count(*)::int AS n FROM h
         WHERE prev IS NOT NULL AND step IS NOT NULL AND prev <> step GROUP BY 1, 2 ORDER BY n DESC, 1, 2`;
       return { stages: [...stages], transitions: [...transitions] };
+    },
+    async existingCommentIds(commentIds) {
+      if (commentIds.length === 0) return new Set();
+      const rows = await sql<{ comment_id: string }[]>`
+        SELECT comment_id FROM comments WHERE comment_id = ANY(${sql.array([...commentIds])}::text[])`;
+      return new Set(rows.map((row) => row.comment_id));
     },
     async deletePersonData(igId) {
       return sql.begin(async (tx) => {

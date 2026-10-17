@@ -167,6 +167,11 @@ export async function rescueComments(since: Date, deps: ProcessDeps, now: Date =
   return { queued, skipped, since: from.toISOString() };
 }
 
+/** Procesa un evento suelto (p. ej. un comentario recuperado tras un reinicio) igual que si viniera en un aviso de Meta. */
+export async function processEvent(event: InstagramEvent, deps: ProcessDeps): Promise<void> {
+  await handleEvent(event, deps);
+}
+
 export async function processWebhook(payload: unknown, deps: ProcessDeps): Promise<void> {
   const events = parseWebhook(payload);
   if (events.length === 0) {

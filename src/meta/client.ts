@@ -36,6 +36,16 @@ export interface Media {
   readonly mediaProductType: string | null;
 }
 
+/** Comentario leído de /<media>/comments (doc: más nuevos primero, máx. 50, sin respuestas salvo que se pidan). */
+export interface MediaComment {
+  readonly id: string;
+  readonly text: string;
+  readonly timestamp: string | null;
+  readonly fromId: string | null;
+  readonly fromUsername: string | null;
+  readonly parentId: string | null;
+}
+
 export interface SendResult {
   readonly recipientId: string | null;
   readonly messageId: string | null;
@@ -143,6 +153,25 @@ export class InstagramClient {
         timestamp: asString(item.timestamp),
         mediaProductType: asString(item.media_product_type),
       }))
+      .filter((item) => item.id !== '');
+  }
+
+  /** Los 50 comentarios principales más recientes de un reel, con su autor (para recuperar los que no nos llegaron). */
+  async listComments(mediaId: string): Promise<MediaComment[]> {
+    const data = await this.call('GET', `${encodeURIComponent(mediaId)}/comments?fields=id,text,timestamp,from,parent_id&limit=50`);
+    const items = Array.isArray(data.data) ? (data.data as Json[]) : [];
+    return items
+      .map((item) => {
+        const from = item.from && typeof item.from === 'object' && !Array.isArray(item.from) ? (item.from as Json) : null;
+        return {
+          id: asString(item.id) ?? '',
+          text: asString(item.text) ?? '',
+          timestamp: asString(item.timestamp),
+          fromId: from ? asString(from.id) : null,
+          fromUsername: from ? asString(from.username) : null,
+          parentId: asString(item.parent_id),
+        };
+      })
       .filter((item) => item.id !== '');
   }
 

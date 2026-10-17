@@ -187,7 +187,9 @@ Progreso:
   - [x] 4.2 BORRAR por DM (Jose: todo lo de esa persona, también el texto en los registros técnicos; confirmación "Listo, he borrado tus datos de nuestro sistema 🙏 Si vuelves a escribir o comentar, empezaremos de cero."). Solo la palabra BORRAR. Segundo barrido al minuto (rastro del eco de la confirmación). Lo que queda del borrado en el registro no lleva su id.
   - [x] 4.3 Al reanudar la IA se contesta lo pendiente. Los "sí"/rescates que contesta el flujo quedan marcados y el setter no los responde.
   - [x] 4.4 `listConversations` ordena y limita en SQL.
-  - [ ] 4.5 Comentarios perdidos al desplegar (502).
+  - [x] 4.5 Comentarios perdidos al desplegar (502): 2 min tras arrancar se piden a Instagram los comentarios de los 25 últimos reels (doc oficial: `/<media>/comments`, más nuevos primero, máx. 50) y los de los 15 min anteriores al arranque que no tenemos pasan por el camino normal (flujo, plan B, una vez por persona y reel). Repetir es seguro (clave única del DM). Resumen en /eventos ("recuperacion").
+  - [x] 4.2 verificado con datos reales (Jose, 00:54 UTC): evento de borrado sin id, ningún rastro del id en acciones/eventos/conversaciones/contactos, segundo barrido OK. Falta que Jose confirme que le llegó el DM de confirmación.
+  - Jose pidió (2026-10-17) "si falla el DM, comentario público + que el flujo se active solo cuando escriba": **ya estaba hecho** (plan B + rescate por DM, B arriba); plan B 4/4 publicados; rescate aún sin caso real.
   - [ ] 4.6 Aprobar borradores desde el panel.
   - [ ] 4.7 BD definitiva / consumo de Neon (con Jose).
   - 328 pruebas. Sin probar con datos reales: BORRAR (necesita que Jose lo pruebe) y el reinicio con un DM a medias.
