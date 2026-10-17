@@ -17,6 +17,8 @@ import type { SetterBrain } from './setter/brain.js';
 import type { DiscardResult, DraftResult } from './setter/service.js';
 import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
+import { createApiRoutes } from './routes-api.js';
+import type { UserStore } from './users.js';
 
 const ADMIN_USER = 'jose';
 const DASHBOARD_ROWS = 60;
@@ -68,6 +70,8 @@ export interface AppDeps {
   readonly replyPending?: (igId: string) => Promise<void>;
   /** Simulador del setter (null = sin ANTHROPIC_API_KEY). */
   readonly simulator?: { readonly brain: SetterBrain; readonly lead: LeadPlayer } | null;
+  /** Usuarios del frontend (Fase 6). Sin ellos no hay /api. */
+  readonly users?: UserStore;
 }
 
 function errorMessage(error: unknown): string {
@@ -300,6 +304,7 @@ export function createApp(deps: AppDeps): Hono {
 
   registerWebhook(app, deps);
   registerLinks(app, deps);
+  if (deps.users) app.route('/api', createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword }));
 
   // Panel privado: contraseña + protección contra formularios enviados desde otras webs.
   const auth = basicAuth({ username: ADMIN_USER, password: deps.config.adminPassword });

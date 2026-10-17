@@ -1,0 +1,64 @@
+import { PGlite } from '@electric-sql/pglite';
+import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createPostgresUserStore, type UserStore } from '../src/users.js';
+
+/** Usuarios y sesiones del frontend (Fase 6) contra un Postgres real (PGlite) en memoria. */
+
+const PORT = 54331;
+const URL = `postgres://postgres@127.0.0.1:${PORT}/postgres`;
+let db: PGlite;
+let server: PGLiteSocketServer;
+let users: UserStore & { close(): Promise<void> };
+
+beforeAll(async () => {
+  db = await PGlite.create();
+  server = new PGLiteSocketServer({ db, port: PORT, host: '127.0.0.1' });
+  await server.start();
+  users = await createPostgresUserStore(URL, { ssl: false, maxConnections: 1 });
+}, 60_000);
+
+afterAll(async () => {
+  await users?.close();
+  await server?.stop();
+  await db?.close();
+});
+
+const IN_ONE_HOUR = () => new Date(Date.now() + 60 * 60 * 1000);
+
+describe('createPostgresUserStore (Postgres real)', () => {
+  it('se puede volver a arrancar sin error (tablas idempotentes) y empieza sin usuarios', async () => {
+    await users.close();
+    users = await createPostgresUserStore(URL, { ssl: false, maxConnections: 1 });
+    expect(await users.countUsers()).toBe(0);
+  });
+
+  it('el primer admin solo se crea si no hay nadie (el alta no se puede repetir)', async () => {
+    const admin = await users.createFirstAdmin({ email: 'Jose@Example.com', name: 'Jose', passwordHash: 'h1' });
+    expect(admin).toMatchObject({ email: 'jose@example.com', name: 'Jose', role: 'admin' });
+    expect(await users.createFirstAdmin({ email: 'otro@example.com', name: 'Otro', passwordHash: 'h2' })).toBeNull();
+    expect(await users.countUsers()).toBe(1);
+  });
+
+  it('busca por correo sin distinguir mayúsculas y devuelve el hash para comprobar la contraseña', async () => {
+    expect(await users.findUserByEmail('JOSE@example.com')).toMatchObject({ email: 'jose@example.com', passwordHash: 'h1' });
+    expect(await users.findUserByEmail('nadie@example.com')).toBeNull();
+  });
+
+  it('crea usuarios del equipo y no deja repetir correo', async () => {
+    expect(await users.createUser({ email: 'equipo@example.com', name: 'Equipo', role: 'team', passwordHash: 'h3' })).toMatchObject({ role: 'team' });
+    await expect(users.createUser({ email: 'EQUIPO@example.com', name: 'X', role: 'team', passwordHash: 'h4' })).rejects.toThrow();
+  });
+
+  it('las sesiones caducan y se pueden cerrar; nunca devuelven el hash de la contraseña', async () => {
+    const admin = await users.findUserByEmail('jose@example.com');
+    await users.createSession('huella-ok', admin!.id, IN_ONE_HOUR());
+    await users.createSession('huella-caducada', admin!.id, new Date(Date.now() - 1000));
+    const user = await users.findSession('huella-ok');
+    expect(user).toMatchObject({ email: 'jose@example.com', role: 'admin' });
+    expect(user).not.toHaveProperty('passwordHash');
+    expect(await users.findSession('huella-caducada')).toBeNull();
+    await users.deleteSession('huella-ok');
+    expect(await users.findSession('huella-ok')).toBeNull();
+  });
+});

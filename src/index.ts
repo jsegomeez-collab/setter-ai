@@ -15,6 +15,7 @@ import { ClaudeLeadPlayer, LEAD_MODEL } from './setter/simulator.js';
 import { EchoWatcher } from './setter/echoes.js';
 import { SetterService } from './setter/service.js';
 import { createPostgresStore } from './store.js';
+import { createPostgresUserStore } from './users.js';
 
 const TOKEN_CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const FIRST_TOKEN_CHECK_MS = 60 * 1000;
@@ -27,6 +28,7 @@ const CATCH_UP_WINDOW_MS = 15 * 60 * 1000;
 async function main(): Promise<void> {
   const config = loadConfig();
   const store = await createPostgresStore(config.databaseUrl);
+  const users = await createPostgresUserStore(config.databaseUrl);
   const tokens = new TokenManager({ store, envToken: config.igAccessToken, encryptionKey: config.tokenEncryptionKey });
   const hasToken = (await tokens.get()) !== null;
   const client = hasToken ? new InstagramClient(() => tokens.get(), config.igApiVersion) : null;
@@ -107,6 +109,7 @@ async function main(): Promise<void> {
     rescueDms: () => rescuePendingDms({ store, sender: activeSender }),
     drafts: { approve: (igId) => setter.approveDraft(igId), discard: (igId) => setter.discardDraft(igId) },
     simulator,
+    users,
   });
 
   const checkToken = () => {
@@ -131,7 +134,7 @@ async function main(): Promise<void> {
     setter.flushPending();
     Promise.all([setter.idle(), echoes.idle()])
       .then(() => activeSender.idle())
-      .then(() => store.close())
+      .then(() => Promise.all([store.close(), users.close()]))
       .finally(() => process.exit(0));
   };
   process.on('SIGTERM', shutdown);

@@ -253,6 +253,18 @@ Plan (orden aprobado):
 - **Configuración**: cuenta de Instagram, token, anti-ban, límites, estado del sistema.
 - Acceso seguro (login) desde cualquier dispositivo.
 
+**Decisiones de Jose (2026-10-17):**
+- **React** (Vite + TypeScript + Tailwind) en el **mismo servicio de Render** (0 € extra, un solo despliegue). El panel actual sigue funcionando hasta que cada parte esté sustituida.
+- **Usuarios: admin y equipo.** Admin = todo (setter, flujos, configuración, usuarios). Equipo = ver y responder conversaciones, ver contactos y métricas; no cambia el setter ni los flujos.
+- **Marco técnico del setter editable solo por el admin**, con historial y "volver al original". Las reglas automáticas (`rules.ts`, `guards.ts`) se quedan en código como red de seguridad.
+- **Diseño:** estilo de la referencia de Jose (panel Better Angles): tema oscuro, acento dorado, Gabarito + Inter, menú lateral + panel redondeado, tarjetas finas. Se copia el estilo, no la marca.
+- Primero una **pasada de punta a punta con datos reales** (6.0 + 6.1); hasta que Jose la vea y la apruebe, no se construye lo siguiente.
+
+Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
+- [ ] **6.0 Base**: app React en `web/` servida en `/app`; API JSON en `/api`; login con correo y contraseña (tabla de usuarios, contraseña con hash, sesión en cookie segura, límite de intentos); roles admin/equipo; menú lateral con el estilo de la referencia.
+- [ ] **6.1 Setter IA**: documento (ver, editar, versiones), marco técnico editable, textos de inicio y espera, modo y usuarios de prueba, simulador (conversación, ficha y coste).
+- [ ] 6.2 Conversaciones · 6.3 Contactos · 6.4 Métricas · 6.5 Constructor visual de flujos · 6.6 Inteligencia (cuando haya conversaciones reales) · 6.7 Configuración (usuarios, cuenta de Instagram, token, límites).
+
 ---
 
 ## Reglas de Meta (verificadas en la doc oficial)
