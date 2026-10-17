@@ -149,6 +149,24 @@ describe('contactos y estado', () => {
     expect(html).toContain('biblioteca: <strong>1</strong>');
   });
 
+  it('métricas: embudo por reel, total y por día (pide contraseña; periodo 7/30 días o todo)', async () => {
+    const { app, store } = setup();
+    expect((await app.request('/metricas')).status).toBe(401);
+    await store.recordComment({ commentId: 'c1', igId: '9', username: 'ana', mediaId: '18094491215151712', text: 'Bolsa' });
+    await store.claimAction('private:c1', 'private_reply', { type: 'private_reply', commentId: 'c1', message: { recipientId: '9' } });
+    await store.finishAction('private:c1', true, { messageId: 'm1' });
+    const html = await (await app.request('/metricas', { headers: { authorization: auth } })).text();
+    expect(html).toContain('Embudo');
+    expect(html).toContain('18094491215151712');
+    expect(html).toContain('TOTAL');
+    expect(html).toContain('Por día');
+    expect(html).toContain('100 %'); // 1 de 1 le llegó el DM
+    const week = await app.request('/metricas?dias=7', { headers: { authorization: auth } });
+    expect(week.status).toBe(200);
+    expect(await week.text()).toContain('últimos 7 días');
+    expect((await app.request('/metricas?dias=abc', { headers: { authorization: auth } })).status).toBe(200); // periodo raro → todo
+  });
+
   it('el estado indica si los enlaces con seguimiento están activos', async () => {
     const on = await (await setup().app.request('/eventos', { headers: { authorization: auth } })).text();
     expect(on).toContain('✔ activos');

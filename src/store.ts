@@ -1,5 +1,6 @@
 import postgres from 'postgres';
 import { flowSchema, type Flow } from './flows/types.js';
+import type { FunnelPersonRow } from './funnel.js';
 
 /** Todo lo que el servidor guarda o lee. La interfaz permite usar una versión en memoria en las pruebas. */
 export interface Store {
@@ -36,6 +37,8 @@ export interface Store {
   recordComment(comment: CommentRecord): Promise<void>;
   /** Resumen por reel: comentarios, personas distintas y personas con cada etiqueta. */
   reelStats(): Promise<ReelStatsRow[]>;
+  /** Embudo (Fase 4): por persona y reel en que comentó desde `since`, qué pasos cumplió. */
+  funnelRows(since: Date): Promise<FunnelPersonRow[]>;
   addContactTags(igId: string, tags: readonly string[]): Promise<void>;
   listContacts(limit: number): Promise<ContactRow[]>;
   /** Pausas programadas. Devuelve null si ya existía (misma clave). */
@@ -445,6 +448,77 @@ export async function createPostgresStore(
         comments: row.comments,
         people: row.people,
         tagged: Object.fromEntries(tags.filter((t) => t.media_id === row.media_id).map((t) => [t.tag, t.n])),
+      }));
+    },
+    async funnelRows(since) {
+      // Cada paso se resume primero por comentario o por persona (una pasada por tabla) y luego se une.
+      const rows = await sql<
+        {
+          media_id: string;
+          ig_id: string;
+          first_at: Date;
+          dm_ok: boolean;
+          dm_failed: boolean;
+          plan_b: boolean;
+          rescued: boolean;
+          asked: boolean;
+          follows: boolean;
+          clicked: boolean;
+          wrote: boolean;
+          qualified: boolean;
+        }[]
+      >`
+        WITH dm AS (
+          SELECT request->>'commentId' AS comment_id, bool_or(ok IS TRUE) AS ok, bool_or(ok IS FALSE) AS failed
+          FROM actions WHERE type = 'private_reply' GROUP BY 1
+        ),
+        plan_b AS (
+          SELECT DISTINCT substr(dedup_key, length('reply-fail:') + 1) AS comment_id
+          FROM actions WHERE type = 'reply_comment' AND ok IS TRUE AND dedup_key LIKE 'reply-fail:%'
+        ),
+        per_reel AS (
+          SELECT c.media_id, c.ig_id, min(c.created_at) AS first_at,
+                 coalesce(bool_or(dm.ok), false) AS dm_ok, coalesce(bool_or(dm.failed), false) AS dm_failed,
+                 bool_or(p.comment_id IS NOT NULL) AS plan_b
+          FROM comments c
+          LEFT JOIN dm ON dm.comment_id = c.comment_id
+          LEFT JOIN plan_b p ON p.comment_id = c.comment_id
+          WHERE c.media_id IS NOT NULL AND c.created_at >= ${since}
+          GROUP BY c.media_id, c.ig_id
+        ),
+        rescued AS (
+          SELECT DISTINCT request->>'recipientId' AS ig_id
+          FROM actions WHERE type = 'send_message' AND ok IS TRUE AND dedup_key LIKE 'rescate-dm:%'
+        ),
+        asked AS (
+          SELECT request->>'recipientId' AS ig_id, bool_or(response->>'follow' = 'yes') AS follows
+          FROM actions WHERE type = 'check_follow' GROUP BY 1
+        ),
+        clicked AS (SELECT DISTINCT data->>'r' AS ig_id FROM event_log WHERE kind = 'click'),
+        wrote AS (SELECT DISTINCT ig_id FROM messages WHERE direction = 'in')
+        SELECT r.media_id, r.ig_id, r.first_at, r.dm_ok, r.dm_failed, r.plan_b,
+               (rs.ig_id IS NOT NULL) AS rescued, (a.ig_id IS NOT NULL) AS asked, coalesce(a.follows, false) AS follows,
+               (k.ig_id IS NOT NULL) AS clicked, (w.ig_id IS NOT NULL) AS wrote,
+               coalesce(ct.lead->>'siguiente_paso' = 'agendar_llamada', false) AS qualified
+        FROM per_reel r
+        LEFT JOIN rescued rs ON rs.ig_id = r.ig_id
+        LEFT JOIN asked a ON a.ig_id = r.ig_id
+        LEFT JOIN clicked k ON k.ig_id = r.ig_id
+        LEFT JOIN wrote w ON w.ig_id = r.ig_id
+        LEFT JOIN contacts ct ON ct.ig_id = r.ig_id`;
+      return rows.map((row) => ({
+        mediaId: row.media_id,
+        igId: row.ig_id,
+        firstAt: row.first_at,
+        dmOk: row.dm_ok,
+        dmFailed: row.dm_failed,
+        planB: row.plan_b,
+        rescued: row.rescued,
+        asked: row.asked,
+        follows: row.follows,
+        clicked: row.clicked,
+        wrote: row.wrote,
+        qualified: row.qualified,
       }));
     },
     async addContactTags(igId, tags) {

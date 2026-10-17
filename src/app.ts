@@ -8,7 +8,9 @@ import { InstagramClient, MetaApiError, type Account, type Media } from './meta/
 import { isValidSignature } from './meta/signature.js';
 import type { TokenManager } from './meta/token.js';
 import { readLinkToken } from './links.js';
+import { buildFunnel } from './funnel.js';
 import { flowFormPage, flowJsonPage, flowsListPage } from './pages-flows.js';
+import { metricsPage, parsePeriod, periodStart } from './pages-metrics.js';
 import { contactsPage, dashboardPage, legalPage } from './pages.js';
 import { registerSetter } from './routes-setter.js';
 import type { SetterBrain } from './setter/brain.js';
@@ -294,7 +296,7 @@ export function createApp(deps: AppDeps): Hono {
 
   // Panel privado: contraseña + protección contra formularios enviados desde otras webs.
   const auth = basicAuth({ username: ADMIN_USER, password: deps.config.adminPassword });
-  for (const path of ['/eventos', '/eventos/*', '/flujos', '/flujos/*', '/contactos', '/setter', '/setter/*', '/conversaciones', '/conversaciones/*']) {
+  for (const path of ['/eventos', '/eventos/*', '/flujos', '/flujos/*', '/contactos', '/metricas', '/setter', '/setter/*', '/conversaciones', '/conversaciones/*']) {
     app.use(path, auth);
   }
   for (const path of ['/eventos/*', '/flujos/*', '/setter/*', '/conversaciones/*']) app.use(path, csrf());
@@ -309,6 +311,11 @@ export function createApp(deps: AppDeps): Hono {
       loadMedia(deps.client, MEDIA_FOR_STATS),
     ]);
     return c.html(contactsPage(contacts, stats, media));
+  });
+  app.get('/metricas', async (c) => {
+    const period = parsePeriod(c.req.query('dias'));
+    const [rows, media] = await Promise.all([deps.store.funnelRows(periodStart(period)), loadMedia(deps.client, MEDIA_FOR_STATS)]);
+    return c.html(metricsPage(buildFunnel(rows), media, period));
   });
   return app;
 }

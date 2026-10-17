@@ -177,6 +177,36 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
   });
 
+  it('Fase 4 · embudo: qué pasos cumplió cada persona en cada reel', async () => {
+    const done = async (key: string, type: string, request: unknown, ok: boolean, response: unknown = {}) => {
+      await store.claimAction(key, type, request);
+      await store.finishAction(key, ok, response);
+    };
+    await store.recordComment({ commentId: 'fc1', igId: 'f1', username: 'uno', mediaId: '9990001', text: 'Bolsa' });
+    await store.recordComment({ commentId: 'fc2', igId: 'f2', username: 'dos', mediaId: '9990001', text: 'Api' });
+    await store.recordComment({ commentId: 'fc3', igId: 'f1', username: 'uno', mediaId: '9990002', text: 'Link' });
+    // f1: le llega el DM, pide el recurso, sigue, hace clic, escribe y queda cualificado.
+    await done('private:fc1', 'private_reply', { type: 'private_reply', commentId: 'fc1', message: { recipientId: 'f1' } }, true, { messageId: 'x1' });
+    await done('pb:fx:sigue', 'check_follow', { type: 'check_follow', recipientId: 'f1' }, true, { follow: 'yes' });
+    await store.logEvent('click', 'Clic en enlace', { f: 'manychat', n: 'biblioteca', r: 'f1' });
+    await store.addMessage({ igId: 'f1', direction: 'in', source: 'user', text: 'si', mid: 'fm-1', status: 'sent', dedupKey: null });
+    await store.saveLead('f1', { siguiente_paso: 'agendar_llamada' });
+    // f2: Meta rechaza su DM → plan B publicado → nos escribe y se le rescata.
+    await done('private:fc2', 'private_reply', { type: 'private_reply', commentId: 'fc2', message: { recipientId: 'f2' } }, false, { code: 100 });
+    await done('reply-fail:fc2', 'reply_comment', { type: 'reply_comment', commentId: 'fc2' }, true, { id: 'r2' });
+    await done('rescate-dm:private:fc2:start', 'send_message', { type: 'send_message', recipientId: 'f2' }, true, { messageId: 'x2' });
+
+    const rows = (await store.funnelRows(new Date(0))).filter((r) => r.mediaId.startsWith('999000'));
+    const find = (mediaId: string, igId: string) => rows.find((r) => r.mediaId === mediaId && r.igId === igId);
+    expect(rows).toHaveLength(3);
+    expect(find('9990001', 'f1')).toMatchObject({ dmOk: true, dmFailed: false, asked: true, follows: true, clicked: true, wrote: true, qualified: true });
+    expect(find('9990001', 'f2')).toMatchObject({ dmOk: false, dmFailed: true, planB: true, rescued: true, asked: false, wrote: false, qualified: false });
+    // Lo que no depende del reel (pidió, sigue, clic, escribió) cuenta también en su otro reel; el DM es de cada comentario.
+    expect(find('9990002', 'f1')).toMatchObject({ dmOk: false, dmFailed: false, asked: true, clicked: true });
+    expect(find('9990001', 'f1')?.firstAt).toBeInstanceOf(Date);
+    expect((await store.funnelRows(new Date(Date.now() + 60_000))).filter((r) => r.mediaId.startsWith('999000'))).toEqual([]);
+  });
+
   it('un flujo guardado antes de existir un campo nuevo se lee con su valor por defecto (dmFailedReplies = [])', async () => {
     const old = { ...followFlow({ id: 'antiguo' }), dmFailedReplies: undefined } as unknown as Flow;
     await store.saveFlow(old);

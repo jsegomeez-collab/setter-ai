@@ -23,7 +23,7 @@ export function status(ok: boolean, yes: string, no: string): string {
   return ok ? `<span class="ok">✔ ${escapeHtml(yes)}</span>` : `<span class="bad">✘ ${escapeHtml(no)}</span>`;
 }
 
-const NAV = `<nav><a href="/eventos">Estado y eventos</a> · <a href="/flujos">Flujos</a> · <a href="/contactos">Contactos</a> · <a href="/setter">Setter IA</a> · <a href="/conversaciones">Conversaciones</a></nav>`;
+const NAV = `<nav><a href="/eventos">Estado y eventos</a> · <a href="/flujos">Flujos</a> · <a href="/contactos">Contactos</a> · <a href="/metricas">Métricas</a> · <a href="/setter">Setter IA</a> · <a href="/conversaciones">Conversaciones</a></nav>`;
 
 export function layout(title: string, body: string): string {
   return `<!doctype html>
@@ -70,7 +70,8 @@ export function legalPage(kind: 'privacy' | 'terms' | 'data-deletion'): string {
   return layout(page.title, `<h1>${page.title}</h1>${page.body}`);
 }
 
-function reelName(media: readonly Media[], mediaId: string | null): string {
+/** Nombre del reel (fecha + inicio del texto) enlazado a Instagram; si no se conoce, su id. Devuelve HTML ya escapado. */
+export function reelName(media: readonly Media[], mediaId: string | null): string {
   if (!mediaId) return '<small>—</small>';
   const item = media.find((candidate) => candidate.id === mediaId);
   const label = item ? `${item.timestamp?.slice(0, 10) ?? ''} · ${(item.caption ?? '').slice(0, 45)}` : mediaId;

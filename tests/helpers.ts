@@ -40,6 +40,7 @@ export function createMemoryStore(): Store & {
     return r?.messageId ?? r?.result?.messageId;
   };
   const comments: CommentRecord[] = [];
+  const commentDates = new Map<string, Date>();
   const jobs = new Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>();
   let nextJobId = 1;
   const requests: { signatureOk: boolean; payload: unknown }[] = [];
@@ -140,7 +141,42 @@ export function createMemoryStore(): Store & {
         .filter((data) => !actions.has(`private:${data.commentId}`));
     },
     async recordComment(comment) {
-      if (!comments.some((c) => c.commentId === comment.commentId)) comments.push(comment);
+      if (comments.some((c) => c.commentId === comment.commentId)) return;
+      comments.push(comment);
+      commentDates.set(comment.commentId, new Date());
+    },
+    async funnelRows(since) {
+      // Misma lógica que el SQL de store.ts (Postgres), en memoria.
+      const all = [...actions.values()];
+      const req = (a: { request: unknown }) => (a.request ?? {}) as { commentId?: string; recipientId?: string };
+      const byPerson = (igId: string, test: (a: (typeof all)[number]) => boolean) => all.some((a) => req(a).recipientId === igId && test(a));
+      const groups = new Map<string, CommentRecord[]>();
+      for (const c of comments) {
+        const at = commentDates.get(c.commentId) ?? new Date(0);
+        if (!c.mediaId || at < since) continue;
+        const key = `${c.mediaId}|${c.igId}`;
+        groups.set(key, [...(groups.get(key) ?? []), c]);
+      }
+      return [...groups.values()].map((list) => {
+        const first = list[0] as CommentRecord;
+        const ids = list.map((c) => c.commentId);
+        const dms = all.filter((a) => a.type === 'private_reply' && ids.includes(req(a).commentId ?? ''));
+        const lead = contacts.get(first.igId)?.lead as { siguiente_paso?: unknown } | undefined;
+        return {
+          mediaId: first.mediaId as string,
+          igId: first.igId,
+          firstAt: new Date(Math.min(...ids.map((id) => commentDates.get(id)?.getTime() ?? 0))),
+          dmOk: dms.some((a) => a.ok === true),
+          dmFailed: dms.some((a) => a.ok === false),
+          planB: all.some((a) => a.type === 'reply_comment' && a.ok === true && ids.some((id) => a.dedupKey === `reply-fail:${id}`)),
+          rescued: byPerson(first.igId, (a) => a.type === 'send_message' && a.ok === true && a.dedupKey.startsWith('rescate-dm:')),
+          asked: byPerson(first.igId, (a) => a.type === 'check_follow'),
+          follows: byPerson(first.igId, (a) => a.type === 'check_follow' && (a.response as { follow?: unknown } | null)?.follow === 'yes'),
+          clicked: events.some((e) => e.kind === 'click' && (e.data as { r?: unknown } | null)?.r === first.igId),
+          wrote: messages.some((m) => m.igId === first.igId && m.direction === 'in'),
+          qualified: lead?.siguiente_paso === 'agendar_llamada',
+        };
+      });
     },
     async reelStats() {
       const byMedia = new Map<string, CommentRecord[]>();
