@@ -1,8 +1,9 @@
 # Plan — Setter IA para Instagram
 
 > Última actualización: 2026-10-17
-> Estado general: **Fase 2 y Fase 3 en producción.** Flujos de comentarios atendiendo a seguidores reales; setter IA en modo **PRUEBA** (solo @josegomezlife). ManyChat desconectado.
-> **En curso: Fase 4** (repasada con Jose el 2026-10-17; orden: embudo → historial de ficha → análisis masivo → pendientes técnicos). Decisión de Jose: terminar primero el programa (Fases 4-6); el marketing del setter lo pule él después.
+> Estado general: **Fases 2 y 3 en producción.** Flujos de comentarios atendiendo a seguidores reales; setter IA en modo **PRUEBA** (solo @josegomezlife). ManyChat desconectado.
+> Fase 4 hecha salvo el paso 3 (análisis, espera conversaciones reales). Fase 5: botón de agenda e inicio del setter (5.4) **probados en real el 2026-10-17** (flujo → inicio → conversación → botón → clic medido). Setter **NO público** (Jose: "no está bien entrenado"); el tono se pulirá desde el frontend.
+> **Siguiente: Fase 6 (frontend).** Rama de trabajo `fase4-wip`; producción = `main` (Render despliega solo al hacer push a `main`).
 
 ## Objetivo
 
@@ -27,6 +28,7 @@ Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para
 | 2026-10-16 | **Todo medido:** cada comentario guarda su reel de origen; cada clic, etiqueta y paso del flujo queda registrado. Las conversaciones se analizan en masa (objeciones, mercado, ángulos de contenido). |
 | 2026-10-16 | Setter: Claude Haiku 5.5 responde y rellena la ficha; Sonnet 5.5 para el análisis masivo; nunca Opus. Solo español. Detalle en la Fase 3. |
 | 2026-10-17 | **Primero terminar el programa (Fases 4-6); el marketing del setter (documento, objeciones, tono) lo pule Jose después.** |
+| 2026-10-17 | Setter con **Haiku 5.5 + reglas de conversación en código** (`src/setter/rules.ts`); Sonnet se probó (≈12× más caro, mejor conversación) y Jose eligió Haiku. Setter **no público** hasta estar bien entrenado; el tono y las reglas se ajustarán desde el frontend (Fase 6). |
 | 2026-10-17 (tarde) | **Cambio de Jose:** la IA también escribe primero a quien **pulsó el botón del flujo** (dentro de las 24 h que abre esa pulsación), con un inicio cercano; habla con **todos los que respondan**; las 5 preguntas eran solo orientación (mejorarlas y preguntar de forma cercana); **pasar a gente real ya** (aviso dado: restricción de Meta hace <1 h). La agenda va en **botón**, nunca en texto. |
 
 Datos de Jose: cuenta Creator pública @josenews.ai (Meta Verified), cuenta de pruebas @josegomezlife, LLC en USA con EIN, ManyChat Pro, GitHub + Render + Neon, API key de Anthropic, oferta/FAQs/objeciones por escrito.
@@ -231,6 +233,12 @@ Plan (orden aprobado):
 - [ ] **5.4 Setteo proactivo** (decisiones de Jose arriba, tabla de decisiones): (a) paso nuevo del flujo "inicio del setter": 15 min tras el recurso, uno de los textos fijos al azar (aprobados por Jose); no sale si ya habla con el setter, si la IA está parada o si el setter está apagado · (b) textos de inicio + documento nuevo → aprobación de Jose · (c) cargar documento, añadir el paso al flujo, prueba con @josegomezlife, setter a público.
 - [x] Petición de Jose (2026-10-17) que originó el 5.4: aprovechar la ventana de 24 h para empezar una conversación de setteo muy cercana con los leads que respondan y parezcan interesantes (a qué se dedica, su situación, negocio, para qué usa la IA, objetivos). Toca decisiones previas (solo con quien responde; público tras pulir marketing).
 - Sin datos reales hasta que el setter sea público (se prueba con la cuenta de prueba).
+- [x] **Pulido y prueba real (2026-10-17, tarde)** — `main` = e8f60cd, 399 pruebas:
+  - Simulador: el lead siempre con Haiku (`LEAD_MODEL`) y coste según el modelo del setter. Prueba con Sonnet (variable `SETTER_MODEL` en Render, ya quitada): mejor conversación, ≈0,05 $/conversación frente a ≈0,004 $ con Haiku → Jose eligió **Haiku**.
+  - Reglas en código (`src/setter/rules.ts` + `guards.ts`, piden otro intento y nunca retienen): membresía solo si no puede invertir o habla de precio (nunca a empresas DFY), agenda una sola vez salvo que la pida, 3 respuestas secas → despedirse, no inventar huecos de la agenda, máx. 3 mensajitos, una pregunta = un tema, muletillas ("vale", "no pasa nada", "no hay problema", "tranquilo/a", "nos vemos"), máx. 1 emoji por respuesta, no empezar igual que los 2 mensajes anteriores. Marco técnico (`prompt.ts`): recurso ≠ programa, "descartar" con reglas claras, hilo de la conversación.
+  - **Prueba real con @josegomezlife (15:41-15:50 UTC) OK de punta a punta**: flujo → 1 min → texto de inicio → conversación → botón "Agendar llamada" → clic medido en /metricas.
+  - **Estado del flujo `manychat`: el inicio del setter está ACTIVO con 60 s** (`espera_setter` → `inicio_setter`). En modo prueba solo le llega a los usuarios de prueba (resto: solo registro). Antes de pasar a público: ponerlo en 900 s.
+  - Pendiente (marketing, desde el frontend): pregunta por ahorros y pasa la agenda en el mismo mensaje; "jaja vale" a mitad de frase; usa "vos" si el lead escribe así; los 2 últimos arreglos (una pregunta = un tema, hilo) sin simular.
 
 ### Fase 6 (FINAL) — Software de gestión completo (frontend) ⏳
 
@@ -275,6 +283,14 @@ Plan (orden aprobado):
 - API de Anthropic: según uso (desde la Fase 3).
 - ManyChat Pro: hasta que se apague.
 
+## Para retomar en otro ordenador
+
+- Clonar el repo, `npm install`, y comprobar: `npm test`, `npm run typecheck`, `npm run build`. Trabajar en la rama `fase4-wip`; desplegar = fusionar en `main` y hacer push.
+- **Comprobar un despliegue:** en Render → Events buscar el texto "Deploy live for <sha>" (el "Live" de la cabecera no basta). Al desplegar hay ~30-45 s de 502.
+- Los secretos (ADMIN_PASSWORD del panel, tokens) **solo** en Render → Environment. Nunca en el chat ni en el repo.
+- Los scripts de Playwright (`.playwright-mcp/`) no están en el repo (ignorados); se rehacen si hacen falta.
+- Neon (base de datos, plan gratis 100 h/mes): revisar el consumo al empezar cada sesión.
+
 ## Pendientes / apuntes
 
 - [ ] (Idea de Jose 2026-10-17, FUERA del plan, no mezclar) Mandar audios con un clon de su voz (ElevenLabs u otro) en la fase de cualificación.
@@ -304,3 +320,4 @@ Plan (orden aprobado):
 - 2026-10-16 — Fase 3 en producción (modo prueba): setter IA con Haiku, panel `/setter` + `/conversaciones` + simulador. ManyChat desconectado. Prueba real con @josegomezlife OK; 4 vueltas de 18 escenarios simulados. Documento del setter v4 (= v2).
 - 2026-10-17 — Decisión de Jose: terminar el programa (Fases 4-6) antes de pulir el marketing del setter. Siguiente: Fase 4.
 - 2026-10-17 — Fase 4 repasada con Jose: embudo primero, ficha actual, análisis con botón manual. Rama `fase4-wip`.
+- 2026-10-17 — Setter pulido con reglas en código (Haiku), prueba real del inicio del setter y del botón de agenda OK. Setter sigue en prueba. Siguiente: Fase 6 (frontend).
