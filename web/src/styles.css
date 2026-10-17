@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+
+/*
+ * Estilo de la referencia de Jose (panel Better Angles, leído de su CSS el 2026-10-17): tema oscuro, acento dorado,
+ * Gabarito para títulos y menú, Inter para el texto. Se copia el estilo, no la marca.
+ */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Gabarito', system-ui, -apple-system, sans-serif;
+
+  --color-base: #0a0a0a;
+  --color-g1: #111113;
+  --color-g2: #161618;
+  --color-g3: #1c1c1f;
+  --color-g4: #232327;
+  --color-g5: #2d2d32;
+  --color-smoke: #6c6c72;
+  --color-ash: #97979e;
+  --color-mist: #c6c6cc;
+  --color-fog: #e9e9ec;
+  --color-snow: #fbfbfc;
+
+  --color-ember-50: #fbf3dc;
+  --color-ember-200: #ebd081;
+  --color-ember-300: #e0bc55;
+  --color-ember-400: #d9ae3e;
+  --color-ember-500: #d4a53a;
+  --color-ember-600: #b98c2c;
+  --color-ember-700: #8f6b1e;
+
+  --color-ok: #2ed38a;
+  --color-bad: #ff5c6a;
+  --color-warn: #f0b23e;
+  --color-info: #5ab0f5;
+  --color-violet: #b79cff;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-base);
+    color: var(--color-fog);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  /* Etiqueta de sección: MAYÚSCULAS pequeñas y espaciadas ("SALUD DEL NEGOCIO"). */
+  .label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--color-smoke);
+  }
+  /* Tarjeta: degradado muy sutil y borde fino. */
+  .card {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008));
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+  }
+  .btn-gold {
+    background: linear-gradient(180deg, #dcae43, #d0a035);
+    color: #1a1406;
+    font-weight: 700;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(212, 165, 58, 0.18);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .btn-gold:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(212, 165, 58, 0.26);
+  }
+  .btn-gold:disabled {
+    opacity: 0.5;
+  }
+  .field {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--color-fog);
+    outline: none;
+  }
+  .field:focus {
+    border-color: rgba(212, 165, 58, 0.5);
+    box-shadow: 0 0 0 3px rgba(212, 165, 58, 0.12);
+  }
+}

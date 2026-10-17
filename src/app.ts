@@ -19,6 +19,7 @@ import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
 import type { UserStore } from './users.js';
+import { registerWebApp } from './web.js';
 
 const ADMIN_USER = 'jose';
 const DASHBOARD_ROWS = 60;
@@ -305,6 +306,7 @@ export function createApp(deps: AppDeps): Hono {
   registerWebhook(app, deps);
   registerLinks(app, deps);
   if (deps.users) app.route('/api', createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword }));
+  registerWebApp(app);
 
   // Panel privado: contraseña + protección contra formularios enviados desde otras webs.
   const auth = basicAuth({ username: ADMIN_USER, password: deps.config.adminPassword });

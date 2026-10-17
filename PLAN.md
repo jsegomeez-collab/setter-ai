@@ -3,7 +3,7 @@
 > Última actualización: 2026-10-17
 > Estado general: **Fases 2 y 3 en producción.** Flujos de comentarios atendiendo a seguidores reales; setter IA en modo **PRUEBA** (solo @josegomezlife). ManyChat desconectado.
 > Fase 4 hecha salvo el paso 3 (análisis, espera conversaciones reales). Fase 5: botón de agenda e inicio del setter (5.4) **probados en real el 2026-10-17** (flujo → inicio → conversación → botón → clic medido). Setter **NO público** (Jose: "no está bien entrenado"); el tono se pulirá desde el frontend.
-> **Siguiente: Fase 6 (frontend).** Rama de trabajo `fase4-wip`; producción = `main` (Render despliega solo al hacer push a `main`).
+> **En curso: Fase 6 (frontend), rama `fase6`.** Producción = `main` (Render despliega solo al hacer push a `main`).
 
 ## Objetivo
 
@@ -261,7 +261,8 @@ Plan (orden aprobado):
 - Primero una **pasada de punta a punta con datos reales** (6.0 + 6.1); hasta que Jose la vea y la apruebe, no se construye lo siguiente.
 
 Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
-- [ ] **6.0 Base**: app React en `web/` servida en `/app`; API JSON en `/api`; login con correo y contraseña (tabla de usuarios, contraseña con hash, sesión en cookie segura, límite de intentos); roles admin/equipo; menú lateral con el estilo de la referencia.
+- [x] **6.0 Base** (rama `fase6`): app React en `web/` (Vite 8 + React 19 + Tailwind 4 + React Router 8 + iconos Lucide) servida en `/app` por `src/web.ts`; API JSON en `/api` (`src/routes-api.ts`); usuarios y sesiones en `src/users.ts` (tablas `app_users`, `app_sessions`); contraseñas con scrypt y límite de 5 intentos/15 min (`src/auth.ts`); cookie HttpOnly + Secure + SameSite=Lax y solo peticiones desde la propia web. Alta del primer admin con la clave actual del panel (ADMIN_PASSWORD), solo mientras no hay usuarios. Menú por rol (equipo: Inicio, Conversaciones, Contactos, Métricas). Secciones pendientes enlazan al panel actual. Probado en local (alta, inicio, móvil, login malo/bueno, logout). 421 pruebas. `npm run build` compila servidor + web.
+  - Sin probar: un usuario del equipo en la web (se podrán crear en 6.7) y la web en producción hasta desplegar.
 - [ ] **6.1 Setter IA**: documento (ver, editar, versiones), marco técnico editable, textos de inicio y espera, modo y usuarios de prueba, simulador (conversación, ficha y coste).
 - [ ] 6.2 Conversaciones · 6.3 Contactos · 6.4 Métricas · 6.5 Constructor visual de flujos · 6.6 Inteligencia (cuando haya conversaciones reales) · 6.7 Configuración (usuarios, cuenta de Instagram, token, límites).
 
@@ -297,7 +298,7 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
 
 ## Para retomar en otro ordenador
 
-- Clonar el repo, `npm install`, y comprobar: `npm test`, `npm run typecheck`, `npm run build`. Trabajar en la rama `fase4-wip`; desplegar = fusionar en `main` y hacer push.
+- Clonar el repo, `npm install`, y comprobar: `npm test`, `npm run typecheck`, `npm run build`. Trabajar en la rama `fase6` (Fase 6); desplegar = fusionar en `main` y hacer push. Ver la web en local: `npm run build` y abrir `/app` del servidor, o `npm run dev:web` con el servidor en marcha.
 - **Comprobar un despliegue:** en Render → Events buscar el texto "Deploy live for <sha>" (el "Live" de la cabecera no basta). Al desplegar hay ~30-45 s de 502.
 - Los secretos (ADMIN_PASSWORD del panel, tokens) **solo** en Render → Environment. Nunca en el chat ni en el repo.
 - Los scripts de Playwright (`.playwright-mcp/`) no están en el repo (ignorados); se rehacen si hacen falta.
