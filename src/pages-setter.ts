@@ -130,7 +130,7 @@ const STATUS_LABELS: Record<MessageRow['status'], string> = {
 const SOURCE_LABELS: Record<MessageRow['source'], string> = { user: 'Persona', flow: 'Flujo', ai: 'IA', human: 'Jose (a mano)' };
 
 function nextStep(lead: unknown): string {
-  const parsed = LeadSchema.safeParse(lead);
+  const parsed = LeadSchema.partial().safeParse(lead);
   return parsed.success ? escapeHtml(parsed.data.siguiente_paso) : '—';
 }
 
@@ -162,7 +162,7 @@ export function conversationsPage(
 
 function leadTable(lead: unknown): string {
   if (lead === null || lead === undefined) return '<p>Sin ficha todavía.</p>';
-  const parsed = LeadSchema.safeParse(lead);
+  const parsed = LeadSchema.partial().safeParse(lead);
   if (!parsed.success) return `<pre>${jsonPreview(lead)}</pre>`;
   const rows = Object.entries(parsed.data)
     .map(([field, value]) => `<tr><th>${escapeHtml(field)}</th><td>${escapeHtml(Array.isArray(value) ? value.join(' · ') || '—' : value ?? '—')}</td></tr>`)

@@ -63,17 +63,21 @@ export interface SetterServiceOptions {
  * El botón pasa por el seguimiento de siempre (clic + etiqueta "agenda").
  */
 const AGENDA_BUTTON_TITLE = 'Agendar llamada';
+const MEMBERSHIP_BUTTON_TITLE = 'Ver membresía';
 const AGENDA_ONLY_TEXT = 'Aquí puedes elegir el hueco que mejor te venga 👇';
+const MEMBERSHIP_ONLY_TEXT = 'Aquí tienes la membresía 👇';
 
-export function withAgendaButton(text: string, agendaUrl: string): { text: string; buttons: Button[]; stored: string } {
-  if (!text.includes(agendaUrl)) return { text, buttons: [], stored: text };
-  const rest = text.split(agendaUrl).join(' ').replace(/[ \t]+/g, ' ').trim();
-  const body = rest.length > 0 ? rest : AGENDA_ONLY_TEXT;
-  return {
-    text: body,
-    buttons: [{ type: 'url', title: AGENDA_BUTTON_TITLE, url: agendaUrl, tags: ['agenda'] }],
-    stored: `${body}\n[Botón: ${AGENDA_BUTTON_TITLE}]`,
-  };
+/** La agenda y la membresía (Stripe) salen como botones; el resto del mensajito, como texto. */
+export function withLinkButtons(text: string, links: Pick<SetterLinks, 'agenda' | 'membership'>): { text: string; buttons: Button[]; stored: string } {
+  const candidates: Button[] = [
+    { type: 'url', title: AGENDA_BUTTON_TITLE, url: links.agenda, tags: ['agenda'] },
+    { type: 'url', title: MEMBERSHIP_BUTTON_TITLE, url: links.membership, tags: ['membresia'] },
+  ];
+  const buttons = candidates.filter((b) => b.type === 'url' && text.includes(b.url));
+  if (buttons.length === 0) return { text, buttons: [], stored: text };
+  const rest = buttons.reduce((t, b) => (b.type === 'url' ? t.split(b.url).join(' ') : t), text).replace(/[ \t]+/g, ' ').trim();
+  const body = rest.length > 0 ? rest : buttons[0]?.title === AGENDA_BUTTON_TITLE ? AGENDA_ONLY_TEXT : MEMBERSHIP_ONLY_TEXT;
+  return { text: body, buttons, stored: `${body}\n${buttons.map((b) => `[Botón: ${b.title}]`).join(' ')}` };
 }
 
 /** Pausa antes de cada mensajito: unos 3-4 s según lo largo que sea, con algo de azar (lo pidió Jose). */
@@ -271,6 +275,8 @@ export class SetterService {
       return this.stop(igId, `${result.kind === 'refusal' ? 'Claude rechazó responder' : 'Fallo al llamar a Claude'}: ${result.detail}`);
     }
     await store.saveLead(igId, result.output.lead);
+    // Dueño de negocio que quiere implementación (DFY): etiqueta para que Jose lo identifique (decisión 2026-10-17).
+    if (result.output.lead.tipo_lead === 'empresa_dfy') await store.addContactTags(igId, ['EMPRESA DFY']);
     await this.deliver(igId, dedupKey, result);
   }
 
@@ -346,7 +352,7 @@ export class SetterService {
    */
   private async send(igId: string, dedupKey: string, original: string, saved = false): Promise<boolean> {
     const { store } = this.options;
-    const out = withAgendaButton(original, this.options.links.agenda);
+    const out = withLinkButtons(original, this.options.links);
     if (saved) await store.setMessageStatus(dedupKey, 'queued');
     else await store.addMessage({ igId, direction: 'out', source: 'ai', text: out.stored, mid: null, status: 'queued', dedupKey });
     const action: Action = {

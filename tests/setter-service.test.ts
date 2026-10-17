@@ -235,6 +235,24 @@ describe('SetterService', () => {
     expect(store.messages.at(-1)?.text).toBe('puedes elegir el hueco aquí:\n[Botón: Agendar llamada]');
   });
 
+  it('la membresía también sale como BOTÓN ("Ver membresía"), nunca como enlace en el texto', async () => {
+    const { decide, enqueue, service, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({ messages: [`la membresía la tienes aquí: ${TEST_SETTER_LINKS.membership}`] })));
+    await service.onIncoming(dm('quiero la membresía', 'm-1'));
+    await flush();
+    expect(enqueue.mock.calls[0]?.[0][0]).toMatchObject({
+      message: { text: 'la membresía la tienes aquí:', buttons: [{ type: 'url', title: 'Ver membresía', url: TEST_SETTER_LINKS.membership, tags: ['membresia'] }] },
+    });
+  });
+
+  it('un dueño de negocio que quiere implementación (tipo_lead empresa_dfy) queda con la etiqueta "EMPRESA DFY"', async () => {
+    const { store, decide, service, flush } = await setup();
+    decide.mockResolvedValue(ok(sampleOutput({}, { tipo_lead: 'empresa_dfy' })));
+    await service.onIncoming(dm('tengo una peluquería y quiero IA para las citas', 'm-1'));
+    await flush();
+    expect((await store.getContact(STRANGER_ID))?.tags).toContain('EMPRESA DFY');
+  });
+
   it('si el mensajito era solo el enlace, el botón va con un texto corto', async () => {
     const { decide, enqueue, service, flush } = await setup();
     decide.mockResolvedValue(ok(sampleOutput({ messages: [TEST_SETTER_LINKS.agenda] })));

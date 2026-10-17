@@ -24,8 +24,9 @@ describe('prompt del setter', () => {
 
   it('el marco técnico lleva las decisiones de Jose: 3ª persona, idioma, precios y cuándo pasar a Jose', () => {
     const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
-    expect(prompt).toContain('NO Jose. Habla de Jose en tercera persona');
-    expect(prompt).toContain('contesta siempre en español y tutea');
+    expect(prompt).toContain('NO Jose (y si preguntan si eres una IA, di la verdad). Habla de Jose en tercera persona');
+    expect(prompt).toContain('contesta siempre en español neutro');
+    expect(prompt).toContain('y tutea');
     expect(prompt).not.toContain('en el idioma en que escribe la persona');
     expect(prompt).toContain('Nunca digas por chat el precio del grupal ni del VIP');
     expect(prompt).toContain('Una pregunta que el documento no responde NO es motivo');
@@ -34,6 +35,18 @@ describe('prompt del setter', () => {
     expect(prompt).toContain('Explica con naturalidad y seguridad todo lo que el documento SÍ dice');
     expect(prompt).toContain('la llamada ES con una persona del equipo, así que pásale el enlace de agenda y sigue');
     expect(prompt).not.toContain('pide expresamente hablar con Jose o con una persona');
+  });
+
+  it('pulido 2026-10-17 (simulaciones con la v5): no se presenta, no vende pronto, mensajes cortos, español neutro, empresas DFY', () => {
+    const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
+    expect(prompt).not.toContain('Quién eres: el asistente de mensajes');
+    expect(prompt).toContain('No te presentes ni digas qué o quién eres si no te lo preguntan');
+    expect(prompt).not.toContain('siempre que encaje, reconduce a agendar la llamada');
+    expect(prompt).toContain('No propongas la llamada ni pases enlaces hasta saber a qué se dedica, su situación y su objetivo');
+    expect(prompt).toContain('1 o 2 mensajitos');
+    expect(prompt).toContain('No repitas lo que te acaba de decir');
+    expect(prompt).toContain('español neutro');
+    expect(prompt).toContain('tipo_lead = "empresa_dfy"');
   });
 
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {

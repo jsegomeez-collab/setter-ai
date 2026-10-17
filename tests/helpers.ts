@@ -400,6 +400,7 @@ export function sampleOutput(overrides: Partial<SetterOutput> = {}, lead: Partia
       vive_en_eeuu: 'desconocido',
       es_menor: 'no',
       siguiente_paso: 'seguir_calificando',
+      tipo_lead: 'desconocido',
       objeciones: [],
       resumen: 'Acaba de escribir, sin datos todavía.',
       ...lead,

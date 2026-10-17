@@ -19,6 +19,9 @@ export const LeadSchema = z.object({
   siguiente_paso: z
     .enum(['seguir_calificando', 'agendar_llamada', 'ofrecer_membresia', 'descartar', 'derivar_a_jose'])
     .describe('Qué toca ahora según la decisión del documento.'),
+  tipo_lead: z
+    .enum(['formacion', 'empresa_dfy', UNKNOWN])
+    .describe('formacion = quiere aprender a vender servicios de IA; empresa_dfy = dueño de negocio que quiere que le implementen la IA en SU negocio.'),
   objeciones: z.array(z.string()).describe('Objeciones que ha puesto, con sus palabras. Lista vacía si ninguna.'),
   resumen: z.string().describe('Resumen de 1-2 frases de quién es y en qué punto está.'),
 });
