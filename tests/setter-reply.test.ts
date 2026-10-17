@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BrainResult, SetterBrain } from '../src/setter/brain.js';
-import { checkReply } from '../src/setter/guards.js';
+import { checkReply, styleIssues } from '../src/setter/guards.js';
 import { decideChecked } from '../src/setter/reply.js';
 import { TEST_SETTER_LINKS, sampleOutput } from './helpers.js';
 
@@ -48,6 +48,29 @@ describe('decideChecked (segundo intento)', () => {
   it('sin mensajitos no hay filtro ni segundo intento (la IA decidió no responder)', async () => {
     const decide = vi.fn<SetterBrain['decide']>().mockResolvedValue(ok([]));
     expect(await decideChecked({ decide }, 'SYS', TURNS, allowed)).toMatchObject({ retried: false, guard: { ok: true }, messages: [] });
+  });
+});
+
+describe('muletillas (segundo intento de estilo, nunca retiene)', () => {
+  it('detecta "vale" y "no pasa nada"; deja "vale la pena"', () => {
+    expect(styleIssues(['vale, no pasa nada 😊'])).toHaveLength(2);
+    expect(styleIssues(['Vale. cuéntame más'])).toHaveLength(1);
+    expect(styleIssues(['eso vale la pena', 'qué tal te fue?'])).toEqual([]);
+  });
+
+  it('con una muletilla pide otra respuesta una vez y se queda con la segunda', async () => {
+    const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale, no pasa nada'])).mockResolvedValueOnce(ok(['tranqui, a qué te dedicas?']));
+    const result = await decideChecked({ decide }, 'SYS', TURNS, allowed);
+    expect(decide).toHaveBeenCalledTimes(2);
+    expect(decide.mock.calls[1]?.[1]?.at(-1)).toEqual({ role: 'system', content: expect.stringContaining('"vale"') });
+    expect(result).toMatchObject({ kind: 'ok', retried: true, guard: { ok: true }, messages: ['tranqui, a qué te dedicas?'] });
+  });
+
+  it('si el segundo intento no llega o no pasa el filtro, se envía el primero (la muletilla no es un riesgo)', async () => {
+    const failed = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale!'])).mockResolvedValueOnce({ kind: 'failed', detail: 'x' });
+    expect(await decideChecked({ decide: failed }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['vale!'] });
+    const blocked = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale!'])).mockResolvedValueOnce(ok(['mira https://otro.com']));
+    expect(await decideChecked({ decide: blocked }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['vale!'] });
   });
 });
 

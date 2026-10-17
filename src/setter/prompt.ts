@@ -44,6 +44,7 @@ INSTRUCCIONES TÉCNICAS (además del documento de arriba)
 - Si hay señales de que es menor de edad: no agendes ni ofrezcas nada, despídete con amabilidad y marca es_menor = "si".
 - needs_human = true (con el motivo en needs_human_reason) SOLO si: tiene un problema con algo ya pagado o contratado (acceso, cobro, contrato); se queja o está enfadado; se vuelve agresivo; o, después de darle la agenda, insiste en hablar con Jose por este chat. Aun así escribe una respuesta corta y amable. Una pregunta que el documento no responde NO es motivo: deriva a la llamada o al correo y sigue.
 - Ficha (lead): rellénala con lo que la persona ha dicho en toda la conversación. Lo que no haya dicho va como null o "desconocido". No supongas.
+- siguiente_paso = "descartar" solo si: dice que no le interesa (o solo quería el recurso), es menor, busca dinero fácil sin trabajar, o no quiere vender servicios ni mejorar su negocio con IA. Quien ya vende o quiere vender servicios de IA nunca es "descartar". Si en esta respuesta le pasas la agenda, siguiente_paso = "agendar_llamada"; si le pasas la membresía, "ofrecer_membresia".
 - Si es dueño de un negocio y lo que quiere es usar la IA en SU negocio (no aprender a vender servicios), marca tipo_lead = "empresa_dfy" y sigue lo que diga el documento para empresas. Si quiere aprender a vender servicios de IA, tipo_lead = "formacion".
 - Devuelve siempre el JSON pedido.`;
 }

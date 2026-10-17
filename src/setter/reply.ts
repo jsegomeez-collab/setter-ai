@@ -1,11 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { addUsage, type BrainUsage, type SetterBrain } from './brain.js';
-import { checkMessages, normalizeMessages, type AllowedContacts, type GuardResult } from './guards.js';
+import { checkMessages, normalizeMessages, styleIssues, type AllowedContacts, type GuardResult } from './guards.js';
 import type { SetterOutput } from './schema.js';
 
 /**
  * Pide la respuesta a Claude y la pasa por el filtro. Si no pasa, le explica por qué (mensaje de sistema a mitad
- * de conversación) y le pide otra UNA vez; solo si vuelve a fallar se retiene. Lo usan el setter real y el simulador.
+ * de conversación) y le pide otra UNA vez; solo si vuelve a fallar se retiene. Con una muletilla ("vale", "no pasa
+ * nada") también pide otra, pero nunca retiene por eso. Lo usan el setter real y el simulador.
  */
 
 export type CheckedReply =
@@ -36,14 +37,19 @@ export async function decideChecked(
   const first = await brain.decide(system, turns);
   if (first.kind !== 'ok') return first;
   const firstCheck = check(first.output, allowed);
-  if (firstCheck.guard.ok) return { kind: 'ok', output: first.output, usage: first.usage, ...firstCheck, retried: false };
-  const reasons = firstCheck.guard.reasons.join('; ');
+  const style = styleIssues(firstCheck.messages);
+  if (firstCheck.guard.ok && style.length === 0) return { kind: 'ok', output: first.output, usage: first.usage, ...firstCheck, retried: false };
+  const reasons = [...(firstCheck.guard.ok ? [] : firstCheck.guard.reasons), ...style].join('; ');
   const retryTurns: Anthropic.MessageParam[] = [
     ...turns,
     { role: 'system', content: `Tu respuesta anterior no se envió porque: ${reasons}. Escribe otra respuesta para la persona que cumpla todas las reglas.` },
   ];
   const second = await brain.decide(system, retryTurns);
-  // Si el segundo intento ni siquiera llega, se queda el primero (que se retendrá).
+  // Si el segundo intento ni siquiera llega, se queda el primero (se retiene solo si no pasaba el filtro).
   if (second.kind !== 'ok') return { kind: 'ok', output: first.output, usage: first.usage, ...firstCheck, retried: true };
-  return { kind: 'ok', output: second.output, usage: addUsage(first.usage, second.usage), ...check(second.output, allowed), retried: true };
+  const usage = addUsage(first.usage, second.usage);
+  const secondCheck = check(second.output, allowed);
+  // Si el primero solo tenía una muletilla y el segundo no pasa el filtro, mejor el primero (que sí se puede enviar).
+  if (firstCheck.guard.ok && !secondCheck.guard.ok) return { kind: 'ok', output: first.output, usage, ...firstCheck, retried: true };
+  return { kind: 'ok', output: second.output, usage, ...secondCheck, retried: true };
 }

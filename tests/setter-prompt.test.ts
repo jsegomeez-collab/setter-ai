@@ -49,6 +49,12 @@ describe('prompt del setter', () => {
     expect(prompt).toContain('tipo_lead = "empresa_dfy"');
   });
 
+  it('dice cuándo marcar "descartar" (el nivel 2 salió descartado sin motivo en una simulación)', () => {
+    const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
+    expect(prompt).toContain('siguiente_paso = "descartar" solo si');
+    expect(prompt).toContain('Si en esta respuesta le pasas la agenda, siguiente_paso = "agendar_llamada"');
+  });
+
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {
     const turns = toClaudeTurns([
       row(1, { direction: 'out', text: 'Hola, pulsa el botón' }),

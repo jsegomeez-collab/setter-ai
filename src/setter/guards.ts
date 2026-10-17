@@ -31,6 +31,20 @@ const FORBIDDEN_PRICE_PATTERN = /\b[14][.,\s]?997\b/;
 /** Letras de otros alfabetos (cirílico, griego, hebreo, árabe, japonés, chino, coreano): fallo raro del modelo ("te молча"). */
 const FOREIGN_SCRIPT_PATTERN = /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿ぀-ヿ一-鿿가-힯]/;
 
+/**
+ * Muletillas que Jose no quiere (simulaciones del 2026-10-17). Es estilo, no riesgo: solo piden otro intento,
+ * nunca retienen. "vale la pena" es español neutro y se permite.
+ */
+const MULETILLAS: readonly { readonly pattern: RegExp; readonly reason: string }[] = [
+  { pattern: /(?<![\p{L}])vale(?![\p{L}])(?!\s+la\s+pena)/iu, reason: 'Usa "vale" (es de España; escribe en español neutro)' },
+  { pattern: /no\s+pasa\s+nada/i, reason: 'Usa la muletilla "no pasa nada"' },
+];
+
+export function styleIssues(messages: readonly string[]): string[] {
+  const text = messages.join('\n');
+  return MULETILLAS.filter((m) => m.pattern.test(text)).map((m) => m.reason);
+}
+
 /** Limpia los mensajitos y, si vienen más de MAX_MESSAGES, junta los sobrantes en el último (es formato, no un riesgo). */
 export function normalizeMessages(messages: readonly string[]): string[] {
   const clean = messages.map((m) => m.trim()).filter((m) => m.length > 0);
