@@ -27,6 +27,7 @@ Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para
 | 2026-10-16 | **Todo medido:** cada comentario guarda su reel de origen; cada clic, etiqueta y paso del flujo queda registrado. Las conversaciones se analizan en masa (objeciones, mercado, ángulos de contenido). |
 | 2026-10-16 | Setter: Claude Haiku 5.5 responde y rellena la ficha; Sonnet 5.5 para el análisis masivo; nunca Opus. Solo español. Detalle en la Fase 3. |
 | 2026-10-17 | **Primero terminar el programa (Fases 4-6); el marketing del setter (documento, objeciones, tono) lo pule Jose después.** |
+| 2026-10-17 (tarde) | **Cambio de Jose:** la IA también escribe primero a quien **pulsó el botón del flujo** (dentro de las 24 h que abre esa pulsación), con un inicio cercano; habla con **todos los que respondan**; las 5 preguntas eran solo orientación (mejorarlas y preguntar de forma cercana); **pasar a gente real ya** (aviso dado: restricción de Meta hace <1 h). La agenda va en **botón**, nunca en texto. |
 
 Datos de Jose: cuenta Creator pública @josenews.ai (Meta Verified), cuenta de pruebas @josegomezlife, LLC en USA con EIN, ManyChat Pro, GitHub + Render + Neon, API key de Anthropic, oferta/FAQs/objeciones por escrito.
 
@@ -221,7 +222,8 @@ Plan (orden aprobado):
 - [x] 5.2 /metricas: agenda **ofrecida** a N personas → **clic** de M.
 - ~~5.3 Reservas desde GHL~~ → **fuera del plan** (Jose 2026-10-17: lo hará él más adelante en su frontend; el `utm_content=<código>` ya va en el enlace).
 - ⚠️ **2026-10-17 01:41 UTC — Meta rechazó el mensaje de la IA con el enlace corto:** 508/**2534122** "Link can't be shared — You can't share links at this time because your activity may not follow our Community Standards. Please refer to the Account Status page". Los botones con enlace sí salían a las 01:28. Hipótesis sin verificar: H1 Meta bloquea enlaces de texto a onrender.com (culpa del enlace corto de hoy) · H2 limitación temporal de la cuenta para compartir enlaces. Pendiente: Jose mira "Estado de la cuenta" + prueba con el enlace normal (con su permiso).
-- [ ] Nueva petición de Jose (2026-10-17), en espera hasta resolver lo de arriba: aprovechar la ventana de 24 h para empezar una conversación de setteo muy cercana con los leads que respondan y parezcan interesantes (a qué se dedica, su situación, negocio, para qué usa la IA, objetivos). Toca decisiones previas (solo con quien responde; público tras pulir marketing).
+- [ ] **5.4 Setteo proactivo** (decisiones de Jose arriba, tabla de decisiones): (a) paso nuevo del flujo "inicio del setter": 15 min tras el recurso, uno de los textos fijos al azar (aprobados por Jose); no sale si ya habla con el setter, si la IA está parada o si el setter está apagado · (b) textos de inicio + documento nuevo → aprobación de Jose · (c) cargar documento, añadir el paso al flujo, prueba con @josegomezlife, setter a público.
+- [x] Petición de Jose (2026-10-17) que originó el 5.4: aprovechar la ventana de 24 h para empezar una conversación de setteo muy cercana con los leads que respondan y parezcan interesantes (a qué se dedica, su situación, negocio, para qué usa la IA, objetivos). Toca decisiones previas (solo con quien responde; público tras pulir marketing).
 - Sin datos reales hasta que el setter sea público (se prueba con la cuenta de prueba).
 
 ### Fase 6 (FINAL) — Software de gestión completo (frontend) ⏳
