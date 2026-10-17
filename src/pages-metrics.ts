@@ -1,6 +1,7 @@
 import { percent, type Funnel, type FunnelCounts } from './funnel.js';
 import type { Media } from './meta/client.js';
 import { escapeHtml, layout, reelName } from './pages.js';
+import type { SetterStageStats } from './store.js';
 
 /** Página /metricas (Fase 4, paso 1): el embudo por reel, total y por día. Provisional hasta el frontend de la Fase 6. */
 
@@ -52,7 +53,19 @@ function periodLinks(period: MetricsPeriod): string {
   return `<p>Periodo: ${link('all', 'Todo')} · ${link(7, '7 días')} · ${link(30, '30 días')}</p>`;
 }
 
-export function metricsPage(funnel: Funnel, media: readonly Media[], period: MetricsPeriod): string {
+/** Setter IA (Fase 4, paso 2): en qué etapa está cada conversación y cuántas cambiaron de etapa (historial de la ficha). */
+function setterBlock(stats: SetterStageStats): string {
+  const stages = stats.stages.map((s) => `<tr><td>${escapeHtml(s.step)}</td><td>${s.n}</td></tr>`).join('');
+  const moves = stats.transitions.map((t) => `<tr><td>${escapeHtml(t.from)} → ${escapeHtml(t.to)}</td><td>${t.n}</td></tr>`).join('');
+  return `<h2>Setter IA</h2>
+<p><small>Etapa = "siguiente paso" de la ficha. Todo el periodo (no depende del filtro de arriba). Con el setter en modo prueba casi solo hay conversaciones de prueba.</small></p>
+<h3>Conversaciones por etapa actual</h3>
+<table><tr><th>Etapa</th><th>Conversaciones</th></tr>${stages || '<tr><td colspan="2">Todavía no hay fichas.</td></tr>'}</table>
+<h3>Cambios de etapa</h3>
+<table><tr><th>De → a</th><th>Veces</th></tr>${moves || '<tr><td colspan="2">Todavía no hay cambios de etapa.</td></tr>'}</table>`;
+}
+
+export function metricsPage(funnel: Funnel, media: readonly Media[], period: MetricsPeriod, setter: SetterStageStats): string {
   const periodText = period === 'all' ? 'todo' : `últimos ${period} días`;
   return layout(
     'Métricas',
@@ -72,6 +85,7 @@ ${table('Día (UTC)', funnel.byDay, funnel.total, escapeHtml)}
 <li><strong>Cualificados</strong>: el setter IA dejó la ficha en "agendar llamada". Con el setter en modo prueba saldrá casi a 0.</li>
 <li>Pidieron, siguen, clic, escribieron y cualificados son de la persona (no de un reel concreto).</li>
 <li><strong>Llamadas</strong>: todavía no se miden (Fase 5).</li>
-</ul>`,
+</ul>
+${setterBlock(setter)}`,
   );
 }

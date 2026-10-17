@@ -3,7 +3,7 @@ import type { Scenario } from './setter/scenarios.js';
 import { LeadSchema } from './setter/schema.js';
 import { estimateCostUsd, verdict, type SimulationResult } from './setter/simulator.js';
 import type { SetterMode } from './setter/service.js';
-import type { ContactRow, ConversationRow, KnowledgeRow, MessageRow } from './store.js';
+import type { ContactRow, ConversationRow, KnowledgeRow, LeadHistoryRow, MessageRow } from './store.js';
 
 /** Páginas del setter IA: /setter (ajustes + documento) y /conversaciones (lista, hilo, ficha, pausa). */
 
@@ -158,7 +158,25 @@ export interface ConversationPageData {
   readonly igId: string;
   readonly contact: ContactRow | null;
   readonly messages: readonly MessageRow[];
+  /** Cada cambio de la ficha, del más antiguo al más nuevo (Fase 4). */
+  readonly leadHistory: readonly LeadHistoryRow[];
   readonly flash: string | null;
+}
+
+/** Lo que más dice del avance: etapa, nivel, si puede invertir y el resumen. */
+function leadHistoryTable(history: readonly LeadHistoryRow[]): string {
+  if (history.length === 0) return '<p>Sin cambios guardados todavía.</p>';
+  const field = (lead: unknown, key: string) => {
+    const value = (lead as Record<string, unknown> | null)?.[key];
+    return typeof value === 'string' ? escapeHtml(value) : '—';
+  };
+  const rows = history
+    .map(
+      (h) => `<tr><td>${when(h.createdAt)}</td><td>${field(h.lead, 'siguiente_paso')}</td><td>${field(h.lead, 'nivel')}</td>
+<td>${field(h.lead, 'puede_invertir')}</td><td><small>${field(h.lead, 'resumen')}</small></td></tr>`,
+    )
+    .join('');
+  return `<table><tr><th>Fecha</th><th>Siguiente paso</th><th>Nivel</th><th>Puede invertir</th><th>Resumen</th></tr>${rows}</table>`;
 }
 
 export function conversationPage(data: ConversationPageData): string {
@@ -178,6 +196,7 @@ export function conversationPage(data: ConversationPageData): string {
   const body = `<p><a href="/conversaciones">← Conversaciones</a></p><h1>${escapeHtml(name)}</h1>${flashBox(data.flash)}
 <div class="card">${pause}</div>
 <h2>Ficha</h2>${leadTable(contact?.lead)}
+<h2>Historial de la ficha</h2><p><small>Una fila cada vez que la IA cambió algo de la ficha.</small></p>${leadHistoryTable(data.leadHistory)}
 <h2>Mensajes</h2><table><tr><th>Fecha</th><th>De</th><th>Texto</th><th></th></tr>${thread || '<tr><td colspan="4">Sin mensajes.</td></tr>'}</table>`;
   return layout(`Conversación ${name}`, body);
 }

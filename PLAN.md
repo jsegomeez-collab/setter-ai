@@ -164,6 +164,8 @@ Hallazgos fuera del plan (decisión de Jose 2026-10-17: arreglar **antes** del p
   - [x] Prueba de Jose del "si" con @josegomezlife (2026-10-16 23:37-23:40 UTC): "texto como botón" → sigue → biblioteca → grupo ✅.
   - Tráfico real hasta 2026-10-17 00:07 UTC: reintento con texto **0 de 3 salvados** (los 3 volvieron a dar 2534025 → apunta a que el botón NO es la causa; muestra pequeña). Plan B **3 de 3 publicados** OK. Rescatados por DM: 0 (aún nadie ha escrito). En 1 caso el primer intento falló por "Service temporarily unavailable" (código 2, pasajero) y el texto por 2534025.
   - [ ] Seguir midiendo; rescate por DM sin verificar con datos reales.
+  - **Conclusión (2026-10-17, datos de Jose):** ManyChat (app aprobada, Advanced Access) **perdía leads por el mismo error** → no es nuestro nivel de acceso (no hace falta App Review). **Ningún reel promocionado** (todo orgánico) → no son anuncios. El % de rechazo varía por reel del 0 % al 79 % con el mismo código y mensaje → depende de la persona (ajustes de mensajes / restricciones de cuenta; fuentes de terceros, Meta no lo documenta). **No se puede saltar por la API.** La única vía: que escriban ellos → plan B + rescate por DM (ya en producción). Medir cuántos se recuperan.
+  - Sin explicar: el reel `18129515419637342` no aparece en la lista de reels del panel (lee los 50 últimos).
   - [ ] Medir tras desplegar: cuántos 2534025 se salvan con el texto (si casi ninguno, la causa no es el botón).
 - [ ] B. **Error 2534025**: 9 de 16 DMs a comentarios rechazados por Meta entre 21:23 y 23:04 UTC del 16-10 (56 %). Investigar la causa con la doc oficial (solo lectura) y traerla a Jose antes de cambiar nada.
 
@@ -174,7 +176,7 @@ Progreso:
   - [x] Corregido (sin desplegar): el % de "Escribieron" se calculaba sobre "Clic" y salía 200 %; ahora sobre "Les llegó el DM". 297 pruebas.
   - Límites: pidieron/siguen/clic/escribieron son de la persona, no del reel; "Cualificados" ≈ 0 con el setter en prueba; llamadas = Fase 5.
 - Hallazgo (2026-10-17): al desplegar, el servidor dio **502 durante ~30-45 s** (404 → 502 ×3 → 401). Los avisos de Meta en ese rato podrían perderse; **no verificado** si Meta los reintenta. `render.yaml` ya tiene `healthCheckPath: /healthz`.
-- [ ] 2. Historial de la ficha.
+- [x] 2. Historial de la ficha (2026-10-17): tabla `lead_history` (una fila solo si la ficha cambia; al arrancar se copia una vez la ficha actual de quien no tenga historial). En cada conversación: "Historial de la ficha". En /metricas: bloque "Setter IA" (conversaciones por etapa actual + cambios de etapa de → a). 304 pruebas (incl. Postgres real partiendo de una base "antigua").
 - [ ] 3. Análisis masivo (botón manual).
 - [ ] 4. Pendientes técnicos.
 

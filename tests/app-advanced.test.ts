@@ -167,6 +167,16 @@ describe('contactos y estado', () => {
     expect((await app.request('/metricas?dias=abc', { headers: { authorization: auth } })).status).toBe(200); // periodo raro → todo
   });
 
+  it('métricas: bloque del setter IA con conversaciones por etapa y cambios de etapa', async () => {
+    const { app, store } = setup();
+    await store.saveLead('9', { siguiente_paso: 'seguir_calificando' });
+    await store.saveLead('9', { siguiente_paso: 'agendar_llamada' });
+    const html = await (await app.request('/metricas', { headers: { authorization: auth } })).text();
+    expect(html).toContain('Setter IA');
+    expect(html).toContain('agendar_llamada');
+    expect(html).toContain('seguir_calificando → agendar_llamada');
+  });
+
   it('el estado indica si los enlaces con seguimiento están activos', async () => {
     const on = await (await setup().app.request('/eventos', { headers: { authorization: auth } })).text();
     expect(on).toContain('✔ activos');

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Funnel, FunnelCounts } from '../src/funnel.js';
 import { metricsPage, parsePeriod, periodStart } from '../src/pages-metrics.js';
 
+const NO_SETTER = { stages: [], transitions: [] };
+
 const counts = (overrides: Partial<FunnelCounts> = {}): FunnelCounts => ({
   key: 'r1',
   commented: 2,
@@ -21,14 +23,14 @@ describe('metricsPage', () => {
   it('"Escribieron" se mide sobre a quién le llegó el DM (se puede escribir sin hacer clic): nunca pasa del 100 %', () => {
     // Caso real 2026-10-17 (reel "5 apps…"): 1 clic y 2 escribieron → salía "200 %".
     const funnel: Funnel = { total: counts({ key: 'TOTAL' }), byReel: [counts()], byDay: [] };
-    const html = metricsPage(funnel, [], 'all');
+    const html = metricsPage(funnel, [], 'all', NO_SETTER);
     expect(html).not.toContain('200 %');
     expect(html).toContain('2 <small>(100 %)</small>');
   });
 
   it('sin datos lo dice', () => {
     const empty = counts({ key: 'TOTAL', commented: 0, reached: 0, asked: 0, follows: 0, clicked: 0, wrote: 0 });
-    expect(metricsPage({ total: empty, byReel: [], byDay: [] }, [], 7)).toContain('Todavía no hay comentarios en este periodo');
+    expect(metricsPage({ total: empty, byReel: [], byDay: [] }, [], 7, NO_SETTER)).toContain('Todavía no hay comentarios en este periodo');
   });
 });
 

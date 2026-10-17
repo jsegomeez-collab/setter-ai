@@ -314,8 +314,12 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.get('/metricas', async (c) => {
     const period = parsePeriod(c.req.query('dias'));
-    const [rows, media] = await Promise.all([deps.store.funnelRows(periodStart(period)), loadMedia(deps.client, MEDIA_FOR_STATS)]);
-    return c.html(metricsPage(buildFunnel(rows), media, period));
+    const [rows, media, setter] = await Promise.all([
+      deps.store.funnelRows(periodStart(period)),
+      loadMedia(deps.client, MEDIA_FOR_STATS),
+      deps.store.setterStageStats(),
+    ]);
+    return c.html(metricsPage(buildFunnel(rows), media, period, setter));
   });
   return app;
 }

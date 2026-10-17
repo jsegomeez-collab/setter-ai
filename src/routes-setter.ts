@@ -12,6 +12,7 @@ const MAX_KNOWLEDGE_CHARS = 60_000;
 const VERSIONS_SHOWN = 20;
 const CONVERSATIONS_SHOWN = 200;
 const THREAD_MESSAGES = 300;
+const LEAD_HISTORY_SHOWN = 50;
 const MODES: readonly SetterMode[] = ['off', 'test', 'live'];
 
 const withMsg = (path: string, message: string) => `${path}?msg=${encodeURIComponent(message)}`;
@@ -85,8 +86,12 @@ function registerConversations(app: Hono, deps: AppDeps): void {
 
   app.get('/conversaciones/:igId', async (c) => {
     const igId = c.req.param('igId');
-    const [contact, messages] = await Promise.all([store.getContact(igId), store.listMessages(igId, THREAD_MESSAGES)]);
-    return c.html(conversationPage({ igId, contact, messages, flash: c.req.query('msg') ?? null }));
+    const [contact, messages, leadHistory] = await Promise.all([
+      store.getContact(igId),
+      store.listMessages(igId, THREAD_MESSAGES),
+      store.listLeadHistory(igId, LEAD_HISTORY_SHOWN),
+    ]);
+    return c.html(conversationPage({ igId, contact, messages, leadHistory, flash: c.req.query('msg') ?? null }));
   });
 
   const setPaused = (paused: boolean) => async (c: Context) => {

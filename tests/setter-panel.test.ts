@@ -120,6 +120,16 @@ describe('panel /conversaciones', () => {
     expect(page).toContain('agendar_llamada');
   });
 
+  it('la conversación enseña el historial de la ficha (cada cambio, con su etapa y fecha)', async () => {
+    const ctx = await withConversation();
+    await ctx.store.saveLead(STRANGER_ID, sampleOutput({}, { siguiente_paso: 'ofrecer_membresia', usa_ia: 'ChatGPT para textos' }).lead);
+    const page = await (await ctx.get(`/conversaciones/${STRANGER_ID}`)).text();
+    expect(page).toContain('Historial de la ficha');
+    const history = page.slice(page.indexOf('Historial de la ficha'));
+    expect(history.indexOf('agendar_llamada')).toBeGreaterThan(-1);
+    expect(history.indexOf('agendar_llamada')).toBeLessThan(history.indexOf('ofrecer_membresia')); // de la más antigua a la más nueva
+  });
+
   it('el hilo enseña los mensajes (escapados), los retenidos y la ficha', async () => {
     const { get } = await withConversation();
     const page = await (await get(`/conversaciones/${STRANGER_ID}`)).text();

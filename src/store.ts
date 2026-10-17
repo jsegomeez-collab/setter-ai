@@ -22,7 +22,12 @@ export interface Store {
   listConversations(limit: number): Promise<ConversationRow[]>;
   getContact(igId: string): Promise<ContactRow | null>;
   setAiPaused(igId: string, paused: boolean, reason: string | null): Promise<void>;
+  /** Guarda la ficha y, si cambió respecto a la última, la apunta en el historial (Fase 4). */
   saveLead(igId: string, lead: unknown): Promise<void>;
+  /** Historial de la ficha de una persona: las `limit` más recientes, de la más antigua a la más nueva. */
+  listLeadHistory(igId: string, limit: number): Promise<LeadHistoryRow[]>;
+  /** Setter IA: conversaciones en cada etapa (siguiente paso) y cambios de etapa según el historial. */
+  setterStageStats(): Promise<SetterStageStats>;
   /** Último DM a un comentario de esta persona que Meta rechazó desde `since` (plan B: rescate por DM). */
   failedPrivateReply(igId: string, since: Date): Promise<{ readonly dedupKey: string; readonly request: unknown; readonly createdAt: Date } | null>;
   /** Acción que produjo un mensaje enviado (por su message_id de Meta), para distinguir ecos propios de mensajes a mano. */
@@ -120,6 +125,16 @@ export interface ConversationRow {
   readonly lastDirection: MessageDirection;
   readonly aiPaused: boolean;
   readonly lead: unknown;
+}
+
+export interface LeadHistoryRow {
+  readonly lead: unknown;
+  readonly createdAt: Date;
+}
+
+export interface SetterStageStats {
+  readonly stages: readonly { readonly step: string; readonly n: number }[];
+  readonly transitions: readonly { readonly from: string; readonly to: string; readonly n: number }[];
 }
 
 export interface KnowledgeRow {
@@ -261,6 +276,17 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS scheduled_jobs_pending_idx ON scheduled_jobs (status, run_at);
+CREATE TABLE IF NOT EXISTS lead_history (
+  id BIGSERIAL PRIMARY KEY,
+  ig_id TEXT NOT NULL,
+  lead JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS lead_history_contact_idx ON lead_history (ig_id, id);
+-- Fichas guardadas antes de existir el historial: su estado actual es el primer punto (una sola vez).
+INSERT INTO lead_history (ig_id, lead, created_at)
+SELECT c.ig_id, c.lead, coalesce(c.lead_updated_at, now()) FROM contacts c
+WHERE c.lead IS NOT NULL AND NOT EXISTS (SELECT 1 FROM lead_history h WHERE h.ig_id = c.ig_id);
 `;
 
 type Sql = ReturnType<typeof postgres>;
@@ -392,9 +418,35 @@ export async function createPostgresStore(
         ON CONFLICT (ig_id) DO UPDATE SET ai_paused = EXCLUDED.ai_paused, ai_paused_reason = EXCLUDED.ai_paused_reason`;
     },
     async saveLead(igId, lead) {
+      const json = toJson(sql, lead);
       await sql`
-        INSERT INTO contacts (ig_id, lead, lead_updated_at) VALUES (${igId}, ${toJson(sql, lead)}, now())
+        INSERT INTO contacts (ig_id, lead, lead_updated_at) VALUES (${igId}, ${json}, now())
         ON CONFLICT (ig_id) DO UPDATE SET lead = EXCLUDED.lead, lead_updated_at = now()`;
+      // Solo si cambió (las respuestas de una misma persona van en fila, así que no se cruzan).
+      await sql`
+        INSERT INTO lead_history (ig_id, lead)
+        SELECT ${igId}, ${json}
+        WHERE (SELECT h.lead FROM lead_history h WHERE h.ig_id = ${igId} ORDER BY h.id DESC LIMIT 1) IS DISTINCT FROM ${json}::jsonb`;
+    },
+    async listLeadHistory(igId, limit) {
+      const rows = await sql<{ lead: unknown; created_at: Date }[]>`
+        SELECT lead, created_at FROM (
+          SELECT id, lead, created_at FROM lead_history WHERE ig_id = ${igId} ORDER BY id DESC LIMIT ${limit}
+        ) h ORDER BY id`;
+      return rows.map((row) => ({ lead: row.lead, createdAt: row.created_at }));
+    },
+    async setterStageStats() {
+      const stages = await sql<{ step: string; n: number }[]>`
+        SELECT lead->>'siguiente_paso' AS step, count(*)::int AS n FROM contacts
+        WHERE lead->>'siguiente_paso' IS NOT NULL GROUP BY 1 ORDER BY n DESC, step`;
+      const transitions = await sql<{ from: string; to: string; n: number }[]>`
+        WITH h AS (
+          SELECT lead->>'siguiente_paso' AS step, lag(lead->>'siguiente_paso') OVER (PARTITION BY ig_id ORDER BY id) AS prev
+          FROM lead_history
+        )
+        SELECT prev AS "from", step AS "to", count(*)::int AS n FROM h
+        WHERE prev IS NOT NULL AND step IS NOT NULL AND prev <> step GROUP BY 1, 2 ORDER BY n DESC, 1, 2`;
+      return { stages: [...stages], transitions: [...transitions] };
     },
     async failedPrivateReply(igId, since) {
       const rows = await sql<{ dedup_key: string; request: unknown; created_at: Date }[]>`

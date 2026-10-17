@@ -41,6 +41,7 @@ export function createMemoryStore(): Store & {
   };
   const comments: CommentRecord[] = [];
   const commentDates = new Map<string, Date>();
+  const leadHistory: { igId: string; lead: unknown; createdAt: Date }[] = [];
   const jobs = new Map<number, JobRow & { dedupKey: string; status: string; result: unknown }>();
   let nextJobId = 1;
   const requests: { signatureOk: boolean; payload: unknown }[] = [];
@@ -102,6 +103,31 @@ export function createMemoryStore(): Store & {
     },
     async saveLead(igId, lead) {
       contacts.set(igId, { ...(contacts.get(igId) ?? blankContact(igId)), lead });
+      const last = leadHistory.filter((h) => h.igId === igId).at(-1);
+      if (JSON.stringify(last?.lead) !== JSON.stringify(lead)) leadHistory.push({ igId, lead, createdAt: new Date() });
+    },
+    async listLeadHistory(igId, limit) {
+      return limit > 0 ? leadHistory.filter((h) => h.igId === igId).slice(-limit).map(({ lead, createdAt }) => ({ lead, createdAt })) : [];
+    },
+    async setterStageStats() {
+      const stepOf = (lead: unknown) => (lead as { siguiente_paso?: unknown } | null)?.siguiente_paso;
+      const stages = new Map<string, number>();
+      for (const contact of contacts.values()) {
+        const step = stepOf(contact.lead);
+        if (typeof step === 'string') stages.set(step, (stages.get(step) ?? 0) + 1);
+      }
+      const transitions = new Map<string, number>();
+      const prevByPerson = new Map<string, unknown>();
+      for (const h of leadHistory) {
+        const prev = prevByPerson.get(h.igId);
+        const step = stepOf(h.lead);
+        if (typeof prev === 'string' && typeof step === 'string' && prev !== step) transitions.set(`${prev}|${step}`, (transitions.get(`${prev}|${step}`) ?? 0) + 1);
+        prevByPerson.set(h.igId, step);
+      }
+      return {
+        stages: [...stages.entries()].map(([step, n]) => ({ step, n })),
+        transitions: [...transitions.entries()].map(([key, n]) => ({ from: key.split('|')[0] as string, to: key.split('|')[1] as string, n })),
+      };
     },
     async findActionByMessageId(mid) {
       const action = [...actions.values()].find((a) => messageIdOf(a.response) === mid);
