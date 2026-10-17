@@ -60,6 +60,8 @@ export interface AppDeps {
   readonly processPayload: (payload: unknown) => void;
   /** Rescata comentarios sin respuesta desde una fecha (pone en cola sus DMs). */
   readonly rescue?: (since: Date) => Promise<{ queued: number; skipped: number; since: string }>;
+  /** Rescate de una vez por DM (botón de /conversaciones): manda el flujo a quien lo necesita. */
+  readonly rescueDms?: () => Promise<{ queued: number }>;
   /** Borradores del setter (modo borrador): enviar tal cual o descartar desde la conversación. */
   readonly drafts?: { approve(igId: string): Promise<DraftResult>; discard(igId: string): Promise<DiscardResult> };
   /** Contesta ya si el último mensaje de esa persona está sin responder (al reanudar la IA). */

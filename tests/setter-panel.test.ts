@@ -4,7 +4,7 @@ import type { Config } from '../src/config.js';
 import { TokenManager } from '../src/meta/token.js';
 import { knowledgeWarnings } from '../src/pages-setter.js';
 import { SETTINGS } from '../src/store.js';
-import { STRANGER_ID, TEST_SETTER_CONFIG, createMemoryStore, sampleOutput } from './helpers.js';
+import { STRANGER_ID, TEST_SETTER_CONFIG, createMemoryStore, followFlow, sampleOutput } from './helpers.js';
 
 const HOST = 'http://localhost';
 const PASSWORD = 'contraseña-larga-123';
@@ -165,6 +165,34 @@ describe('panel /conversaciones', () => {
     expect(drafts.approve).toHaveBeenCalledWith(STRANGER_ID);
     expect((await postTo(`/conversaciones/${STRANGER_ID}/borrador/descartar`)).status).toBe(303);
     expect(drafts.discard).toHaveBeenCalledWith(STRANGER_ID);
+  });
+
+  it('rescate de una vez: /conversaciones lista a quién se le mandaría el flujo y el botón lo lanza', async () => {
+    const store = createMemoryStore();
+    const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
+    const rescueDms = vi.fn().mockResolvedValue({ queued: 1 });
+    const app = createApp({ config: config(), store, client: null, tokens, processPayload: vi.fn(), linkSecret: null, rescueDms });
+    store.flows.set('flow1', followFlow());
+    await store.touchContact(STRANGER_ID, 'helmuth_hg');
+    await store.claimAction('private:c-1', 'private_reply', {
+      type: 'private_reply',
+      commentId: 'c-1',
+      message: { text: 'x', buttons: [], flowId: 'flow1', nodeId: 'start', recipientId: STRANGER_ID },
+    });
+    await store.finishAction('private:c-1', false, { code: 100 });
+    await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'No he recibido nada', mid: 'm-1', status: 'sent', dedupKey: null });
+
+    const page = await (await app.request(`${HOST}/conversaciones`, { headers: { authorization: auth } })).text();
+    expect(page).toContain('Rescate por DM');
+    expect(page).toContain('@helmuth_hg');
+    expect(page).toContain('/conversaciones/rescatar-dms');
+    const res = await app.request(`${HOST}/conversaciones/rescatar-dms`, {
+      method: 'POST',
+      headers: { authorization: auth, origin: HOST, 'content-type': 'application/x-www-form-urlencoded' },
+      body: '',
+    });
+    expect(res.status).toBe(303);
+    expect(rescueDms).toHaveBeenCalledTimes(1);
   });
 
   it('sin borrador pendiente no aparecen los botones', async () => {

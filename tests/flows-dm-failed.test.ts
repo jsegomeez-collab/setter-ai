@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { findDmRescueCandidates, rescuePendingDms } from '../src/flows/dm-rescue.js';
 import { planComment, type Action } from '../src/flows/engine.js';
 import { MetaApiError, type InstagramClient } from '../src/meta/client.js';
 import { processWebhook } from '../src/process.js';
@@ -87,6 +88,40 @@ describe('Sender: plan B público', () => {
     await sender.enqueue([privateReply(PLAN_B[0])]);
     await sender.idle();
     expect(client.replyToComment).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('rescate de una vez (quien ya escribió antes de que existiera el rescate automático)', () => {
+  it('lista a quien tuvo el DM rechazado y escribió en las últimas 24 h sin recibir nada; el botón le manda el flujo', async () => {
+    const { client, sender, store } = setup();
+    await sender.enqueue([privateReply(PLAN_B[0])]); // DM rechazado
+    await sender.idle();
+    await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'No he recibido nada', mid: 'm-1', status: 'sent', dedupKey: null });
+
+    const candidates = await findDmRescueCandidates(store);
+    expect(candidates.map((c) => c.igId)).toEqual([STRANGER_ID]);
+
+    expect(await rescuePendingDms({ store, sender })).toEqual({ queued: 1 });
+    await sender.idle();
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      STRANGER_ID,
+      expect.objectContaining({ attachment: expect.objectContaining({ payload: expect.objectContaining({ text: 'Hola, pulsa el botón' }) }) }),
+    );
+    // Una sola vez: pulsar otra vez el botón no repite.
+    await rescuePendingDms({ store, sender });
+    await sender.idle();
+    expect(client.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('no lista a quien escribió hace más de 24 h (Meta ya no deja contestar) ni a quien no tuvo el DM rechazado', async () => {
+    const { sender, store } = setup();
+    await sender.enqueue([privateReply(PLAN_B[0])]);
+    await sender.idle();
+    await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'hola', mid: 'm-1', status: 'sent', dedupKey: null });
+    const msg = store.messages.find((m) => m.mid === 'm-1');
+    if (msg) store.messages[store.messages.indexOf(msg)] = { ...msg, createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) };
+    await store.addMessage({ igId: 'otra', direction: 'in', source: 'user', text: 'hola', mid: 'm-2', status: 'sent', dedupKey: null });
+    expect(await findDmRescueCandidates(store)).toEqual([]);
   });
 });
 

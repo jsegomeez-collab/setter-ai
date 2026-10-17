@@ -132,7 +132,20 @@ function nextStep(lead: unknown): string {
   return parsed.success ? escapeHtml(parsed.data.siguiente_paso) : '—';
 }
 
-export function conversationsPage(rows: readonly ConversationRow[], flash: string | null): string {
+/** Rescate de una vez: a quién se le mandaría el flujo (DM rechazado + escribió en las últimas 24 h). */
+function rescueCard(rescue: readonly { readonly igId: string; readonly username: string | null }[]): string {
+  if (rescue.length === 0) return '';
+  const names = rescue.map((r) => `<li>${r.username ? `@${escapeHtml(r.username)}` : escapeHtml(r.igId)}</li>`).join('');
+  return `<div class="card"><strong>Rescate por DM</strong>: a estas ${rescue.length} persona(s) Meta les rechazó el DM y te escribieron en las últimas 24 h sin recibir nada.
+Al pulsar se les manda el primer mensaje del flujo (una sola vez).<ul>${names}</ul>
+<form method="post" action="/conversaciones/rescatar-dms"><button>Enviar el flujo a estas personas</button></form></div>`;
+}
+
+export function conversationsPage(
+  rows: readonly ConversationRow[],
+  flash: string | null,
+  rescue: readonly { readonly igId: string; readonly username: string | null }[] = [],
+): string {
   const list = rows
     .map(
       (r) => `<tr><td><a href="/conversaciones/${encodeURIComponent(r.igId)}">${r.username ? `@${escapeHtml(r.username)}` : escapeHtml(r.igId)}</a></td>
@@ -140,7 +153,7 @@ export function conversationsPage(rows: readonly ConversationRow[], flash: strin
 <td>${r.aiPaused ? '<span class="bad">IA parada</span>' : '<span class="ok">IA activa</span>'}</td><td>${nextStep(r.lead)}</td></tr>`,
     )
     .join('');
-  const body = `<h1>Conversaciones</h1>${flashBox(flash)}
+  const body = `<h1>Conversaciones</h1>${flashBox(flash)}${rescueCard(rescue)}
 <table><tr><th>Persona</th><th>Último mensaje</th><th></th><th>IA</th><th>Siguiente paso</th></tr>${list || '<tr><td colspan="5">Todavía no hay conversaciones.</td></tr>'}</table>`;
   return layout('Conversaciones', body);
 }

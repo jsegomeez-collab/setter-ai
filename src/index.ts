@@ -6,6 +6,7 @@ import { deriveLinkSecret } from './links.js';
 import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
 import { catchUpComments } from './catch-up.js';
+import { rescuePendingDms } from './flows/dm-rescue.js';
 import { processEvent, processInBackground, rescueComments } from './process.js';
 import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
@@ -98,6 +99,7 @@ async function main(): Promise<void> {
     processPayload: (payload) => processInBackground(payload, processDeps),
     rescue: (since) => rescueComments(since, { store, sender: activeSender }),
     replyPending: (igId) => setter.replyNow(igId),
+    rescueDms: () => rescuePendingDms({ store, sender: activeSender }),
     drafts: { approve: (igId) => setter.approveDraft(igId), discard: (igId) => setter.discardDraft(igId) },
     simulator,
   });

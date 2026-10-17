@@ -1,6 +1,7 @@
 import type { Context, Hono } from 'hono';
 import type { AppDeps } from './app.js';
 import { conversationPage, conversationsPage, setterPage, simulationResultPage, simulatorPage } from './pages-setter.js';
+import { findDmRescueCandidates } from './flows/dm-rescue.js';
 import { SCENARIOS, findScenario } from './setter/scenarios.js';
 import { runSimulation } from './setter/simulator.js';
 import { parseUsernames, readSetterMode, type SetterMode } from './setter/service.js';
@@ -82,7 +83,17 @@ function registerKnowledge(app: Hono, deps: AppDeps): void {
 function registerConversations(app: Hono, deps: AppDeps): void {
   const { store } = deps;
 
-  app.get('/conversaciones', async (c) => c.html(conversationsPage(await store.listConversations(CONVERSATIONS_SHOWN), c.req.query('msg') ?? null)));
+  app.get('/conversaciones', async (c) => {
+    const [rows, candidates] = await Promise.all([store.listConversations(CONVERSATIONS_SHOWN), findDmRescueCandidates(store)]);
+    const rescue = await Promise.all(candidates.map(async ({ igId }) => ({ igId, username: (await store.getContact(igId))?.username ?? null })));
+    return c.html(conversationsPage(rows, c.req.query('msg') ?? null, rescue));
+  });
+
+  app.post('/conversaciones/rescatar-dms', async (c) => {
+    if (!deps.rescueDms) return c.redirect(withMsg('/conversaciones', 'El rescate no está disponible.'), 303);
+    const { queued } = await deps.rescueDms();
+    return c.redirect(withMsg('/conversaciones', `Rescate: flujo enviado a ${queued} persona(s).`), 303);
+  });
 
   app.get('/conversaciones/:igId', async (c) => {
     const igId = c.req.param('igId');
