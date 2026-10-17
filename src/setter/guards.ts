@@ -37,12 +37,25 @@ const FOREIGN_SCRIPT_PATTERN = /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿ぀-ヿ一-鿿가-힯]/;
  */
 const MULETILLAS: readonly { readonly pattern: RegExp; readonly reason: string }[] = [
   { pattern: /(?<![\p{L}])vale(?![\p{L}])(?!\s+la\s+pena)/iu, reason: 'Usa "vale" (es de España; escribe en español neutro)' },
-  { pattern: /no\s+pasa\s+nada/i, reason: 'Usa la muletilla "no pasa nada"' },
+  { pattern: /pasa\s+nada/i, reason: 'Usa la muletilla "no pasa nada" (o "tampoco pasa nada"); no la uses ni parecidas' },
+  { pattern: /no\s+hay\s+problema/i, reason: 'Usa la muletilla "no hay problema"; no la uses ni parecidas' },
+  { pattern: /(?<![\p{L}])tranquil[oa]s?(?![\p{L}])/iu, reason: 'Usa "tranquilo/a" (palabra con género y muletilla)' },
 ];
 
-export function styleIssues(messages: readonly string[]): string[] {
+/** Cuántos mensajes anteriores de la cuenta se miran para no empezar igual. */
+const SAME_OPENING_WINDOW = 2;
+
+function openingWord(text: string): string {
+  return text.trim().toLowerCase().match(/^[\p{L}]+/u)?.[0] ?? '';
+}
+
+/** `previous`: mensajes anteriores de la cuenta, del más antiguo al más reciente. */
+export function styleIssues(messages: readonly string[], previous: readonly string[] = []): string[] {
   const text = messages.join('\n');
-  return MULETILLAS.filter((m) => m.pattern.test(text)).map((m) => m.reason);
+  const issues = MULETILLAS.filter((m) => m.pattern.test(text)).map((m) => m.reason);
+  const opening = openingWord(messages[0] ?? '');
+  const repeated = opening.length > 0 && previous.slice(-SAME_OPENING_WINDOW).some((p) => openingWord(p) === opening);
+  return repeated ? [...issues, `Empieza igual ("${opening}") que uno de tus mensajes anteriores; empieza de otra forma`] : issues;
 }
 
 /** Limpia los mensajitos y, si vienen más de MAX_MESSAGES, junta los sobrantes en el último (es formato, no un riesgo). */

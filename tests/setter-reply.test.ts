@@ -58,6 +58,35 @@ describe('muletillas (segundo intento de estilo, nunca retiene)', () => {
     expect(styleIssues(['eso vale la pena', 'qué tal te fue?'])).toEqual([]);
   });
 
+  it('pilla las variantes de la simulación del seco: "tampoco pasa nada", "no hay problema", "tranquilo/a"', () => {
+    expect(styleIssues(['ok, tampoco pasa nada'])).toHaveLength(1);
+    expect(styleIssues(['ok, no hay problema'])).toHaveLength(1);
+    expect(styleIssues(['tranquila, sin prisa'])).toHaveLength(1);
+    expect(styleIssues(['me tranquiliza saberlo'])).toEqual([]);
+  });
+
+  it('pilla que empiece igual que alguno de sus 2 mensajes anteriores ("entiendo… / entiendo…")', () => {
+    const previous = ['entiendo, a veces cuesta arrancar\n¿estás trabajando?', 'perfecto, cuéntame más'];
+    expect(styleIssues(['Entiendo, a veces uno no tiene respuesta'], previous)).toHaveLength(1);
+    expect(styleIssues(['claro, sin prisa'], previous)).toEqual([]);
+    expect(styleIssues(['entiendo'], ['entiendo', 'b', 'c'])).toEqual([]);
+  });
+
+  it('usa los 2 últimos mensajes de la cuenta del historial para ver si empieza igual', async () => {
+    const turns = [
+      { role: 'user' as const, content: 'no se' },
+      { role: 'assistant' as const, content: 'entiendo, cuesta arrancar' },
+      { role: 'user' as const, content: 'nada' },
+    ];
+    const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['entiendo, está bien'])).mockResolvedValueOnce(ok(['sin prisa, cuando quieras']));
+    expect(await decideChecked({ decide }, 'SYS', turns, allowed)).toMatchObject({ retried: true, messages: ['sin prisa, cuando quieras'] });
+  });
+
+  it('si el segundo intento tiene más muletillas que el primero, se envía el primero', async () => {
+    const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale!'])).mockResolvedValueOnce(ok(['vale, no pasa nada']));
+    expect(await decideChecked({ decide }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['vale!'] });
+  });
+
   it('con una muletilla pide otra respuesta una vez y se queda con la segunda', async () => {
     const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale, no pasa nada'])).mockResolvedValueOnce(ok(['tranqui, a qué te dedicas?']));
     const result = await decideChecked({ decide }, 'SYS', TURNS, allowed);

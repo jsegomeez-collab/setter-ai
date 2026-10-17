@@ -67,6 +67,8 @@ describe('ClaudeLeadPlayer', () => {
 describe('runSimulation', () => {
   it('alterna lead y setter; el setter recibe el documento y el historial con los roles bien', async () => {
     const { decide, deps } = fakes(['hola, vi tu reel', 'uso chatgpt', null]);
+    // La segunda respuesta empieza distinto: si repitiera el inicio, el filtro de estilo pediría un segundo intento.
+    decide.mockResolvedValueOnce(ok()).mockResolvedValueOnce(ok(sampleOutput({ messages: ['claro, y para qué la usas?'] })));
     const result = await runSimulation(deps, { persona: 'nivel 1' });
     expect(result.turns.map((t) => t.who)).toEqual(['lead', 'setter', 'lead', 'setter']);
     expect(result.endReason).toBe('El lead dio la conversación por terminada');

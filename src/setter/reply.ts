@@ -37,7 +37,8 @@ export async function decideChecked(
   const first = await brain.decide(system, turns);
   if (first.kind !== 'ok') return first;
   const firstCheck = check(first.output, allowed);
-  const style = styleIssues(firstCheck.messages);
+  const previous = turns.filter((t) => t.role === 'assistant').map((t) => String(t.content));
+  const style = styleIssues(firstCheck.messages, previous);
   if (firstCheck.guard.ok && style.length === 0) return { kind: 'ok', output: first.output, usage: first.usage, ...firstCheck, retried: false };
   const reasons = [...(firstCheck.guard.ok ? [] : firstCheck.guard.reasons), ...style].join('; ');
   const retryTurns: Anthropic.MessageParam[] = [
@@ -49,7 +50,8 @@ export async function decideChecked(
   if (second.kind !== 'ok') return { kind: 'ok', output: first.output, usage: first.usage, ...firstCheck, retried: true };
   const usage = addUsage(first.usage, second.usage);
   const secondCheck = check(second.output, allowed);
-  // Si el primero solo tenía una muletilla y el segundo no pasa el filtro, mejor el primero (que sí se puede enviar).
-  if (firstCheck.guard.ok && !secondCheck.guard.ok) return { kind: 'ok', output: first.output, usage, ...firstCheck, retried: true };
+  // Si el primero solo tenía muletillas y el segundo no pasa el filtro o tiene más, mejor el primero (que sí se puede enviar).
+  const secondIsWorse = !secondCheck.guard.ok || styleIssues(secondCheck.messages, previous).length > style.length;
+  if (firstCheck.guard.ok && secondIsWorse) return { kind: 'ok', output: first.output, usage, ...firstCheck, retried: true };
   return { kind: 'ok', output: second.output, usage, ...secondCheck, retried: true };
 }

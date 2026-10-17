@@ -55,6 +55,15 @@ describe('prompt del setter', () => {
     expect(prompt).toContain('Si en esta respuesta le pasas la agenda, siguiente_paso = "agendar_llamada"');
   });
 
+  it('fallos de la simulación del 17-10 (nivel 2 y seco): recurso ≠ programa, membresía, seco, agenda una vez', () => {
+    const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
+    expect(prompt).toContain('El recurso (la biblioteca) que recibió es gratis y NO es el programa');
+    expect(prompt).toContain('Ofrece la membresía solo a quien tiene interés pero no puede invertir ahora');
+    expect(prompt).toContain('Si contesta seco 3 veces seguidas');
+    expect(prompt).toContain('Si ya le pasaste la agenda, no la vuelvas a pasar');
+    expect(prompt).toContain('No uses palabras con género');
+  });
+
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {
     const turns = toClaudeTurns([
       row(1, { direction: 'out', text: 'Hola, pulsa el botón' }),
