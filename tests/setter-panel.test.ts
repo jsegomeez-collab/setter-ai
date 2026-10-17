@@ -148,6 +148,31 @@ describe('panel /conversaciones', () => {
     expect(await store.getContact(STRANGER_ID)).toMatchObject({ aiPaused: false, aiPausedReason: null });
   });
 
+  it('borrador pendiente: la conversación enseña Enviar / Descartar y los botones llaman al setter', async () => {
+    const store = createMemoryStore();
+    const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
+    const drafts = { approve: vi.fn().mockResolvedValue({ ok: true, sent: 1 }), discard: vi.fn().mockResolvedValue({ ok: true, discarded: 1 }) };
+    const app = createApp({ config: config(), store, client: null, tokens, processPayload: vi.fn(), linkSecret: null, drafts });
+    await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'hola', mid: 'm-1', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: STRANGER_ID, direction: 'out', source: 'ai', text: 'ey!', mid: null, status: 'held', dedupKey: 'ai:m-1:1', note: 'Modo borrador: pendiente de aprobar' });
+    const page = await (await app.request(`${HOST}/conversaciones/${STRANGER_ID}`, { headers: { authorization: auth } })).text();
+    expect(page).toContain('Borrador pendiente');
+    expect(page).toContain(`/conversaciones/${STRANGER_ID}/borrador/enviar`);
+    expect(page).toContain(`/conversaciones/${STRANGER_ID}/borrador/descartar`);
+    const postTo = (path: string) =>
+      app.request(`${HOST}${path}`, { method: 'POST', headers: { authorization: auth, origin: HOST, 'content-type': 'application/x-www-form-urlencoded' }, body: '' });
+    expect((await postTo(`/conversaciones/${STRANGER_ID}/borrador/enviar`)).status).toBe(303);
+    expect(drafts.approve).toHaveBeenCalledWith(STRANGER_ID);
+    expect((await postTo(`/conversaciones/${STRANGER_ID}/borrador/descartar`)).status).toBe(303);
+    expect(drafts.discard).toHaveBeenCalledWith(STRANGER_ID);
+  });
+
+  it('sin borrador pendiente no aparecen los botones', async () => {
+    const { get } = await withConversation(); // su retenido es por seguridad (enlace no permitido), no un borrador
+    const page = await (await get(`/conversaciones/${STRANGER_ID}`)).text();
+    expect(page).not.toContain('Borrador pendiente');
+  });
+
   it('al reanudar la IA, contesta ya si había un mensaje de la persona sin responder', async () => {
     const store = createMemoryStore();
     const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });

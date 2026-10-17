@@ -14,6 +14,7 @@ import { metricsPage, parsePeriod, periodStart } from './pages-metrics.js';
 import { contactsPage, dashboardPage, legalPage } from './pages.js';
 import { registerSetter } from './routes-setter.js';
 import type { SetterBrain } from './setter/brain.js';
+import type { DiscardResult, DraftResult } from './setter/service.js';
 import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
 
@@ -59,6 +60,8 @@ export interface AppDeps {
   readonly processPayload: (payload: unknown) => void;
   /** Rescata comentarios sin respuesta desde una fecha (pone en cola sus DMs). */
   readonly rescue?: (since: Date) => Promise<{ queued: number; skipped: number; since: string }>;
+  /** Borradores del setter (modo borrador): enviar tal cual o descartar desde la conversación. */
+  readonly drafts?: { approve(igId: string): Promise<DraftResult>; discard(igId: string): Promise<DiscardResult> };
   /** Contesta ya si el último mensaje de esa persona está sin responder (al reanudar la IA). */
   readonly replyPending?: (igId: string) => Promise<void>;
   /** Simulador del setter (null = sin ANTHROPIC_API_KEY). */

@@ -104,6 +104,18 @@ function registerConversations(app: Hono, deps: AppDeps): void {
     const path = `/conversaciones/${encodeURIComponent(igId)}`;
     return c.redirect(withMsg(path, paused ? 'IA parada en esta conversación.' : 'IA reanudada: si había un mensaje sin responder, lo contesta ya.'), 303);
   };
+  // Borrador (modo borrador): se espera al envío (unos segundos por mensajito) para enseñar el resultado.
+  const draftAction = (kind: 'approve' | 'discard') => async (c: Context) => {
+    const igId = c.req.param('igId') ?? '';
+    const path = `/conversaciones/${encodeURIComponent(igId)}`;
+    if (!deps.drafts) return c.redirect(withMsg(path, 'Los borradores no están disponibles (setter sin conectar).'), 303);
+    const result = kind === 'approve' ? await deps.drafts.approve(igId) : await deps.drafts.discard(igId);
+    if (!result.ok) return c.redirect(withMsg(path, result.reason), 303);
+    return c.redirect(withMsg(path, 'sent' in result ? `Borrador enviado (${result.sent} mensajito(s)).` : `Borrador descartado (${result.discarded}).`), 303);
+  };
+  app.post('/conversaciones/:igId/borrador/enviar', draftAction('approve'));
+  app.post('/conversaciones/:igId/borrador/descartar', draftAction('discard'));
+
   app.post('/conversaciones/:igId/pausar', setPaused(true));
   app.post('/conversaciones/:igId/reanudar', setPaused(false));
 }

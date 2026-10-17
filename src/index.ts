@@ -98,6 +98,7 @@ async function main(): Promise<void> {
     processPayload: (payload) => processInBackground(payload, processDeps),
     rescue: (since) => rescueComments(since, { store, sender: activeSender }),
     replyPending: (igId) => setter.replyNow(igId),
+    drafts: { approve: (igId) => setter.approveDraft(igId), discard: (igId) => setter.discardDraft(igId) },
     simulator,
   });
 

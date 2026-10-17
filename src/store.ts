@@ -107,8 +107,8 @@ export interface ContactRow {
 
 export type MessageDirection = 'in' | 'out';
 export type MessageSource = 'user' | 'flow' | 'ai' | 'human';
-/** sent = enviado · queued = en cola · held = retenido para revisión de Jose (no enviado). */
-export type MessageStatus = 'sent' | 'queued' | 'held' | 'failed';
+/** sent = enviado · queued = en cola · held = retenido para revisión de Jose (no enviado) · discarded = borrador que Jose descartó. */
+export type MessageStatus = 'sent' | 'queued' | 'held' | 'failed' | 'discarded';
 
 export interface NewMessage {
   readonly igId: string;

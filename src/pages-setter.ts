@@ -2,7 +2,7 @@ import { escapeHtml, jsonPreview, layout } from './pages.js';
 import type { Scenario } from './setter/scenarios.js';
 import { LeadSchema } from './setter/schema.js';
 import { estimateCostUsd, verdict, type SimulationResult } from './setter/simulator.js';
-import type { SetterMode } from './setter/service.js';
+import { trailingDrafts, type SetterMode } from './setter/service.js';
 import type { ContactRow, ConversationRow, KnowledgeRow, LeadHistoryRow, MessageRow } from './store.js';
 
 /** Páginas del setter IA: /setter (ajustes + documento) y /conversaciones (lista, hilo, ficha, pausa). */
@@ -123,6 +123,7 @@ const STATUS_LABELS: Record<MessageRow['status'], string> = {
   queued: '<span class="warn">en cola</span>',
   held: '<span class="bad">RETENIDO (no enviado)</span>',
   failed: '<span class="bad">FALLÓ el envío</span>',
+  discarded: '<span class="warn">DESCARTADO</span>',
 };
 const SOURCE_LABELS: Record<MessageRow['source'], string> = { user: 'Persona', flow: 'Flujo', ai: 'IA', human: 'Jose (a mano)' };
 
@@ -163,6 +164,16 @@ export interface ConversationPageData {
   readonly flash: string | null;
 }
 
+/** Borrador pendiente (modo borrador): lo que diría la IA, con Enviar / Descartar. */
+function draftCard(id: string, messages: readonly MessageRow[]): string {
+  const drafts = trailingDrafts(messages);
+  if (drafts.length === 0) return '';
+  const texts = drafts.map((m) => `<li>${escapeHtml(m.text)}</li>`).join('');
+  return `<div class="card"><strong>Borrador pendiente</strong> (la IA lo escribió pero no lo ha enviado):<ol>${texts}</ol>
+<form class="inline" method="post" action="/conversaciones/${id}/borrador/enviar"><button>Enviar tal cual</button></form>
+<form class="inline" method="post" action="/conversaciones/${id}/borrador/descartar"><button>Descartar</button></form></div>`;
+}
+
 /** Lo que más dice del avance: etapa, nivel, si puede invertir y el resumen. */
 function leadHistoryTable(history: readonly LeadHistoryRow[]): string {
   if (history.length === 0) return '<p>Sin cambios guardados todavía.</p>';
@@ -195,6 +206,7 @@ export function conversationPage(data: ConversationPageData): string {
     .join('');
   const body = `<p><a href="/conversaciones">← Conversaciones</a></p><h1>${escapeHtml(name)}</h1>${flashBox(data.flash)}
 <div class="card">${pause}</div>
+${draftCard(id, data.messages)}
 <h2>Ficha</h2>${leadTable(contact?.lead)}
 <h2>Historial de la ficha</h2><p><small>Una fila cada vez que la IA cambió algo de la ficha.</small></p>${leadHistoryTable(data.leadHistory)}
 <h2>Mensajes</h2><table><tr><th>Fecha</th><th>De</th><th>Texto</th><th></th></tr>${thread || '<tr><td colspan="4">Sin mensajes.</td></tr>'}</table>`;

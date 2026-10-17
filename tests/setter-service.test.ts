@@ -221,6 +221,54 @@ describe('SetterService', () => {
     ]);
   });
 
+  it('aprobar el borrador: envía los mensajitos retenidos en orden, con "escribiendo…", y quedan como enviados (sin duplicar filas)', async () => {
+    const { store, enqueue, showTyping, service, flush } = await setup();
+    store.settings.set(SETTINGS.setterDraft, 'true');
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    const before = store.messages.length;
+
+    expect(await service.approveDraft(STRANGER_ID)).toEqual({ ok: true, sent: 2 });
+
+    expect(enqueue.mock.calls.map(([actions]) => actions[0]?.dedupKey)).toEqual(['ai:m-1:1', 'ai:m-1:2']);
+    expect(showTyping).toHaveBeenCalledTimes(2);
+    expect(store.messages).toHaveLength(before);
+    expect(store.messages.filter((m) => m.direction === 'out').map((m) => m.status)).toEqual(['sent', 'sent']);
+  });
+
+  it('aprobar sin borrador pendiente, o con una respuesta retenida por seguridad, no envía nada', async () => {
+    const { store, enqueue, service } = await setup();
+    expect(await service.approveDraft(STRANGER_ID)).toEqual({ ok: false, reason: 'No hay ningún borrador pendiente en esta conversación.' });
+    await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'hola', mid: 'm-1', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: STRANGER_ID, direction: 'out', source: 'ai', text: 'paga en https://otro.com', mid: null, status: 'held', dedupKey: 'ai:m-1', note: 'Enlace no permitido' });
+    expect((await service.approveDraft(STRANGER_ID)).ok).toBe(false);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('aprobar pasadas 24 h desde su último mensaje: no se envía (regla de Meta) y se avisa', async () => {
+    const { store, enqueue, service, flush } = await setup();
+    store.settings.set(SETTINGS.setterDraft, 'true');
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    const last = store.messages.find((m) => m.mid === 'm-1');
+    if (last) store.messages[store.messages.indexOf(last)] = { ...last, createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) };
+    const result = await service.approveDraft(STRANGER_ID);
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ reason: expect.stringContaining('24 h') });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('descartar el borrador: quedan como descartados y no se envían', async () => {
+    const { store, enqueue, service, flush } = await setup();
+    store.settings.set(SETTINGS.setterDraft, 'true');
+    await service.onIncoming(dm('hola', 'm-1'));
+    await flush();
+    expect(await service.discardDraft(STRANGER_ID)).toEqual({ ok: true, discarded: 2 });
+    expect(store.messages.filter((m) => m.direction === 'out').map((m) => m.status)).toEqual(['discarded', 'discarded']);
+    expect((await service.approveDraft(STRANGER_ID)).ok).toBe(false);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
   it('si Instagram no acepta un mensajito, queda como fallido y NO salen los siguientes', async () => {
     const { store, enqueue, service, flush } = await setup({ sendOk: false });
     await service.onIncoming(dm('hola', 'm-1'));

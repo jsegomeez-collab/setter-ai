@@ -1,6 +1,6 @@
 import type { Action } from '../flows/engine.js';
 import type { InstagramEvent } from '../meta/parse.js';
-import { SETTINGS, type Store } from '../store.js';
+import { SETTINGS, type MessageRow, type Store } from '../store.js';
 import type { SetterBrain } from './brain.js';
 import { decideChecked, type CheckedReply } from './reply.js';
 import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks } from './prompt.js';
@@ -19,6 +19,20 @@ const HISTORY_LIMIT = 40;
 export const SETTER_FLOW_ID = 'setter';
 /** Nota de un DM que ya contestó el flujo ("sí" escrito o rescate por DM): el setter no lo responde. */
 export const FLOW_HANDLED_NOTE = 'Lo contestó el flujo';
+/** Nota de los mensajitos retenidos en modo borrador (los únicos que Jose puede enviar desde el panel). */
+export const DRAFT_NOTE = 'Modo borrador: pendiente de aprobar';
+/** Meta solo deja escribir dentro de las 24 h desde el último mensaje de la persona (doc, Fase 2). */
+const META_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export type DraftResult = { readonly ok: true; readonly sent: number } | { readonly ok: false; readonly reason: string };
+export type DiscardResult = { readonly ok: true; readonly discarded: number } | { readonly ok: false; readonly reason: string };
+
+/** El borrador pendiente: los mensajitos retenidos en modo borrador después del último mensaje de la persona. */
+export function trailingDrafts(messages: readonly MessageRow[]): MessageRow[] {
+  const lastIn = messages.map((m) => m.direction).lastIndexOf('in');
+  return messages.slice(lastIn + 1).filter((m) => m.status === 'held' && m.note === DRAFT_NOTE && m.dedupKey !== null);
+}
+const NO_DRAFT = 'No hay ningún borrador pendiente en esta conversación.';
 const LOG_KIND = 'setter';
 
 export type SetterMode = 'off' | 'test' | 'live';
@@ -126,6 +140,40 @@ export class SetterService {
     return run;
   }
 
+  /** Jose aprueba el borrador desde el panel: se envía tal cual, mensajito a mensajito. Va en fila con las respuestas. */
+  approveDraft(igId: string): Promise<DraftResult> {
+    const run = (this.chains.get(igId) ?? Promise.resolve()).then(() => this.sendDraft(igId));
+    this.chains.set(igId, run.then(() => undefined, () => undefined));
+    return run;
+  }
+
+  /** Jose descarta el borrador: no se envía. */
+  async discardDraft(igId: string): Promise<DiscardResult> {
+    const drafts = trailingDrafts(await this.options.store.listMessages(igId, HISTORY_LIMIT));
+    if (drafts.length === 0) return { ok: false, reason: NO_DRAFT };
+    for (const draft of drafts) await this.options.store.setMessageStatus(draft.dedupKey as string, 'discarded');
+    await this.log('Borrador descartado por Jose.', { igId, messages: drafts.length });
+    return { ok: true, discarded: drafts.length };
+  }
+
+  private async sendDraft(igId: string): Promise<DraftResult> {
+    const history = await this.options.store.listMessages(igId, HISTORY_LIMIT);
+    const drafts = trailingDrafts(history);
+    if (drafts.length === 0) return { ok: false, reason: NO_DRAFT };
+    const lastIn = [...history].reverse().find((m) => m.direction === 'in');
+    if (!lastIn || Date.now() - lastIn.createdAt.getTime() > META_REPLY_WINDOW_MS) {
+      return { ok: false, reason: 'Han pasado más de 24 h desde su último mensaje: Instagram no deja enviarlo. Descártalo.' };
+    }
+    for (const [i, draft] of drafts.entries()) {
+      await this.typeLikeHuman(igId, draft.text);
+      if (!(await this.send(igId, draft.dedupKey as string, draft.text, true))) {
+        return { ok: false, reason: `Instagram no aceptó el mensajito ${i + 1}; los siguientes no se enviaron.` };
+      }
+    }
+    await this.log('Borrador aprobado por Jose y enviado.', { igId, messages: drafts.length });
+    return { ok: true, sent: drafts.length };
+  }
+
   /** Al apagarse (SIGTERM del despliegue): contesta ya lo que esperaba los 8 s; si no, se perdería con el reinicio. */
   flushPending(): void {
     for (const [igId, handle] of this.timers) {
@@ -207,7 +255,7 @@ export class SetterService {
       }
       if ((await store.getSetting(SETTINGS.setterDraft)) === 'true') {
         for (const [i, text] of messages.entries()) {
-          await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'held', dedupKey: `${dedupKey}:${i + 1}`, note: 'Modo borrador: pendiente de aprobar' });
+          await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'held', dedupKey: `${dedupKey}:${i + 1}`, note: DRAFT_NOTE });
         }
         await this.log('Modo borrador: respuesta retenida para aprobar.', facts);
       } else {
@@ -239,10 +287,14 @@ export class SetterService {
     await this.sleep(typingDelayMs(text, this.random()));
   }
 
-  /** Envía un mensajito por la cola y apunta cómo terminó. Devuelve true si Instagram lo aceptó. */
-  private async send(igId: string, dedupKey: string, text: string): Promise<boolean> {
+  /**
+   * Envía un mensajito por la cola y apunta cómo terminó. Devuelve true si Instagram lo aceptó.
+   * `saved`: el mensajito ya está guardado (borrador aprobado) y solo cambia su estado, sin duplicar la fila.
+   */
+  private async send(igId: string, dedupKey: string, text: string, saved = false): Promise<boolean> {
     const { store } = this.options;
-    await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'queued', dedupKey });
+    if (saved) await store.setMessageStatus(dedupKey, 'queued');
+    else await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'queued', dedupKey });
     const action: Action = {
       type: 'send_message',
       dedupKey,
