@@ -182,7 +182,7 @@ Progreso:
   - Precios oficiales (tabla del SDK, 2026-10-06): Sonnet 5.5 $2/$10 por millón (entrada/salida); Haiku 5.5 $0,10/$0,50; Batch API al 50 %. Estimación sin medir: ~0,08 $ por 100 conversaciones con Sonnet en Batch.
   - Propuesta: "tipo de tráfico por reel" = suma de las fichas (sin IA, gratis); la IA solo para dolores, lenguaje e ideas de reels.
   - **Bloqueo:** con el setter en modo prueba no hay conversaciones de cualificación reales → no se puede probar con datos reales hasta que el setter sea público (y eso espera a que Jose pula el marketing).
-- [ ] 4. Pendientes técnicos (Jose: los 7, en este orden).
+- [x] 4. Pendientes técnicos (Jose: los 7, en este orden). Todo desplegado (`main` = 98933c5).
   - [x] 4.1 DMs sin respuesta tras un reinicio: al arrancar se contestan las conversaciones de la última hora que esperan respuesta; al apagarse (SIGTERM) se contesta ya lo que esperaba los 8 s.
   - [x] 4.2 BORRAR por DM (Jose: todo lo de esa persona, también el texto en los registros técnicos; confirmación "Listo, he borrado tus datos de nuestro sistema 🙏 Si vuelves a escribir o comentar, empezaremos de cero."). Solo la palabra BORRAR. Segundo barrido al minuto (rastro del eco de la confirmación). Lo que queda del borrado en el registro no lleva su id.
   - [x] 4.3 Al reanudar la IA se contesta lo pendiente. Los "sí"/rescates que contesta el flujo quedan marcados y el setter no los responde.
@@ -192,7 +192,7 @@ Progreso:
   - Jose pidió (2026-10-17) "si falla el DM, comentario público + que el flujo se active solo cuando escriba": **ya estaba hecho** (plan B + rescate por DM, B arriba); plan B 4/4 publicados; rescate aún sin caso real.
   - [x] 4.5 verificado en producción (01:02:42 UTC): "0 recuperados; reels revisados 25, con error 0" (las 25 consultas a Instagram funcionan; no había comentarios perdidos). Sin caso real de recuperación aún.
   - [x] 4.6 Aprobar borradores (Jose: enviar o descartar, editar en la Fase 6): tarjeta "Borrador pendiente" en la conversación con "Enviar tal cual" / "Descartar". Solo los retenidos en modo borrador (no los retenidos por seguridad). Pasadas 24 h desde su último mensaje no se envía (regla de Meta). 339 pruebas. Sin probar con datos reales (necesita modo borrador + un DM de prueba).
-  - [ ] 4.7 BD definitiva / consumo de Neon (con Jose).
+  - [x] 4.7 Neon (2026-10-17 ~01:15 UTC, leído en su consola con Jose): plan Free (100 CU-h/mes; al acabarse **para la BD hasta el siguiente periodo**), cómputo 0,25↔2 CU, **2,67 CU-h en ~13,7 h** (≈4,7 CU-h/día ≈ 140-146/mes → se acabaría hacia el día 21 del periodo), almacenamiento 34 MB. Opciones vistas en su Billing: ampliación 10 $/mes (250 h) o Launch 0,106 $/CU-h (~15 $/mes). **Decisión de Jose: seguir gratis y vigilar.** Regla: revisar el consumo al empezar cada sesión y avisar si la proyección pasa de 100 h antes de fin de periodo (fecha de reinicio sin verificar).
   - 328 pruebas. Sin probar con datos reales: BORRAR (necesita que Jose lo pruebe) y el reinicio con un DM a medias.
 
 Lista original (referencia):
