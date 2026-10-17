@@ -64,6 +64,12 @@ describe('prompt del setter', () => {
     expect(prompt).toContain('No uses palabras con género');
   });
 
+  it('no inventa cosas de la persona ni dice que estará en la llamada', () => {
+    const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
+    expect(prompt).toContain('No supongas nada de la persona que no te haya dicho');
+    expect(prompt).toContain('Tú no estás en la llamada');
+  });
+
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {
     const turns = toClaudeTurns([
       row(1, { direction: 'out', text: 'Hola, pulsa el botón' }),

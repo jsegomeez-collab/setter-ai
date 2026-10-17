@@ -38,7 +38,8 @@ const FOREIGN_SCRIPT_PATTERN = /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿ぀-ヿ一-鿿가-힯]/;
 const MULETILLAS: readonly { readonly pattern: RegExp; readonly reason: string }[] = [
   { pattern: /(?<![\p{L}])vale(?![\p{L}])(?!\s+la\s+pena)/iu, reason: 'Usa "vale" (es de España; escribe en español neutro)' },
   { pattern: /pasa\s+nada/i, reason: 'Usa la muletilla "no pasa nada" (o "tampoco pasa nada"); no la uses ni parecidas' },
-  { pattern: /no\s+hay\s+problema/i, reason: 'Usa la muletilla "no hay problema"; no la uses ni parecidas' },
+  { pattern: /(no\s+hay|ning[uú]n)\s+problema/i, reason: 'Usa la muletilla "no hay problema" (o "ningún problema"); no la uses ni parecidas' },
+  { pattern: /nos\s+vemos/i, reason: 'Dice "nos vemos", pero tú no estás en la llamada (es con el equipo)' },
   { pattern: /(?<![\p{L}])tranquil[oa]s?(?![\p{L}])/iu, reason: 'Usa "tranquilo/a" (palabra con género y muletilla)' },
 ];
 
@@ -56,6 +57,34 @@ export function styleIssues(messages: readonly string[], previous: readonly stri
   const opening = openingWord(messages[0] ?? '');
   const repeated = opening.length > 0 && previous.slice(-SAME_OPENING_WINDOW).some((p) => openingWord(p) === opening);
   return repeated ? [...issues, `Empieza igual ("${opening}") que uno de tus mensajes anteriores; empieza de otra forma`] : issues;
+}
+
+/** Un emoji con sus añadidos (tono de piel, selector de variante, unión de emojis). */
+const EMOJI_PATTERN = /(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|️|‍)+/gu;
+
+function hasEmoji(text: string): boolean {
+  return new RegExp(EMOJI_PATTERN.source, 'u').test(text);
+}
+
+function tidy(text: string): string {
+  return text.replace(/\s{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1').trim();
+}
+
+/**
+ * Documento de Jose: emojis "como mucho uno por mensaje y no en todos". Se arregla aquí sin gastar otro intento:
+ * se deja solo el primero de la respuesta, y ninguno si el mensaje anterior de la cuenta ya llevaba.
+ * Nunca deja la respuesta vacía.
+ */
+export function limitEmojis(messages: readonly string[], previous: readonly string[] = []): string[] {
+  let allowed = hasEmoji(previous.at(-1) ?? '') ? 0 : 1;
+  const limited = messages
+    .map((m) =>
+      hasEmoji(m)
+        ? tidy(m.replace(EMOJI_PATTERN, (emoji) => (allowed-- > 0 ? emoji : '')))
+        : m,
+    )
+    .filter((m) => m.length > 0);
+  return limited.length > 0 ? limited : [...messages];
 }
 
 /** Limpia los mensajitos y, si vienen más de MAX_MESSAGES, junta los sobrantes en el último (es formato, no un riesgo). */

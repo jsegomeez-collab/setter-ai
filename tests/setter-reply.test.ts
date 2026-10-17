@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BrainResult, SetterBrain } from '../src/setter/brain.js';
-import { checkReply, styleIssues } from '../src/setter/guards.js';
+import { checkReply, limitEmojis, styleIssues } from '../src/setter/guards.js';
 import { decideChecked } from '../src/setter/reply.js';
 import { TEST_SETTER_LINKS, sampleOutput } from './helpers.js';
 
@@ -82,6 +82,11 @@ describe('muletillas (segundo intento de estilo, nunca retiene)', () => {
     expect(await decideChecked({ decide }, 'SYS', turns, allowed)).toMatchObject({ retried: true, messages: ['sin prisa, cuando quieras'] });
   });
 
+  it('pilla "ningún problema" y "nos vemos" (el setter no está en la llamada)', () => {
+    expect(styleIssues(['ningún problema, sin prisa'])).toHaveLength(1);
+    expect(styleIssues(['genial, nos vemos en la llamada'])).toHaveLength(1);
+  });
+
   it('si el segundo intento tiene más muletillas que el primero, se envía el primero', async () => {
     const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale!'])).mockResolvedValueOnce(ok(['vale, no pasa nada']));
     expect(await decideChecked({ decide }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['vale!'] });
@@ -100,6 +105,31 @@ describe('muletillas (segundo intento de estilo, nunca retiene)', () => {
     expect(await decideChecked({ decide: failed }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['vale!'] });
     const blocked = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale!'])).mockResolvedValueOnce(ok(['mira https://otro.com']));
     expect(await decideChecked({ decide: blocked }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['vale!'] });
+  });
+});
+
+describe('emojis (como mucho uno por respuesta y no en dos seguidas)', () => {
+  it('deja solo el primero de la respuesta', () => {
+    expect(limitEmojis(['qué bueno 🙌', 'y tú a qué te dedicas? 😊'], [])).toEqual(['qué bueno 🙌', 'y tú a qué te dedicas?']);
+  });
+
+  it('si el mensaje anterior de la cuenta ya llevaba emoji, los quita todos (también con tono de piel)', () => {
+    expect(limitEmojis(['dale, sin prisa 🙂', 'hola 👍🏽 qué tal?'], ['buenas! 😊'])).toEqual(['dale, sin prisa', 'hola qué tal?']);
+  });
+
+  it('nunca deja la respuesta vacía: un mensaje que solo es un emoji se queda si es el único', () => {
+    expect(limitEmojis(['🙌'], ['buenas! 😊'])).toEqual(['🙌']);
+    expect(limitEmojis(['🙌', 'cuéntame más'], ['buenas! 😊'])).toEqual(['cuéntame más']);
+  });
+
+  it('decideChecked envía los mensajitos ya sin el emoji de más', async () => {
+    const turns = [
+      { role: 'user' as const, content: 'hola' },
+      { role: 'assistant' as const, content: 'buenas! 😊' },
+      { role: 'user' as const, content: 'trabajo' },
+    ];
+    const decide = vi.fn<SetterBrain['decide']>().mockResolvedValue(ok(['qué bien 🙂', 'en qué trabajas?']));
+    expect(await decideChecked({ decide }, 'SYS', turns, allowed)).toMatchObject({ retried: false, messages: ['qué bien', 'en qué trabajas?'] });
   });
 });
 
