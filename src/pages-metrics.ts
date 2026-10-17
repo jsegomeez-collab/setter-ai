@@ -27,7 +27,8 @@ const COLUMNS: readonly { key: Exclude<keyof FunnelCounts, 'key'>; title: string
   { key: 'asked', title: 'Pidieron el recurso', base: 'reached' },
   { key: 'follows', title: 'Siguen', base: 'asked' },
   { key: 'clicked', title: 'Clic en el recurso', base: 'follows' },
-  { key: 'wrote', title: 'Escribieron por DM', base: 'clicked' },
+  // Se puede escribir sin hacer clic: se mide sobre a quién le llegó el DM (si no, pasaba del 100 %).
+  { key: 'wrote', title: 'Escribieron por DM', base: 'reached' },
   { key: 'qualified', title: 'Cualificados', base: 'wrote' },
 ];
 
@@ -67,7 +68,7 @@ ${table('Día (UTC)', funnel.byDay, funnel.total, escapeHtml)}
 <li><strong>Les llegó el DM</strong>: Meta aceptó el DM a su comentario (con botón o, de respaldo, como texto) o se le rescató después por DM.</li>
 <li><strong>DM rechazado</strong>: Meta rechazó el DM a algún comentario suyo. <strong>Plan B</strong> y <strong>Rescatados</strong> salen de ahí.</li>
 <li><strong>Pidieron el recurso</strong>: pulsaron el botón o escribieron "sí". <strong>Siguen</strong>: Meta dijo que siguen la cuenta.</li>
-<li><strong>Clic en el recurso</strong>: abrieron un enlace con seguimiento. <strong>Escribieron por DM</strong>: mandaron algún mensaje.</li>
+<li><strong>Clic en el recurso</strong>: abrieron un enlace con seguimiento. <strong>Escribieron por DM</strong>: mandaron algún mensaje (su % es sobre "Les llegó el DM", porque se puede escribir sin hacer clic).</li>
 <li><strong>Cualificados</strong>: el setter IA dejó la ficha en "agendar llamada". Con el setter en modo prueba saldrá casi a 0.</li>
 <li>Pidieron, siguen, clic, escribieron y cualificados son de la persona (no de un reel concreto).</li>
 <li><strong>Llamadas</strong>: todavía no se miden (Fase 5).</li>

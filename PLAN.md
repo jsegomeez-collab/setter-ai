@@ -161,12 +161,19 @@ Hallazgos fuera del plan (decisión de Jose 2026-10-17: arreglar **antes** del p
   - [x] 2. Plan B público + rescate por DM (Jose: "crealo tu" → 3 textos aprobados). Campo `dmFailedReplies` del flujo; la respuesta pública solo se encola si el DM falla del todo (nunca con 368), una vez por comentario; si esa persona escribe en 7 días y no le mandamos nada desde el fallo, el flujo le manda su primer mensaje (una vez). 285 pruebas.
     - Encontrado antes de desplegar: `listFlows` devolvía el JSON sin pasar por el esquema → los flujos antiguos no tendrían el campo nuevo y **todos** los comentarios habrían fallado. Arreglado (se pasa por el esquema) + protección en el motor + prueba con Postgres real.
   - [x] 2b. Desplegado (ffad1df, Render "Live", /healthz 200) y **activado** 2026-10-17: flujo "Réplica ManyChat" guardado con los 3 textos; el resto del flujo comprobado sin cambios.
-  - [ ] Ver con tráfico real: primer 2534025 → ¿sale el texto? si no, ¿sale el plan B? y si la persona escribe, ¿le llega el primer mensaje?
+  - [x] Prueba de Jose del "si" con @josegomezlife (2026-10-16 23:37-23:40 UTC): "texto como botón" → sigue → biblioteca → grupo ✅.
+  - Tráfico real hasta 2026-10-17 00:07 UTC: reintento con texto **0 de 3 salvados** (los 3 volvieron a dar 2534025 → apunta a que el botón NO es la causa; muestra pequeña). Plan B **3 de 3 publicados** OK. Rescatados por DM: 0 (aún nadie ha escrito). En 1 caso el primer intento falló por "Service temporarily unavailable" (código 2, pasajero) y el texto por 2534025.
+  - [ ] Seguir midiendo; rescate por DM sin verificar con datos reales.
   - [ ] Medir tras desplegar: cuántos 2534025 se salvan con el texto (si casi ninguno, la causa no es el botón).
 - [ ] B. **Error 2534025**: 9 de 16 DMs a comentarios rechazados por Meta entre 21:23 y 23:04 UTC del 16-10 (56 %). Investigar la causa con la doc oficial (solo lectura) y traerla a Jose antes de cambiar nada.
 
 Progreso:
-- [ ] 1. Embudo `/metricas`.
+- [x] 1. Embudo `/metricas` (2026-10-17, desplegado 127bb48): por reel + TOTAL + por día; periodo todo/7/30 días. Decisiones de Jose: tabla con DM rechazado/plan B/rescatados; quien comenta en 2 reels cuenta en los dos.
+  - Validado con datos reales: "Comentaron" coincide reel a reel con "Personas" de /contactos (18 reels).
+  - Primera foto real (todo el periodo): 104 personas → **les llegó el DM 48 (46 %)** · **DM rechazado 55 (53 %)** · pidieron el recurso 15 · siguen 15 · clic 11 · escribieron 3 · cualificados 0.
+  - [x] Corregido (sin desplegar): el % de "Escribieron" se calculaba sobre "Clic" y salía 200 %; ahora sobre "Les llegó el DM". 297 pruebas.
+  - Límites: pidieron/siguen/clic/escribieron son de la persona, no del reel; "Cualificados" ≈ 0 con el setter en prueba; llamadas = Fase 5.
+- Hallazgo (2026-10-17): al desplegar, el servidor dio **502 durante ~30-45 s** (404 → 502 ×3 → 401). Los avisos de Meta en ese rato podrían perderse; **no verificado** si Meta los reintenta. `render.yaml` ya tiene `healthCheckPath: /healthz`.
 - [ ] 2. Historial de la ficha.
 - [ ] 3. Análisis masivo (botón manual).
 - [ ] 4. Pendientes técnicos.
