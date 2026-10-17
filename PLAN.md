@@ -178,7 +178,10 @@ Progreso:
 - Hallazgo (2026-10-17): al desplegar, el servidor dio **502 durante ~30-45 s** (404 → 502 ×3 → 401). Los avisos de Meta en ese rato podrían perderse; **no verificado** si Meta los reintenta. `render.yaml` ya tiene `healthCheckPath: /healthz`.
 - [x] 2. Historial de la ficha (2026-10-17): tabla `lead_history` (una fila solo si la ficha cambia; al arrancar se copia una vez la ficha actual de quien no tenga historial). En cada conversación: "Historial de la ficha". En /metricas: bloque "Setter IA" (conversaciones por etapa actual + cambios de etapa de → a). 304 pruebas (incl. Postgres real partiendo de una base "antigua").
   - Desplegado 661be72 y comprobado con datos reales: copia inicial de la ficha de @josegomezlife con su fecha original (2026-10-16 18:29); etapas: seguir_calificando 1; cambios: 0 (normal en modo prueba). % de "Escribieron" corregido en producción. El 502 al desplegar no se pudo medir esta vez.
-- [ ] 3. Análisis masivo (botón manual).
+- [ ] 3. Análisis masivo (botón manual). **Qué quiere Jose (2026-10-17):** solo la parte de **cualificación** (lo que habla el setter después del recurso, no el flujo) → ideas de reels, lenguaje literal del mercado, dolores y **qué tipo de tráfico atrae cada reel**; gasto mínimo.
+  - Precios oficiales (tabla del SDK, 2026-10-06): Sonnet 5.5 $2/$10 por millón (entrada/salida); Haiku 5.5 $0,10/$0,50; Batch API al 50 %. Estimación sin medir: ~0,08 $ por 100 conversaciones con Sonnet en Batch.
+  - Propuesta: "tipo de tráfico por reel" = suma de las fichas (sin IA, gratis); la IA solo para dolores, lenguaje e ideas de reels.
+  - **Bloqueo:** con el setter en modo prueba no hay conversaciones de cualificación reales → no se puede probar con datos reales hasta que el setter sea público (y eso espera a que Jose pula el marketing).
 - [ ] 4. Pendientes técnicos.
 
 Lista original (referencia):
@@ -242,6 +245,8 @@ Lista original (referencia):
 - ManyChat Pro: hasta que se apague.
 
 ## Pendientes / apuntes
+
+- [ ] (Idea de Jose 2026-10-17, FUERA del plan, no mezclar) Mandar audios con un clon de su voz (ElevenLabs u otro) en la fase de cualificación.
 
 - [ ] (2026-10-17, Jose: "apuntar y seguir") 3 personas reales escribieron por DM y no recibieron respuesta (setter en modo prueba): @mg_grela ("si" ×3), @helmuth_hg ("No he recibido nasa", sin DM del flujo en su hilo), @zymmer12 ("El Instagram me.pidio un montos de cuidado con tu cuenta" → **posible aviso de spam de Instagram**, sin verificar).
 
