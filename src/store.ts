@@ -1,7 +1,6 @@
 import postgres from 'postgres';
 import { flowSchema, type Flow } from './flows/types.js';
 import type { FunnelPersonRow } from './funnel.js';
-import type { LinkData } from './links.js';
 
 /** Todo lo que el servidor guarda o lee. La interfaz permite usar una versión en memoria en las pruebas. */
 export interface Store {
@@ -46,10 +45,7 @@ export interface Store {
   listKnowledgeVersions(limit: number): Promise<KnowledgeRow[]>;
   /** Comentarios registrados desde una fecha que NO recibieron respuesta privada (para rescatarlos). */
   unansweredCommentEvents(since: Date): Promise<unknown[]>;
-  /** Enlaces cortos (Fase 5). Guardar devuelve false si el código ya existía. */
-  saveShortLink(code: string, data: LinkData): Promise<boolean>;
-  getShortLink(code: string): Promise<LinkData | null>;
-  /** Agenda: personas a las que se ofreció (enlace corto creado) y que hicieron clic. */
+  /** Agenda (Fase 5): personas a las que se envió bien el botón de agenda y que hicieron clic en él. */
   agendaStats(): Promise<{ readonly offered: number; readonly clicked: number }>;
   /** De estos comentarios, cuáles ya tenemos guardados (para recuperar solo los que no nos llegaron). */
   existingCommentIds(commentIds: readonly string[]): Promise<Set<string>>;
@@ -291,11 +287,8 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS scheduled_jobs_pending_idx ON scheduled_jobs (status, run_at);
-CREATE TABLE IF NOT EXISTS short_links (
-  code TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- Enlaces cortos en texto (17-10, sustituidos por el botón de agenda): la tabla se quita (llevaba ids de personas).
+DROP TABLE IF EXISTS short_links;
 CREATE TABLE IF NOT EXISTS lead_history (
   id BIGSERIAL PRIMARY KEY,
   ig_id TEXT NOT NULL,
@@ -468,18 +461,12 @@ export async function createPostgresStore(
         WHERE prev IS NOT NULL AND step IS NOT NULL AND prev <> step GROUP BY 1, 2 ORDER BY n DESC, 1, 2`;
       return { stages: [...stages], transitions: [...transitions] };
     },
-    async saveShortLink(code, data) {
-      const rows = await sql`INSERT INTO short_links (code, data) VALUES (${code}, ${toJson(sql, data)}) ON CONFLICT (code) DO NOTHING RETURNING code`;
-      return rows.length > 0;
-    },
-    async getShortLink(code) {
-      const rows = await sql<{ data: LinkData }[]>`SELECT data FROM short_links WHERE code = ${code}`;
-      return rows[0]?.data ?? null;
-    },
     async agendaStats() {
       const agenda = sql.json(['agenda']);
+      const agendaButton = sql.json([{ tags: ['agenda'] }]);
       const [offered] = await sql<{ n: number }[]>`
-        SELECT count(DISTINCT data->>'r')::int AS n FROM short_links WHERE data->'t' @> ${agenda}`;
+        SELECT count(DISTINCT request->>'recipientId')::int AS n FROM actions
+        WHERE type = 'send_message' AND ok IS TRUE AND request->'message'->'buttons' @> ${agendaButton}`;
       const [clicked] = await sql<{ n: number }[]>`
         SELECT count(DISTINCT data->>'r')::int AS n FROM event_log WHERE kind = 'click' AND data->'t' @> ${agenda}`;
       return { offered: offered?.n ?? 0, clicked: clicked?.n ?? 0 };
@@ -503,7 +490,6 @@ export async function createPostgresStore(
             OR dedup_key LIKE ${`once:%:${igId}`} OR dedup_key LIKE ${`once:%:${igId}:%`}`
         ).count;
         counts.scheduled_jobs = (await tx`DELETE FROM scheduled_jobs WHERE payload->>'recipientId' = ${igId}`).count;
-        counts.short_links = (await tx`DELETE FROM short_links WHERE data->>'r' = ${igId}`).count;
         counts.event_log = (await tx`DELETE FROM event_log WHERE data::text LIKE ${quoted}`).count;
         counts.webhook_requests = (await tx`DELETE FROM webhook_requests WHERE payload::text LIKE ${quoted}`).count;
         counts.comments = (await tx`DELETE FROM comments WHERE ig_id = ${igId}`).count;

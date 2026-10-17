@@ -216,7 +216,7 @@ Lista original (referencia):
 **Decisiones de Jose (2026-10-17):** agenda en **GoHighLevel** (u otra CRM); **enlace con seguimiento** (más adelante con su dominio: basta cambiar `PUBLIC_BASE_URL`); "solo a cualificados" **lo decide la IA** (se mide y, si hace falta, se endurece).
 
 Plan (orden aprobado):
-- [x] 5.1 + 5.2 hechos (2026-10-17, 351 pruebas): tabla `short_links`; el setter cambia el enlace de agenda por `…/l/<7 caracteres>` al enviar cada mensajito (si falla, sale el normal); `/l/<código>` registra el clic, etiqueta "agenda" y redirige con `utm_content=<código>`; /metricas → bloque "Agenda (Fase 5)": ofrecida → clic. BORRAR también borra los enlaces cortos de esa persona. Sin probar con datos reales.
+- ~~Enlace corto en texto~~ (cd2acf5) → Meta rechazó el mensaje (2534122). **Jose (2026-10-17): la agenda va en un BOTÓN** ("camufla el enlace y da mejor reputación con Meta"). Hecho: si un mensajito de la IA lleva la agenda, sale sin el enlace en el texto + botón "Agendar llamada" (seguimiento de siempre: clic + etiqueta "agenda"); /metricas: ofrecida = botón enviado bien → clic. Enlace corto quitado (tabla `short_links` borrada). 347 pruebas. Sin `utm_content` (GHL fuera del plan).
 - [x] 5.1 Enlace **corto** a la agenda con seguimiento (`…/l/<7 caracteres>`; el firmado de los botones mide >200 caracteres y en texto queda mal): se pone en lugar del enlace de agenda en los mensajes de la IA (después de los filtros); clic → registro + etiqueta "agenda" + redirección a la agenda con `utm_content=<código>`.
 - [x] 5.2 /metricas: agenda **ofrecida** a N personas → **clic** de M.
 - ~~5.3 Reservas desde GHL~~ → **fuera del plan** (Jose 2026-10-17: lo hará él más adelante en su frontend; el `utm_content=<código>` ya va en el enlace).

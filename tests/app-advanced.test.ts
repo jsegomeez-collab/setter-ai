@@ -49,18 +49,6 @@ describe('enlaces con seguimiento /l/:token', () => {
     expect(store.events[0]?.kind).toBe('click');
   });
 
-  it('enlace corto de la agenda: registra el clic, etiqueta "agenda" y redirige; un código que no existe → 404', async () => {
-    const { app, store } = setup();
-    const data = { f: 'setter', n: 'agenda', b: 0, r: '9', u: 'https://codigomaestria.com/agenda?utm_source=instagram&utm_content=Ab3dEf9', t: ['agenda'] };
-    await store.saveShortLink('Ab3dEf9', data);
-    const res = await app.request('/l/Ab3dEf9');
-    expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(data.u);
-    expect(store.events.find((e) => e.kind === 'click')?.data).toEqual(data);
-    expect((await store.getContact('9'))?.tags).toContain('agenda');
-    expect((await app.request('/l/Zz9Zz9Z')).status).toBe(404);
-  });
-
   it('enlace falso o seguimiento desactivado → 404 (nunca redirige a sitios no firmados)', async () => {
     expect((await setup().app.request('/l/falso.falso')).status).toBe(404);
     const token = createLinkToken(SECRET, { f: 'f', n: 'n', b: 0, r: '9', u: 'https://a.com', t: [] });
@@ -191,9 +179,11 @@ describe('contactos y estado', () => {
 
   it('métricas: agenda ofrecida a N personas → clic de M', async () => {
     const { app, store } = setup();
-    await store.saveShortLink('Aaaaaa1', { f: 'setter', n: 'agenda', b: 0, r: '9', u: 'https://a.com', t: ['agenda'] });
-    await store.saveShortLink('Aaaaaa2', { f: 'setter', n: 'agenda', b: 0, r: '8', u: 'https://a.com', t: ['agenda'] });
-    await app.request('/l/Aaaaaa1');
+    for (const r of ['9', '8']) {
+      await store.claimAction(`ai:${r}:1`, 'send_message', { type: 'send_message', recipientId: r, message: { buttons: [{ type: 'url', tags: ['agenda'] }] } });
+      await store.finishAction(`ai:${r}:1`, true, {});
+    }
+    await app.request(`/l/${createLinkToken(SECRET, { f: 'setter', n: 'reply', b: 0, r: '9', u: 'https://a.com', t: ['agenda'] })}`);
     const html = await (await app.request('/metricas', { headers: { authorization: auth } })).text();
     expect(html).toContain('Agenda ofrecida');
     expect(html).toMatch(/Agenda ofrecida<\/td><td>2<\/td>/);

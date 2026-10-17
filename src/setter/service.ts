@@ -1,4 +1,5 @@
 import type { Action } from '../flows/engine.js';
+import type { Button } from '../flows/types.js';
 import type { InstagramEvent } from '../meta/parse.js';
 import { SETTINGS, type MessageRow, type Store } from '../store.js';
 import type { SetterBrain } from './brain.js';
@@ -53,8 +54,25 @@ export interface SetterServiceOptions {
   readonly clearTimer?: (handle: unknown) => void;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly random?: () => number;
-  /** Cambia el enlace de agenda por uno corto con seguimiento (Fase 5). Sin él, el texto sale tal cual. */
-  readonly trackLinks?: (igId: string, text: string) => Promise<string>;
+}
+
+/**
+ * La agenda va en un BOTÓN, nunca como enlace en el texto (Fase 5, idea de Jose 2026-10-17): Meta rechazó un mensaje
+ * con el enlace en texto (508/2534122 "Link can't be shared") mientras los botones con enlace salían bien.
+ * El botón pasa por el seguimiento de siempre (clic + etiqueta "agenda").
+ */
+const AGENDA_BUTTON_TITLE = 'Agendar llamada';
+const AGENDA_ONLY_TEXT = 'Aquí puedes elegir el hueco que mejor te venga 👇';
+
+export function withAgendaButton(text: string, agendaUrl: string): { text: string; buttons: Button[]; stored: string } {
+  if (!text.includes(agendaUrl)) return { text, buttons: [], stored: text };
+  const rest = text.split(agendaUrl).join(' ').replace(/[ \t]+/g, ' ').trim();
+  const body = rest.length > 0 ? rest : AGENDA_ONLY_TEXT;
+  return {
+    text: body,
+    buttons: [{ type: 'url', title: AGENDA_BUTTON_TITLE, url: agendaUrl, tags: ['agenda'] }],
+    stored: `${body}\n[Botón: ${AGENDA_BUTTON_TITLE}]`,
+  };
 }
 
 /** Pausa antes de cada mensajito: unos 3-4 s según lo largo que sea, con algo de azar (lo pidió Jose). */
@@ -295,31 +313,20 @@ export class SetterService {
    */
   private async send(igId: string, dedupKey: string, original: string, saved = false): Promise<boolean> {
     const { store } = this.options;
-    const text = await this.withTrackedLinks(igId, original);
+    const out = withAgendaButton(original, this.options.links.agenda);
     if (saved) await store.setMessageStatus(dedupKey, 'queued');
-    else await store.addMessage({ igId, direction: 'out', source: 'ai', text, mid: null, status: 'queued', dedupKey });
+    else await store.addMessage({ igId, direction: 'out', source: 'ai', text: out.stored, mid: null, status: 'queued', dedupKey });
     const action: Action = {
       type: 'send_message',
       dedupKey,
       recipientId: igId,
-      message: { text, buttons: [], flowId: SETTER_FLOW_ID, nodeId: 'reply', recipientId: igId },
+      message: { text: out.text, buttons: out.buttons, flowId: SETTER_FLOW_ID, nodeId: 'reply', recipientId: igId },
     };
     await this.options.enqueue([action]);
     const done = await store.getAction(dedupKey);
     if (done?.ok === true) await store.setMessageStatus(dedupKey, 'sent', messageIdOf(done.response));
     else if (done?.ok === false) await store.setMessageStatus(dedupKey, 'failed');
     return done?.ok === true;
-  }
-
-  /** Enlace de agenda → corto con seguimiento. Si falla, el mensaje sale igual con el enlace normal (y se apunta). */
-  private async withTrackedLinks(igId: string, text: string): Promise<string> {
-    if (!this.options.trackLinks) return text;
-    try {
-      return await this.options.trackLinks(igId, text);
-    } catch (error) {
-      await this.log('No se pudo crear el enlace corto: sale el enlace normal.', { igId, error: error instanceof Error ? error.message : String(error) });
-      return text;
-    }
   }
 
   private async stop(igId: string, reason: string): Promise<void> {

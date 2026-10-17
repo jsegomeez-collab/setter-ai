@@ -7,7 +7,7 @@ import { validateFlow } from './flows/types.js';
 import { InstagramClient, MetaApiError, type Account, type Media } from './meta/client.js';
 import { isValidSignature } from './meta/signature.js';
 import type { TokenManager } from './meta/token.js';
-import { isShortCode, readLinkToken } from './links.js';
+import { readLinkToken } from './links.js';
 import { buildFunnel } from './funnel.js';
 import { flowFormPage, flowJsonPage, flowsListPage } from './pages-flows.js';
 import { metricsPage, parsePeriod, periodStart } from './pages-metrics.js';
@@ -117,13 +117,7 @@ function registerWebhook(app: Hono, deps: AppDeps): void {
 /** Enlaces con seguimiento: registra el clic, añade etiquetas y redirige al destino real. */
 function registerLinks(app: Hono, deps: AppDeps): void {
   app.get('/l/:token', async (c) => {
-    const token = c.req.param('token');
-    // Corto (agenda en texto, guardado en la BD) o firmado (botones). Nunca se redirige a algo que no hayamos creado.
-    const data = isShortCode(token)
-      ? await deps.store.getShortLink(token).catch(() => null)
-      : deps.linkSecret
-        ? readLinkToken(deps.linkSecret, token)
-        : null;
+    const data = deps.linkSecret ? readLinkToken(deps.linkSecret, c.req.param('token')) : null;
     if (!data) return c.text('Enlace no válido', 404);
     try {
       await deps.store.logEvent('click', `Clic en enlace del flujo ${data.f} (paso ${data.n}).`, data);

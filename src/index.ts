@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
-import { deriveLinkSecret, trackAgendaLinks } from './links.js';
+import { deriveLinkSecret } from './links.js';
 import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
 import { catchUpComments } from './catch-up.js';
@@ -68,10 +68,6 @@ async function main(): Promise<void> {
     enqueue: (actions) => activeSender.enqueue(actions),
     getUsername: async (igId) => (client ? client.getUsername(igId) : null),
     showTyping: client ? (igId) => client.sendTypingOn(igId) : undefined,
-    // Agenda con seguimiento (Fase 5): solo si hay URL pública (PUBLIC_BASE_URL; más adelante el dominio de Jose).
-    trackLinks: config.publicBaseUrl
-      ? (igId, text) => trackAgendaLinks(text, igId, { store, baseUrl: config.publicBaseUrl as string, agendaUrl: links.agenda })
-      : undefined,
   });
   const echoes = new EchoWatcher({ store });
   // Si el servidor se reinició durante la espera de 8 s, esos DMs quedaron sin respuesta: se contestan ahora.

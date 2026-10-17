@@ -61,7 +61,7 @@ function setterBlock(stats: SetterStageStats, agenda: AgendaStats): string {
 <table><tr><th>Paso</th><th>Personas</th></tr>
 <tr><td>Agenda ofrecida</td><td>${agenda.offered}</td></tr>
 <tr><td>Clic en la agenda</td><td>${agenda.clicked}${clickPct === null ? '' : ` <small>(${clickPct} %)</small>`}</td></tr></table>
-<p><small>Ofrecida = la IA le mandó el enlace de agenda (corto, con seguimiento). Reservas: cuando conectemos GoHighLevel (5.3).</small></p>`;
+<p><small>Ofrecida = a la persona le llegó el botón "Agendar llamada" de la IA. Clic = lo pulsó (enlace con seguimiento). Las reservas no se miden aquí (GoHighLevel, fuera del plan).</small></p>`;
   const moves = stats.transitions.map((t) => `<tr><td>${escapeHtml(t.from)} → ${escapeHtml(t.to)}</td><td>${t.n}</td></tr>`).join('');
   return `<h2>Setter IA</h2>
 <p><small>Etapa = "siguiente paso" de la ficha. Todo el periodo (no depende del filtro de arriba). Con el setter en modo prueba casi solo hay conversaciones de prueba.</small></p>

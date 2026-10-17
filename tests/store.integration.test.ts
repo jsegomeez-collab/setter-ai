@@ -177,15 +177,18 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getAction('ai:mid-1')).toMatchObject({ ok: true, response: { messageId: 'mid-out-1' } });
   });
 
-  it('Fase 5 · enlaces cortos: guardar, leer, no pisar un código repetido y medir agenda ofrecida → clic', async () => {
-    const data = (r: string) => ({ f: 'setter', n: 'agenda', b: 0, r, u: 'https://codigomaestria.com/agenda?utm_content=x', t: ['agenda'] });
-    expect(await store.saveShortLink('Qq1Qq1Q', data('s1'))).toBe(true);
-    expect(await store.saveShortLink('Qq1Qq1Q', data('otro'))).toBe(false);
-    expect(await store.getShortLink('Qq1Qq1Q')).toEqual(data('s1'));
-    expect(await store.getShortLink('NoExiste')).toBeNull();
-    await store.saveShortLink('Qq2Qq2Q', data('s1'));
-    await store.saveShortLink('Qq3Qq3Q', data('s2'));
-    await store.logEvent('click', 'Clic', data('s1'));
+  it('Fase 5 · agenda ofrecida (botón enviado bien) → clic, por personas', async () => {
+    const agendaButton = { type: 'url', title: 'Agendar llamada', url: 'https://codigomaestria.com/agenda', tags: ['agenda'] };
+    const send = async (key: string, r: string, ok: boolean, buttons: unknown[]) => {
+      await store.claimAction(key, 'send_message', { type: 'send_message', recipientId: r, message: { text: 'x', buttons, recipientId: r } });
+      await store.finishAction(key, ok, {});
+    };
+    await send('ai:s1-a:1', 's1', true, [agendaButton]);
+    await send('ai:s1-b:1', 's1', true, [agendaButton]); // misma persona dos veces → 1
+    await send('ai:s2-a:1', 's2', true, [agendaButton]);
+    await send('ai:s3-a:1', 's3', false, [agendaButton]); // no salió → no cuenta
+    await send('pb:s4:biblio', 's4', true, [{ type: 'url', title: 'IR A LA BIBLIOTECA', url: 'https://b.com', tags: ['biblioteca'] }]);
+    await store.logEvent('click', 'Clic', { f: 'setter', n: 'agenda', b: 0, r: 's1', u: 'https://codigomaestria.com/agenda', t: ['agenda'] });
     expect(await store.agendaStats()).toEqual({ offered: 2, clicked: 1 });
   });
 
