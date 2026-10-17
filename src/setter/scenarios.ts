@@ -6,7 +6,7 @@ import type { Lead } from './schema.js';
  * `expectStep` / `expectStop` se comprueban solos; `check` es lo que Jose debe mirar a ojo.
  */
 
-export type ScenarioGroup = 'Calificación' | 'Objeciones' | 'Casos delicados' | 'Fuera de tema';
+export type ScenarioGroup = 'Inicio' | 'Calificación' | 'Objeciones' | 'Casos delicados' | 'Fuera de tema';
 
 export interface Scenario {
   readonly id: string;
@@ -19,9 +19,70 @@ export interface Scenario {
   readonly expectStep?: readonly Lead['siguiente_paso'][];
   /** true = la IA debería pararse (pasar a Jose o posible menor). */
   readonly expectStop?: boolean;
+  /** Texto de inicio: la cuenta escribe primero (paso "inicio del setter", Fase 5.4) y el lead contesta. */
+  readonly opener?: string;
 }
 
+/** Los 5 textos de inicio aprobados por Jose (2026-10-17). */
+const OPENERS = [
+  'oye! espero que te sirva la biblioteca 🙌 por curiosidad, ¿a qué te dedicas ahora mismo?',
+  'ey! ¿pudiste echarle un vistazo a la biblioteca? me da curiosidad, ¿ya estás usando la IA para algo?',
+  'buenas! ya tienes todo en la biblioteca 😊 cuéntame, ¿qué te gustaría conseguir con la IA?',
+  'hola! gracias por comentar 🙏 ¿ya estás metido en algo con IA o te está empezando a interesar?',
+  'qué tal! vi que te interesó el recurso, ¿lo quieres para tu negocio o para empezar algo nuevo?',
+] as const;
+const AFTER_RESOURCE = 'Comentaste en un reel de Jose News AI, pulsaste el botón y te llegó su biblioteca de recursos. Ahora la cuenta te escribe primero.';
+
 export const SCENARIOS: readonly Scenario[] = [
+  {
+    id: 'inicio-negocio',
+    group: 'Inicio',
+    title: 'Tiene un negocio pequeño',
+    persona: `${AFTER_RESOURCE} Tienes una peluquería en Ciudad de México con 3 empleadas. Quieres usar la IA para conseguir más clientes y ahorrar tiempo con las citas. Respondes con ganas pero cortito.`,
+    opener: OPENERS[0],
+    check: 'Se interesa por la peluquería (cómo le va, qué le gustaría mejorar) antes de hablar del programa; una pregunta por mensaje.',
+  },
+  {
+    id: 'inicio-curioso',
+    group: 'Inicio',
+    title: 'Curioso, sin negocio',
+    persona: `${AFTER_RESOURCE} Tienes 24 años, trabajas en un call center en Colombia. Ves que la IA es el futuro pero no sabes por dónde empezar. Usas ChatGPT a veces para la universidad.`,
+    opener: OPENERS[1],
+    check: 'Conversación cercana: reacciona a lo que cuenta y descubre su situación y su objetivo sin parecer un formulario.',
+  },
+  {
+    id: 'inicio-seco',
+    group: 'Inicio',
+    title: 'Responde seco (monosílabos)',
+    persona: `${AFTER_RESOURCE} No te gusta escribir: contestas con una o dos palabras ("ok", "nada", "si", "no se"). No eres borde, solo seco.`,
+    opener: OPENERS[2],
+    check: 'Hace preguntas fáciles y abiertas; no insiste ni agobia; si no hay interés se despide bien.',
+  },
+  {
+    id: 'inicio-desconfiado',
+    group: 'Inicio',
+    title: 'Desconfiado: ¿quién eres?',
+    persona: `${AFTER_RESOURCE} Te extraña que te escriban. Preguntas quién es, si es un bot, y qué te van a vender.`,
+    opener: OPENERS[3],
+    check: 'Dice la verdad si pregunta si es una IA; explica sin vender; baja la desconfianza y sigue con curiosidad.',
+  },
+  {
+    id: 'inicio-nivel2',
+    group: 'Inicio',
+    title: 'Nivel 2: ya vende servicios',
+    persona: `${AFTER_RESOURCE} Vives en Texas, usas Claude Code a diario, has vendido 2 webs con IA a negocios pero estás estancado y quieres escalar. Tienes ahorros. Si te proponen una llamada, aceptas.`,
+    opener: OPENERS[4],
+    check: 'Detecta nivel 2, profundiza (qué vendió, qué le frena) y propone la llamada en el momento adecuado.',
+    expectStep: ['agendar_llamada', 'seguir_calificando'],
+  },
+  {
+    id: 'inicio-sin-interes',
+    group: 'Inicio',
+    title: 'Solo quería el recurso',
+    persona: `${AFTER_RESOURCE} Solo querías la biblioteca, no te interesa hablar ni comprar nada. Lo dices educadamente.`,
+    opener: OPENERS[0],
+    check: 'Acepta sin insistir y se despide con buen tono (no intenta vender).',
+  },
   {
     id: 'nivel1-con-dinero',
     group: 'Calificación',

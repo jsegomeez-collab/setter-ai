@@ -5,7 +5,7 @@ import { TokenManager } from '../src/meta/token.js';
 import type { BrainResult, SetterBrain } from '../src/setter/brain.js';
 import { NO_TEXT_PLACEHOLDER } from '../src/setter/prompt.js';
 import { SCENARIOS } from '../src/setter/scenarios.js';
-import { estimateCostUsd, runSimulation, verdict, type LeadPlayer } from '../src/setter/simulator.js';
+import { ClaudeLeadPlayer, estimateCostUsd, runSimulation, verdict, type LeadPlayer } from '../src/setter/simulator.js';
 import { TEST_SETTER_CONFIG, TEST_SETTER_LINKS, createMemoryStore, sampleOutput } from './helpers.js';
 
 const USAGE = { inputTokens: 100, outputTokens: 200, cacheReadTokens: 5000, cacheCreationTokens: 0 };
@@ -17,6 +17,52 @@ function fakes(leadLines: (string | null)[]) {
   const next = vi.fn<LeadPlayer['next']>().mockImplementation(async () => (lines.length ? (lines.shift() ?? null) : null));
   return { decide, next, deps: { brain: { decide }, lead: { next }, knowledge: 'DOC [LINK AGENDA]', links: TEST_SETTER_LINKS } };
 }
+
+describe('simulación con texto de inicio (la IA escribe primero, Fase 5.4)', () => {
+  const OPENER = 'oye! espero que te sirva la biblioteca 🙌 por curiosidad, ¿a qué te dedicas ahora mismo?';
+
+  it('empieza con el texto de inicio, el lead contesta y el setter lo ve como en producción (mensaje previo de la cuenta)', async () => {
+    const { decide, next, deps } = fakes(['trabajo en una tienda de ropa', null]);
+    const result = await runSimulation(deps, { persona: 'x', opener: OPENER });
+    expect(result.turns.map((t) => t.who)).toEqual(['setter', 'lead', 'setter']);
+    expect(result.turns[0]).toMatchObject({ who: 'setter', texts: [OPENER] });
+    expect(next.mock.calls[0]?.[1][0]).toMatchObject({ who: 'setter', texts: [OPENER] }); // el lead ve primero el inicio
+    expect(decide.mock.calls[0]?.[0]).toContain(OPENER); // va en el system como en producción
+    expect(decide.mock.calls[0]?.[1]).toEqual([{ role: 'user', content: 'trabajo en una tienda de ropa' }]);
+  });
+
+  it('si el lead no contesta al inicio, termina sin gastar en el setter', async () => {
+    const { decide, deps } = fakes([null]);
+    const result = await runSimulation(deps, { persona: 'x', opener: OPENER });
+    expect(decide).not.toHaveBeenCalled();
+    expect(result.endReason).toBe('El lead dio la conversación por terminada');
+  });
+
+  it('suma también lo que gasta la IA que hace de lead (coste real completo)', async () => {
+    const { deps } = fakes(['hola', null]);
+    const leadUsage = { inputTokens: 300, outputTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0 };
+    const result = await runSimulation({ ...deps, lead: { ...deps.lead, takeUsage: () => leadUsage } }, { persona: 'x' });
+    expect(result.leadUsage).toEqual(leadUsage);
+  });
+
+  it('hay escenarios del grupo "Inicio", cada uno con uno de los textos de inicio', () => {
+    const inicio = SCENARIOS.filter((s) => s.group === 'Inicio');
+    expect(inicio.length).toBeGreaterThanOrEqual(6);
+    expect(inicio.every((s) => typeof s.opener === 'string' && s.opener.length > 0)).toBe(true);
+  });
+});
+
+describe('ClaudeLeadPlayer', () => {
+  it('si la cuenta escribió primero, la conversación del lead empieza por ese mensaje y cuenta lo que gasta', async () => {
+    const create = vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'trabajo en una tienda' }], usage: { input_tokens: 400, output_tokens: 15 } });
+    const player = new ClaudeLeadPlayer({ messages: { create } } as never, 'claude-haiku-5-5');
+    expect(await player.next('x', [{ who: 'setter', texts: ['oye! ¿a qué te dedicas?'] }])).toBe('trabajo en una tienda');
+    expect(create.mock.calls[0]?.[0].messages).toEqual([{ role: 'user', content: 'oye! ¿a qué te dedicas?' }]);
+    await player.next('x', [{ who: 'setter', texts: ['oye!'] }, { who: 'lead', texts: ['hola'] }, { who: 'setter', texts: ['qué tal'] }]);
+    expect(player.takeUsage()).toMatchObject({ inputTokens: 800, outputTokens: 30 });
+    expect(player.takeUsage()).toMatchObject({ inputTokens: 0, outputTokens: 0 }); // se reinicia al leerlo
+  });
+});
 
 describe('runSimulation', () => {
   it('alterna lead y setter; el setter recibe el documento y el historial con los roles bien', async () => {
@@ -124,7 +170,7 @@ describe('panel /setter/simulador', () => {
     expect(page).toContain('Nivel 1 con ahorros');
     expect(page).toContain('hola');
     expect(page).toContain('Comprobación automática');
-    expect(page).toContain('Coste estimado');
+    expect(page).toContain('<strong>Coste:</strong> setter');
     expect(store.events.at(-1)).toMatchObject({ kind: 'simulacion' });
     expect(store.messages).toHaveLength(0); // no se guarda como conversación real
   });

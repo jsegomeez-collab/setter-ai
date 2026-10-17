@@ -101,7 +101,9 @@ export function simulationResultPage(scenario: Pick<Scenario, 'title' | 'persona
 <div class="card"><small>${escapeHtml(scenario.persona)}</small></div>
 <div class="card"><strong>Qué debería pasar:</strong> ${escapeHtml(scenario.check)}<br>
 ${auto ? `<strong>Comprobación automática:</strong> <span class="${auto.ok ? 'ok' : 'bad'}">${escapeHtml(auto.detail)}</span><br>` : ''}
-<strong>Final:</strong> ${escapeHtml(result.endReason)} · <strong>Coste estimado del setter:</strong> ${estimateCostUsd(result.usage).toFixed(4)} $</div>
+<strong>Final:</strong> ${escapeHtml(result.endReason)} · <strong>Coste:</strong> setter ${estimateCostUsd(result.usage).toFixed(4)} $${
+    result.leadUsage ? ` + IA que hace de lead ${estimateCostUsd(result.leadUsage).toFixed(4)} $ = <strong>${(estimateCostUsd(result.usage) + estimateCostUsd(result.leadUsage)).toFixed(4)} $</strong>` : ''
+  }</div>
 <h2>Conversación</h2><table>${thread}</table>
 <h2>Ficha final</h2>${leadTable(result.lead)}`;
   return layout(`Simulación: ${scenario.title}`, body);
