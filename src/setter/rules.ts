@@ -21,13 +21,13 @@ export interface RuleContext {
   readonly userTurns: readonly string[];
   readonly links: RuleLinks;
   /** La ficha que acaba de devolver la IA en esta misma respuesta. */
-  readonly lead: Pick<Lead, 'puede_invertir'>;
+  readonly lead: Pick<Lead, 'puede_invertir' | 'tipo_lead'>;
 }
 
 export interface RuleIssue {
   readonly reason: string;
-  /** Enlace que no tocaba: si la IA insiste, se quita el mensajito que lo lleva. */
-  readonly link?: string;
+  /** Mensajitos que no tocaban (enlace o mención): si la IA insiste, se quitan. */
+  readonly drop?: (message: string) => boolean;
 }
 
 const MAX_RULE_MESSAGES = 3;
@@ -35,7 +35,10 @@ const MAX_RULE_MESSAGES = 3;
 const DRY_MAX_WORDS = 3;
 const DRY_STREAK = 3;
 
-const TALKS_ABOUT_MONEY = /membres|\b47\b|barat|econ[oó]mic|\bcaro\b|no tengo (dinero|plata|presupuesto)|sin (dinero|plata|presupuesto)|poco (dinero|presupuesto)|no me alcanza/i;
+/** La persona habla de precio o de dinero: entonces sí se puede hablar de la membresía (marco técnico: "desde $47 al mes…"). */
+const TALKS_ABOUT_MONEY =
+  /membres|\b47\b|barat|econ[oó]mic|\bcaro\b|precio|cu[aá]nto (cuesta|sale|vale|cobr)|no tengo (dinero|plata|presupuesto)|sin (dinero|plata|presupuesto)|poco (dinero|presupuesto)|no me alcanza/i;
+const MENTIONS_MEMBERSHIP = /membres|\$\s?47\b|\b47\s?(\$|d[oó]lares|usd|al mes)/i;
 const ASKS_FOR_AGENDA = /agenda|enlace|link|reserv|hueco|d[oó]nde|calendario/i;
 const INVENTED_SLOTS = /(hay|tiene|quedan)\s+(\p{L}+\s+)?huecos|huecos\s+(entre\s+semana|por\s+la|disponibles|libres|esta\s+semana)/iu;
 
@@ -47,15 +50,20 @@ export function ruleIssues(messages: readonly string[], ctx: RuleContext): RuleI
   const text = messages.join('\n');
   const lastUser = ctx.userTurns.at(-1) ?? '';
   const issues: RuleIssue[] = [];
-  if (text.includes(ctx.links.membership) && ctx.lead.puede_invertir !== 'no' && !TALKS_ABOUT_MONEY.test(lastUser)) {
-    issues.push({
-      reason: 'Ofreces la membresía a quien no ha dicho que no puede invertir ni la ha pedido: no la ofrezcas, llévalo a la llamada',
-      link: ctx.links.membership,
-    });
+  const isMembership = (m: string): boolean => m.includes(ctx.links.membership) || MENTIONS_MEMBERSHIP.test(m);
+  if (messages.some(isMembership)) {
+    if (ctx.lead.tipo_lead === 'empresa_dfy') {
+      issues.push({ reason: 'Es un negocio que quiere la IA en SU negocio: la membresía es de la formación, no se la menciones', drop: isMembership });
+    } else if (ctx.lead.puede_invertir !== 'no' && !TALKS_ABOUT_MONEY.test(lastUser)) {
+      issues.push({
+        reason: 'Hablas de la membresía a quien no ha dicho que no puede invertir ni ha preguntado el precio: no la menciones, llévalo a la llamada',
+        drop: isMembership,
+      });
+    }
   }
   const agendaSent = ctx.previous.some((p) => p.includes(ctx.links.agenda) || p.includes(`[Botón: ${AGENDA_BUTTON_TITLE}]`));
   if (text.includes(ctx.links.agenda) && agendaSent && !ASKS_FOR_AGENDA.test(lastUser)) {
-    issues.push({ reason: 'Ya le pasaste la agenda antes: no la vuelvas a pasar', link: ctx.links.agenda });
+    issues.push({ reason: 'Ya le pasaste la agenda antes: no la vuelvas a pasar', drop: (m) => m.includes(ctx.links.agenda) });
   }
   const lastUserTurns = ctx.userTurns.slice(-DRY_STREAK);
   if (lastUserTurns.length === DRY_STREAK && lastUserTurns.every(isDry) && text.includes('?')) {
@@ -66,10 +74,10 @@ export function ruleIssues(messages: readonly string[], ctx: RuleContext): RuleI
   return issues;
 }
 
-/** Última barrera para los enlaces que no tocaban: quita esos mensajitos. Nunca deja la respuesta vacía. */
+/** Última barrera para la agenda repetida y la membresía que no toca: quita esos mensajitos. Nunca deja la respuesta vacía. */
 export function enforceLinkRules(messages: readonly string[], ctx: RuleContext): string[] {
-  const banned = ruleIssues(messages, ctx).flatMap((i) => (i.link ? [i.link] : []));
-  if (banned.length === 0) return [...messages];
-  const kept = messages.filter((m) => !banned.some((link) => m.includes(link)));
+  const drops = ruleIssues(messages, ctx).flatMap((i) => (i.drop ? [i.drop] : []));
+  if (drops.length === 0) return [...messages];
+  const kept = messages.filter((m) => !drops.some((drop) => drop(m)));
   return kept.length > 0 ? kept : [...messages];
 }

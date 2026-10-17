@@ -87,6 +87,12 @@ export function limitEmojis(messages: readonly string[], previous: readonly stri
   return limited.length > 0 ? limited : [...messages];
 }
 
+/** "vale" al principio de un mensajito (muletilla de España): se quita sin gastar otro intento. Nunca deja la respuesta vacía. */
+export function stripLeadingVale(messages: readonly string[]): string[] {
+  const stripped = messages.map((m) => m.replace(/^\s*vale\b[\s,.!¡]*/i, '').trim()).filter((m) => m.length > 0);
+  return stripped.length > 0 ? stripped : [...messages];
+}
+
 /** Limpia los mensajitos y, si vienen más de MAX_MESSAGES, junta los sobrantes en el último (es formato, no un riesgo). */
 export function normalizeMessages(messages: readonly string[]): string[] {
   const clean = messages.map((m) => m.trim()).filter((m) => m.length > 0);

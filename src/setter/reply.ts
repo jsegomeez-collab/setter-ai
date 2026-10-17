@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { addUsage, type BrainUsage, type SetterBrain } from './brain.js';
-import { checkMessages, limitEmojis, normalizeMessages, styleIssues, type AllowedContacts, type GuardResult } from './guards.js';
+import { checkMessages, limitEmojis, normalizeMessages, stripLeadingVale, styleIssues, type AllowedContacts, type GuardResult } from './guards.js';
 import { enforceLinkRules, ruleIssues, type RuleContext, type RuleLinks } from './rules.js';
 import type { SetterOutput } from './schema.js';
 
@@ -27,7 +27,7 @@ type Checked = { messages: string[]; guard: GuardResult };
 const PASS: GuardResult = { ok: true };
 
 function check(output: SetterOutput, allowed: AllowedContacts, previous: readonly string[]): Checked {
-  const messages = limitEmojis(normalizeMessages(output.messages), previous);
+  const messages = stripLeadingVale(limitEmojis(normalizeMessages(output.messages), previous));
   // Sin mensajitos no se filtra: la IA decidió no responder.
   return { messages, guard: messages.length === 0 ? PASS : checkMessages(messages, allowed) };
 }

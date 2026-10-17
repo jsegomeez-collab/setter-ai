@@ -87,16 +87,23 @@ describe('muletillas (segundo intento de estilo, nunca retiene)', () => {
     expect(styleIssues(['genial, nos vemos en la llamada'])).toHaveLength(1);
   });
 
+  it('un "vale" al principio de un mensajito lo quita el código, sin gastar otro intento', async () => {
+    const decide = vi.fn<SetterBrain['decide']>().mockResolvedValue(ok(['Vale, cuéntame más', 'a qué te dedicas?']));
+    const result = await decideChecked({ decide }, 'SYS', TURNS, allowed);
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ retried: false, messages: ['cuéntame más', 'a qué te dedicas?'] });
+  });
+
   it('si el segundo intento tiene más muletillas que el primero, se envía el primero', async () => {
-    const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale!'])).mockResolvedValueOnce(ok(['vale, no pasa nada']));
-    expect(await decideChecked({ decide }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['vale!'] });
+    const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['no hay problema'])).mockResolvedValueOnce(ok(['no hay problema, no pasa nada']));
+    expect(await decideChecked({ decide }, 'SYS', TURNS, allowed)).toMatchObject({ guard: { ok: true }, messages: ['no hay problema'] });
   });
 
   it('con una muletilla pide otra respuesta una vez y se queda con la segunda', async () => {
     const decide = vi.fn<SetterBrain['decide']>().mockResolvedValueOnce(ok(['vale, no pasa nada'])).mockResolvedValueOnce(ok(['tranqui, a qué te dedicas?']));
     const result = await decideChecked({ decide }, 'SYS', TURNS, allowed);
     expect(decide).toHaveBeenCalledTimes(2);
-    expect(decide.mock.calls[1]?.[1]?.at(-1)).toEqual({ role: 'system', content: expect.stringContaining('"vale"') });
+    expect(decide.mock.calls[1]?.[1]?.at(-1)).toEqual({ role: 'system', content: expect.stringContaining('pasa nada') });
     expect(result).toMatchObject({ kind: 'ok', retried: true, guard: { ok: true }, messages: ['tranqui, a qué te dedicas?'] });
   });
 

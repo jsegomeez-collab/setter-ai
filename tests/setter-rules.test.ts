@@ -5,18 +5,30 @@ import { enforceLinkRules, ruleIssues, type RuleContext } from '../src/setter/ru
 import { TEST_SETTER_LINKS, sampleOutput } from './helpers.js';
 
 const links = { agenda: TEST_SETTER_LINKS.agenda, membership: TEST_SETTER_LINKS.membership };
-const ctx = (over: Partial<RuleContext> = {}): RuleContext => ({ previous: [], userTurns: ['hola'], links, lead: { puede_invertir: 'si' }, ...over });
+const ctx = (over: Partial<RuleContext> = {}): RuleContext => ({ previous: [], userTurns: ['hola'], links, lead: { puede_invertir: 'si', tipo_lead: 'formacion' }, ...over });
 const reasons = (messages: string[], c: RuleContext): string[] => ruleIssues(messages, c).map((i) => i.reason);
 
 describe('reglas de conversación en código (Haiku se las saltaba en las simulaciones del 17-10)', () => {
   it('membresía: solo si no puede invertir o la persona habla de precio, de la membresía o de no tener dinero', () => {
     const offer = [`mira la membresía: ${links.membership}`];
-    expect(reasons(offer, ctx({ lead: { puede_invertir: 'si' } }))).toHaveLength(1);
-    expect(reasons(offer, ctx({ lead: { puede_invertir: 'duda' } }))).toHaveLength(1);
-    expect(reasons(offer, ctx({ lead: { puede_invertir: 'no' } }))).toEqual([]);
+    expect(reasons(offer, ctx({ lead: { puede_invertir: 'si', tipo_lead: 'formacion' } }))).toHaveLength(1);
+    expect(reasons(offer, ctx({ lead: { puede_invertir: 'duda', tipo_lead: 'formacion' } }))).toHaveLength(1);
+    expect(reasons(offer, ctx({ lead: { puede_invertir: 'no', tipo_lead: 'formacion' } }))).toEqual([]);
     expect(reasons(offer, ctx({ userTurns: ['uf, me parece caro'] }))).toEqual([]);
     expect(reasons(offer, ctx({ userTurns: ['ahora no tengo plata'] }))).toEqual([]);
     expect(reasons(offer, ctx({ userTurns: ['qué incluye la membresía?'] }))).toEqual([]);
+  });
+
+  it('membresía: tampoco mencionarla ni decir "$47" sin motivo; sí si pregunta el precio', () => {
+    expect(reasons(['si quieres algo chico, hay una membresía de $47 al mes'], ctx())).toHaveLength(1);
+    expect(reasons(['hay opciones desde $47 al mes hasta acompañamiento 1:1'], ctx({ userTurns: ['cuánto cuesta?'] }))).toEqual([]);
+    expect(reasons(['hay opciones desde $47 al mes hasta acompañamiento 1:1'], ctx({ userTurns: ['y el precio?'] }))).toEqual([]);
+  });
+
+  it('a un lead de empresa (DFY) nunca se le habla de la membresía: es de la formación', () => {
+    const dfy = ctx({ lead: { puede_invertir: 'no', tipo_lead: 'empresa_dfy' }, userTurns: ['cuánto cuesta?'] });
+    expect(reasons(['hay una membresía de $47 al mes'], dfy)).toHaveLength(1);
+    expect(enforceLinkRules(['el precio lo ve el equipo contigo', 'también hay una membresía de $47 al mes'], dfy)).toEqual(['el precio lo ve el equipo contigo']);
   });
 
   it('agenda una sola vez (también si antes salió como botón), salvo que la pida', () => {
