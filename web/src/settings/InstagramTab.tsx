@@ -73,7 +73,16 @@ export function InstagramTab() {
           <Check ok={status.setterKey}>Clave de Anthropic (setter IA) {status.setterKey ? 'configurada' : 'SIN configurar'}</Check>
           <Check ok>Flujos activos: {status.flows.active} de {status.flows.total}</Check>
         </ul>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap gap-2">
+          <SecondaryButton
+            onClick={() =>
+              void api<{ url: string }>('/settings/instagram/connect-url')
+                .then(({ url }) => window.location.assign(url))
+                .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo abrir'))
+            }
+          >
+            <Radio size={14} /> Probar "Conectar Instagram"
+          </SecondaryButton>
           <SecondaryButton onClick={() => void run(async () => `Avisos de Meta: ${JSON.stringify((await api<{ result: unknown }>('/settings/subscribe', { method: 'POST' })).result)}`)}>
             <Radio size={14} /> Volver a suscribir los avisos de Meta
           </SecondaryButton>

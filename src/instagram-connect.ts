@@ -81,6 +81,8 @@ export class InstagramConnect {
       response_type: 'code',
       scope: CONNECT_SCOPES.join(','),
       state,
+      // Obliga a iniciar sesión otra vez: así se elige la cuenta (y no entra la que el navegador tenga abierta).
+      force_reauth: 'true',
     });
     return `${AUTHORIZE_URL}?${params.toString()}`;
   }
