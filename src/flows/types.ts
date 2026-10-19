@@ -121,6 +121,8 @@ export const flowSchema = z
     onceScope: z.enum(['media', 'flow']).default('media'),
     /** "basic" = creado con el formulario del panel; otro valor = creado por el constructor o en JSON. */
     template: z.string().max(30).optional(),
+    /** Posición de cada paso en el lienzo del constructor visual (Fase 6.5). El motor no la usa. */
+    layout: z.record(id, z.object({ x: z.number().finite(), y: z.number().finite() })).optional(),
   })
   .superRefine((flow, ctx) => {
     const ids = new Set<string>();

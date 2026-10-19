@@ -23,6 +23,7 @@ import { createConversationsApi } from './routes-api-conversations.js';
 import { createContactsApi } from './routes-api-contacts.js';
 import { createMetricsApi } from './routes-api-metrics.js';
 import { createMediaLoader } from './media-catalog.js';
+import { createFlowsApi } from './routes-api-flows.js';
 import type { UserStore } from './users.js';
 import { registerWebApp } from './web.js';
 
@@ -319,6 +320,7 @@ export function createApp(deps: AppDeps): Hono {
     const media = createMediaLoader(deps.client, MEDIA_FOR_STATS);
     api.route('/contacts', createContactsApi({ store: deps.store, users: deps.users, media }));
     api.route('/metrics', createMetricsApi({ store: deps.store, users: deps.users, media }));
+    api.route('/flows', createFlowsApi({ store: deps.store, users: deps.users, media }));
     api.route(
       '/conversations',
       createConversationsApi({ store: deps.store, users: deps.users, drafts: deps.drafts, replyPending: deps.replyPending, sendManual: deps.conversations?.sendManual }),
