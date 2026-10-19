@@ -1,28 +1,29 @@
-import { Bot, Clock, FlaskConical, RotateCcw, X } from 'lucide-react';
+import { Bot, Clock, CornerDownRight, FlaskConical, GitBranch, Heart, RotateCcw, Zap, X } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { Notice } from '../ui/kit';
-import { DmPreview } from './Preview';
-import { walk, type SimItem } from './simulate';
-import { formatSeconds } from './StepNode';
-import type { Flow, FlowsResponse } from './types';
+import { CarouselPreview, DmPreview, MediaPreview } from './Preview';
+import { choicesAfter, walk, type SimItem } from './simulate';
+import { formatSeconds } from './steps-meta';
+import { TRIGGER_LABEL, type Flow, type FlowSummary, type FlowsResponse } from './types';
 
-/** Probar un comentario (Fase 6.5c): ¿salta el flujo? y, si salta, recorrer el camino como la persona. No envía nada. */
+/**
+ * Probar (Fase 6.5c, ampliado en la 7.3b): ¿salta el flujo con este comentario o este DM? y, si salta, recorrer el
+ * camino como la persona. Usa el borrador del lienzo (aunque no esté guardado). No envía nada a nadie.
+ */
 
 type Line = SimItem | { readonly kind: 'tap'; readonly label: string };
 type Result = { matches: boolean; reasons: string[]; enabled: boolean; takenBy: { id: string; name: string } | null };
+type Props = { flow: Flow; reels: FlowsResponse['reels']; flows: readonly FlowSummary[]; onFocus: (stepId: string | null) => void; onClose: () => void };
 
-const GATE_CHOICES = [
-  { label: 'Sí sigue', field: 'ifFollowing' },
-  { label: 'No sigue', field: 'ifNotFollowing' },
-  { label: 'No se sabe', field: 'ifUnknown' },
-] as const;
-
-export function TestPanel({ flow, reels, onFocus, onClose }: { flow: Flow; reels: FlowsResponse['reels']; onFocus: (stepId: string | null) => void; onClose: () => void }) {
-  const firstReel = flow.trigger.mediaIds === 'all' ? (reels[0]?.mediaId ?? '') : (flow.trigger.mediaIds[0] ?? '');
+export function TestPanel({ flow, reels, flows, onFocus, onClose }: Props) {
+  const { trigger } = flow;
+  const firstReel = trigger.type === 'comment' ? (trigger.mediaIds === 'all' ? (reels[0]?.mediaId ?? '') : (trigger.mediaIds[0] ?? '')) : '';
+  const firstWord = trigger.type === 'comment' || trigger.type === 'dm_keyword' || trigger.type === 'story_reply' ? (trigger.keywords[0] ?? '') : '';
   const [mediaId, setMediaId] = useState(firstReel);
   const [username, setUsername] = useState(flow.testUsernames[0] ?? '');
-  const [text, setText] = useState(flow.trigger.keywords[0] ?? 'Info');
+  const [text, setText] = useState(firstWord || (trigger.type === 'story_reply' ? '🔥' : 'Info'));
+  const [ref, setRef] = useState(trigger.type === 'ref' ? trigger.ref : '');
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
@@ -34,13 +35,30 @@ export function TestPanel({ flow, reels, onFocus, onClose }: { flow: Flow; reels
     onFocus(last?.stepId ?? null);
   };
 
+  const probeBody = () => {
+    const who = username.replace(/^@/, '') || null;
+    if (trigger.type === 'comment') return { comment: { text, username: who, mediaId: mediaId || null } };
+    return {
+      message: {
+        text: trigger.type === 'story_mention' || trigger.type === 'ref' ? null : text,
+        username: who,
+        storyReply: trigger.type === 'story_reply',
+        storyMention: trigger.type === 'story_mention',
+        ref: trigger.type === 'ref' ? ref : null,
+      },
+    };
+  };
+
   const run = async () => {
     setError(null);
+    if (trigger.type === 'manual') {
+      // No salta solo: se recorre desde el primer paso, como si llegara desde otro flujo, un rompehielos o el menú.
+      setResult({ matches: true, reasons: [], enabled: flow.enabled, takenBy: null });
+      go(flow.startNodeId);
+      return;
+    }
     try {
-      const res = await api<Result>(`/flows/${encodeURIComponent(flow.id)}/test`, {
-        method: 'POST',
-        body: { draft: { trigger: flow.trigger, testUsernames: flow.testUsernames }, comment: { text, username: username.replace(/^@/, '') || null, mediaId: mediaId || null } },
-      });
+      const res = await api<Result>(`/flows/${encodeURIComponent(flow.id)}/test`, { method: 'POST', body: { draft: { trigger, testUsernames: flow.testUsernames }, ...probeBody() } });
       setResult(res);
       if (res.matches) go(flow.startNodeId);
       else setLines([]);
@@ -49,19 +67,18 @@ export function TestPanel({ flow, reels, onFocus, onClose }: { flow: Flow; reels
     }
   };
 
-  const tap = (label: string, target: string) => go(target, [...lines, { kind: 'tap', label }]);
   const last = lines.at(-1);
+  const choices = choicesAfter(flow, last && last.kind !== 'tap' ? last : undefined);
   // Los reels elegidos que no están entre los últimos también salen (con su número), para que la lista diga la verdad.
-  const chosen = flow.trigger.mediaIds === 'all' ? null : flow.trigger.mediaIds;
-  const reelOptions = chosen
-    ? chosen.map((id) => reels.find((r) => r.mediaId === id) ?? { mediaId: id, label: `Reel ${id}` })
-    : reels;
+  const chosen = trigger.type === 'comment' && trigger.mediaIds !== 'all' ? trigger.mediaIds : null;
+  const reelOptions = chosen ? chosen.map((id) => reels.find((r) => r.mediaId === id) ?? { mediaId: id, label: `Reel ${id}` }) : reels;
+  const flowName = (id: string) => flows.find((item) => item.id === id)?.name ?? id;
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between">
         <p className="label flex items-center gap-1.5">
-          <FlaskConical size={13} /> Probar un comentario
+          <FlaskConical size={13} /> Probar · {TRIGGER_LABEL[trigger.type]}
         </p>
         <button type="button" aria-label="Cerrar la prueba" onClick={onClose} className="text-smoke hover:text-fog">
           <X size={16} />
@@ -75,18 +92,29 @@ export function TestPanel({ flow, reels, onFocus, onClose }: { flow: Flow; reels
           void run();
         }}
       >
-        <select aria-label="Reel" className="field !py-2 text-[13px]" value={mediaId} onChange={(e) => setMediaId(e.target.value)}>
-          {reelOptions.map((r) => (
-            <option key={r.mediaId} value={r.mediaId}>
-              {r.label}
-            </option>
-          ))}
-          <option value="otro">Otro reel (no elegido)</option>
-        </select>
-        <input aria-label="Usuario" className="field !py-2 text-[13px]" placeholder="@usuario que comenta" value={username} onChange={(e) => setUsername(e.target.value)} />
-        <input aria-label="Comentario" className="field !py-2 text-[13px]" placeholder="Texto del comentario" value={text} onChange={(e) => setText(e.target.value)} />
-        <button type="submit" disabled={!text.trim()} className="btn-gold w-full py-2 text-[13px]">
-          Probar
+        {trigger.type === 'comment' && (
+          <select aria-label="Reel" className="field !py-2 text-[13px]" value={mediaId} onChange={(e) => setMediaId(e.target.value)}>
+            {reelOptions.map((r) => (
+              <option key={r.mediaId} value={r.mediaId}>
+                {r.label}
+              </option>
+            ))}
+            <option value="otro">Otro reel (no elegido)</option>
+          </select>
+        )}
+        {trigger.type !== 'manual' && <input aria-label="Usuario" className="field !py-2 text-[13px]" placeholder="@usuario" value={username} onChange={(e) => setUsername(e.target.value)} />}
+        {(trigger.type === 'comment' || trigger.type === 'dm_keyword' || trigger.type === 'story_reply') && (
+          <input
+            aria-label={trigger.type === 'comment' ? 'Comentario' : 'Mensaje'}
+            className="field !py-2 text-[13px]"
+            placeholder={trigger.type === 'comment' ? 'Texto del comentario' : 'Lo que escribe la persona'}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        )}
+        {trigger.type === 'ref' && <input aria-label="ref del enlace" className="field !py-2 text-[13px]" placeholder="ref con el que abre el chat" value={ref} onChange={(e) => setRef(e.target.value)} />}
+        <button type="submit" className="btn-gold w-full py-2 text-[13px]">
+          {trigger.type === 'manual' ? 'Recorrer desde el primer paso' : 'Probar'}
         </button>
       </form>
 
@@ -103,24 +131,33 @@ export function TestPanel({ flow, reels, onFocus, onClose }: { flow: Flow; reels
       )}
       {result?.matches && (
         <>
-          <Notice tone={result.takenBy || !result.enabled ? 'warn' : 'ok'}>
-            Saltaría este flujo.
-            {!result.enabled && ' Ahora mismo está INACTIVO: no pasará nada hasta activarlo.'}
-            {result.takenBy && ` Pero el flujo activo “${result.takenBy.name}” es más específico y se quedaría con este comentario.`}
-          </Notice>
-          {flow.publicReplies[0] && <p className="text-xs text-ash">Respuesta pública en el reel (una al azar): “{flow.publicReplies[0]}”</p>}
+          {trigger.type !== 'manual' && (
+            <Notice tone={result.takenBy || !result.enabled ? 'warn' : 'ok'}>
+              Saltaría este flujo.
+              {!result.enabled && ' Ahora mismo está INACTIVO: no pasará nada hasta activarlo.'}
+              {result.takenBy && ` Pero el flujo activo “${result.takenBy.name}” es más concreto y se quedaría con esto.`}
+            </Notice>
+          )}
+          {trigger.type === 'comment' && flow.publicReplies[0] && <p className="text-xs text-ash">Respuesta pública en el reel (una al azar): “{flow.publicReplies[0]}”</p>}
           <div className="space-y-3">
             {lines.map((line, i) => (
-              <SimLine key={i} line={line} />
+              <SimLine key={i} line={line} flowName={flowName} />
             ))}
           </div>
-          {last?.kind === 'message' && last.buttons.some((b) => b.type === 'postback') && (
-            <Choices options={last.buttons.flatMap((b) => (b.type === 'postback' ? [{ label: b.title, target: b.next }] : []))} onPick={tap} prefix="Pulsar" />
+          {choices.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {choices.map((choice) => (
+                <button
+                  key={`${choice.label}-${choice.target}`}
+                  type="button"
+                  onClick={() => go(choice.target, [...lines, { kind: 'tap', label: choice.label }])}
+                  className="min-h-[36px] rounded-full border border-ember-500/40 px-3 py-1 text-[12px] font-semibold text-ember-400 hover:bg-ember-500/10"
+                >
+                  {last?.kind === 'gate' || last?.kind === 'condition' ? 'Si' : 'Pulsar'} «{choice.label}»
+                </button>
+              ))}
+            </div>
           )}
-          {last?.kind === 'gate' && (() => {
-            const gate = flow.nodes.find((s) => s.id === last.stepId);
-            return gate?.type === 'follow_gate' ? <Choices options={GATE_CHOICES.map((c) => ({ label: c.label, target: gate[c.field] }))} onPick={tap} prefix="Si" /> : null;
-          })()}
           <button type="button" onClick={() => go(flow.startNodeId)} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ash hover:text-fog">
             <RotateCcw size={13} /> Empezar de nuevo
           </button>
@@ -130,24 +167,28 @@ export function TestPanel({ flow, reels, onFocus, onClose }: { flow: Flow; reels
   );
 }
 
-function Choices({ options, onPick, prefix }: { options: readonly { label: string; target: string }[]; onPick: (label: string, target: string) => void; prefix: string }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <button key={o.label} type="button" onClick={() => onPick(o.label, o.target)} className="rounded-full border border-ember-500/40 px-3 py-1 text-[12px] font-semibold text-ember-400 hover:bg-ember-500/10">
-          {prefix} «{o.label}»
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function SimLine({ line }: { line: Line }) {
+function SimLine({ line, flowName }: { line: Line; flowName: (id: string) => string }) {
   switch (line.kind) {
     case 'message':
-      return <DmPreview text={line.text} buttons={line.buttons} />;
+      return <DmPreview text={line.text} buttons={line.buttons} quickReplies={line.quickReplies} />;
+    case 'carousel':
+      return <CarouselPreview cards={line.cards} />;
+    case 'media':
+      return <MediaPreview kind={line.mediaKind} url={line.url} />;
+    case 'react':
+      return (
+        <p className="flex items-center gap-1.5 text-[12px] text-ash">
+          <Heart size={12} /> Reacciona a su mensaje con {line.emoji}
+        </p>
+      );
+    case 'action':
+      return (
+        <p className="flex items-center gap-1.5 text-[12px] text-info">
+          <Zap size={12} /> {line.text}
+        </p>
+      );
     case 'tap':
-      return <p className="text-right text-[12px] text-info">La persona: «{line.label}»</p>;
+      return <p className="text-right text-[12px] text-info">«{line.label}»</p>;
     case 'wait':
       return (
         <p className="flex items-center gap-1.5 text-[12px] text-ash">
@@ -156,6 +197,18 @@ function SimLine({ line }: { line: Line }) {
       );
     case 'gate':
       return <p className="text-[12px] text-ash">¿Sigue la cuenta? Elige qué pasa:</p>;
+    case 'condition':
+      return (
+        <p className="flex items-center gap-1.5 text-[12px] text-warn">
+          <GitBranch size={12} /> {line.text} Elige qué pasa:
+        </p>
+      );
+    case 'goto':
+      return (
+        <p className="flex items-center gap-1.5 text-[12px] text-info">
+          <CornerDownRight size={12} /> Sigue con el flujo «{line.flowId ? flowName(line.flowId) : '(sin elegir)'}» (pruébalo desde ese flujo).
+        </p>
+      );
     case 'setter':
       return (
         <div className="space-y-1">

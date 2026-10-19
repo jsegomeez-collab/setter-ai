@@ -6,6 +6,7 @@ import type { InstagramClient } from '../src/meta/client.js';
 import { TokenManager } from '../src/meta/token.js';
 import { TEST_SETTER_CONFIG, createMemoryStore, followFlow } from './helpers.js';
 import { createMemoryUserStore } from './users-memory.js';
+import { validateFlow } from '../src/flows/types.js';
 
 /** API de Flujos del constructor visual (Fase 6.5a). Solo admin. Activar pide escribir ACTIVAR; borrar, BORRAR. */
 
@@ -33,6 +34,7 @@ async function setup() {
   const client = {
     listMedia: vi.fn().mockResolvedValue([{ id: '18000000000000001', caption: 'Mi reel', permalink: null, timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS' }]),
     getMedia: vi.fn().mockResolvedValue(null),
+    getAccount: vi.fn().mockResolvedValue({ userId: '1', username: 'josenews.ai' }),
   } as unknown as InstagramClient;
   const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
   const app = createApp({ config, store, client, tokens, processPayload: vi.fn(), linkSecret: null, users });
@@ -136,5 +138,44 @@ describe('API Flujos · avisos para Jose (Fase 7.3a)', () => {
       { createdAt: expect.any(String), text: 'Pidió la guía', igId: '901', username: null, flowId: 'f2', flowName: 'Guía' },
       { createdAt: expect.any(String), text: 'Quiere una llamada', igId: '900', username: 'ana_ig', flowId: 'f1', flowName: 'Agenda' },
     ]);
+  });
+});
+
+describe('API Flujos · constructor nuevo (Fase 7.3b)', () => {
+  it('crear desde una plantilla: nace desactivado, válido y con la forma de empezar de la plantilla', async () => {
+    const { send, admin, getFlow } = await setup();
+    for (const [template, type] of [
+      ['comment_resource', 'comment'],
+      ['comment_follow', 'comment'],
+      ['dm_keyword', 'dm_keyword'],
+      ['story_reply', 'story_reply'],
+      ['story_mention', 'story_mention'],
+      ['blank', 'comment'],
+    ] as const) {
+      const res = await send('POST', '/api/flows', admin, { name: `Desde ${template}`, template });
+      expect(res.status).toBe(201);
+      const { flow } = await res.json();
+      expect(flow).toMatchObject({ enabled: false, trigger: { type } });
+      expect(validateFlow(await getFlow(flow.id)).ok).toBe(true);
+    }
+    expect((await send('POST', '/api/flows', admin, { name: 'x', template: 'no-existe' })).status).toBe(400);
+  });
+
+  it('la lista trae el usuario de la cuenta (para el enlace ig.me)', async () => {
+    const { send, admin } = await setup();
+    expect((await (await send('GET', '/api/flows', admin)).json()).account).toBe('josenews.ai');
+  });
+
+  it('probar un DM con el borrador: palabra clave, historia, mención e ig.me; dice por qué no salta', async () => {
+    const { send, admin } = await setup();
+    const probe = (trigger: unknown, message: unknown) => send('POST', '/api/flows/manychat/test', admin, { draft: { trigger, testUsernames: [] }, message });
+    const yes = await (await probe({ type: 'dm_keyword', keywords: ['guia'], exact: false }, { text: 'quiero la GUÍA', username: 'ana' })).json();
+    expect(yes).toMatchObject({ matches: true, reasons: [] });
+    const no = await (await probe({ type: 'dm_keyword', keywords: ['guia'], exact: true }, { text: 'quiero la guía', username: 'ana' })).json();
+    expect(no.matches).toBe(false);
+    expect(no.reasons.join(' ')).toContain('palabra clave');
+    expect((await (await probe({ type: 'story_mention' }, { storyMention: true })).json()).matches).toBe(true);
+    expect((await (await probe({ type: 'ref', ref: 'guia_n8n' }, { ref: 'guia_n8n' })).json()).matches).toBe(true);
+    expect((await probe({ type: 'ref', ref: 'con espacio' }, { ref: 'x' })).status).toBe(400);
   });
 });

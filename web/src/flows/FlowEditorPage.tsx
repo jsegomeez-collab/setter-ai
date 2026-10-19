@@ -6,11 +6,11 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { Notice, SecondaryButton, formatDate } from '../ui/kit';
 import { FlowCanvas } from './FlowCanvas';
-import { missingConnections } from './graph';
+import { liveWarnings } from './graph';
 import { FlowSettings } from './FlowSettings';
 import { StepEditor } from './StepEditor';
 import { TestPanel } from './TestPanel';
-import type { Flow, FlowsResponse } from './types';
+import { triggerSummary, type Flow, type FlowsResponse } from './types';
 
 /** Constructor visual de un flujo (Fase 6.5b): lienzo + panel lateral. Solo admin. */
 
@@ -78,7 +78,7 @@ export function FlowEditorPage() {
 
   const save = () =>
     run(async () => {
-      const missing = missingConnections(draft);
+      const missing = liveWarnings(draft);
       if (missing.length > 0) {
         setErrors(missing);
         return;
@@ -121,7 +121,8 @@ export function FlowEditorPage() {
     });
 
   const step = draft.nodes.find((s) => s.id === selected) ?? null;
-  const reelsText = draft.trigger.mediaIds === 'all' ? 'todos los reels' : `${draft.trigger.mediaIds.length} reel(s) elegido(s)`;
+  const warnings = liveWarnings(draft);
+  const flowName = (flowId: string) => meta.flows.find((item) => item.id === flowId)?.name;
 
   return (
     <Page>
@@ -154,6 +155,16 @@ export function FlowEditorPage() {
 
       <div className="mt-4 space-y-3">
         {meta.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados hasta el {formatDate(meta.sendsBlockedUntil)} (bloqueo de Meta): aunque actives un flujo, no saldrá ningún mensaje hasta entonces.</Notice>}
+        {errors.length === 0 && warnings.length > 0 && (
+          <div role="status" className="rounded-lg border border-warn/30 bg-warn/[0.07] px-3 py-2 text-[13px] text-warn">
+            <p className="font-semibold">Falta para poder guardar ({warnings.length}):</p>
+            <ul className="mt-1 list-disc pl-5">
+              {warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {errors.length > 0 && (
           <div role="alert" className="rounded-lg border border-bad/30 bg-bad/[0.08] px-3 py-2 text-sm text-bad">
             <p className="font-semibold">No se ha guardado. Hay que arreglar:</p>
@@ -168,23 +179,24 @@ export function FlowEditorPage() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="card h-[68vh] min-h-[460px] overflow-hidden">
-          <FlowCanvas flow={draft} selected={selected} onSelect={setSelected} onChange={setDraft} />
+          <FlowCanvas flow={draft} selected={selected} onSelect={setSelected} onChange={setDraft} flowName={flowName} />
         </div>
         <aside className="card max-h-[68vh] min-h-[300px] overflow-y-auto p-5">
           {testing ? (
-            <TestPanel flow={draft} reels={meta.reels} onFocus={setSelected} onClose={() => setTesting(false)} />
+            <TestPanel flow={draft} reels={meta.reels} flows={meta.flows} onFocus={setSelected} onClose={() => setTesting(false)} />
           ) : step ? (
-            <StepEditor flow={draft} step={step} onChange={setDraft} onClose={() => setSelected(null)} />
+            <StepEditor flow={draft} step={step} flows={meta.flows} onChange={setDraft} onClose={() => setSelected(null)} />
           ) : (
-            <FlowSettings flow={draft} reels={meta.reels} onChange={setDraft} />
+            <FlowSettings flow={draft} reels={meta.reels} account={meta.account ?? null} onChange={setDraft} />
           )}
         </aside>
       </div>
 
       {dialog === 'enable' && (
         <ConfirmDialog title={`Activar "${saved.name}"`} word="ACTIVAR" confirmLabel="Activar" busy={busy} onConfirm={() => setEnabled(true)} onCancel={() => setDialog(null)}>
-          <p>Al activarlo, responderá por DM a las personas reales que comenten en <strong className="text-fog">{reelsText}</strong>
-            {saved.trigger.keywords.length ? <> con las palabras “{saved.trigger.keywords.join(', ')}”</> : ' (cualquier comentario)'}.</p>
+          <p>
+            Al activarlo, responderá por DM a personas reales. Empieza con: <strong className="text-fog">{triggerSummary(saved.trigger)}</strong>.
+          </p>
           {saved.testUsernames.length > 0 && <p>Modo prueba: solo a {saved.testUsernames.map((u) => `@${u}`).join(', ')}.</p>}
           {meta.sendsBlockedUntil && <p className="text-warn">Ahora mismo los envíos están bloqueados por Meta: no saldrá nada hasta el {formatDate(meta.sendsBlockedUntil)}.</p>}
         </ConfirmDialog>

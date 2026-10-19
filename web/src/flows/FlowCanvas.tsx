@@ -1,14 +1,22 @@
 import '@xyflow/react/dist/style.css';
 import { Background, Controls, MarkerType, Panel, ReactFlow, ReactFlowProvider, applyNodeChanges, useReactFlow, type Connection, type DefaultEdgeOptions, type Edge, type EdgeChange, type NodeChange } from '@xyflow/react';
-import { Bot, Clock, MessageSquare, UserCheck } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { addStep, connect, disconnect, moveStep, toCanvas } from './graph';
+import { addStep, connect, disconnect, freeSpot, moveStep, toCanvas } from './graph';
+import { GROUP_LABEL, STEP_META, STEP_TYPES_BY_GROUP, type StepGroup } from './steps-meta';
 import { StepNode, type StepNodeType } from './StepNode';
 import { MAX_STEPS, type Flow, type StepType } from './types';
 
 /** Lienzo tipo ManyChat (React Flow): cajas que se arrastran y flechas entre la salida de una y la entrada de otra. */
 
-type Props = { flow: Flow; selected: string | null; onSelect: (id: string | null) => void; onChange: (flow: Flow) => void };
+type Props = {
+  flow: Flow;
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  onChange: (flow: Flow) => void;
+  /** Nombre de otro flujo por su id (para "ir a otro flujo"). */
+  flowName?: (id: string) => string | undefined;
+};
 
 const NODE_TYPES = { step: StepNode };
 const EDGE_OPTIONS: DefaultEdgeOptions = {
@@ -20,12 +28,7 @@ const EDGE_OPTIONS: DefaultEdgeOptions = {
   labelBgPadding: [6, 3],
   labelBgBorderRadius: 6,
 };
-const ADD: readonly { type: StepType; label: string; icon: typeof MessageSquare }[] = [
-  { type: 'message', label: 'Mensaje', icon: MessageSquare },
-  { type: 'follow_gate', label: '¿Me sigue?', icon: UserCheck },
-  { type: 'delay', label: 'Pausa', icon: Clock },
-  { type: 'setter_opener', label: 'Setter IA', icon: Bot },
-];
+const GROUPS: readonly StepGroup[] = ['send', 'do', 'condition'];
 const NODE_HALF = { x: 125, y: 70 };
 const START_VIEWPORT = { x: 30, y: 80, zoom: 0.8 };
 
@@ -37,26 +40,36 @@ export function FlowCanvas(props: Props) {
   );
 }
 
-function Canvas({ flow, selected, onSelect, onChange }: Props) {
+function Canvas({ flow, selected, onSelect, onChange, flowName }: Props) {
   const canvas = useMemo(() => toCanvas(flow), [flow]);
   const [nodes, setNodes] = useState<StepNodeType[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
 
   // Las cajas se copian a un estado local para que arrastrar sea fluido; al soltar se guarda la posición en el flujo.
   useEffect(() => {
-    setNodes(canvas.nodes.map((n) => ({ id: n.id, type: 'step', position: n.position, data: { step: n.step, isStart: n.isStart }, selected: n.id === selected })));
-  }, [canvas, selected]);
+    setNodes(canvas.nodes.map((n) => ({ id: n.id, type: 'step', position: n.position, data: { step: n.step, isStart: n.isStart, flowName }, selected: n.id === selected })));
+  }, [canvas, selected, flowName]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: KeyboardEvent) => event.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [menuOpen]);
 
   const edges: Edge[] = useMemo(() => canvas.edges.map((e) => ({ ...e, selectable: true })), [canvas]);
 
   const add = (type: StepType) => {
     const box = wrapper.current?.getBoundingClientRect();
     const center = box ? screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 }) : { x: 0, y: 0 };
-    const result = addStep(flow, type, { x: Math.round(center.x - NODE_HALF.x), y: Math.round(center.y - NODE_HALF.y) });
+    const result = addStep(flow, type, freeSpot(flow, { x: Math.round(center.x - NODE_HALF.x), y: Math.round(center.y - NODE_HALF.y) }));
     onChange(result.flow);
     onSelect(result.id);
+    setMenuOpen(false);
   };
+  const full = flow.nodes.length >= MAX_STEPS;
 
   const onEdgesChange = (changes: EdgeChange[]) => {
     const removed = changes.filter((change) => change.type === 'remove');
@@ -74,7 +87,7 @@ function Canvas({ flow, selected, onSelect, onChange }: Props) {
   };
 
   return (
-    <div ref={wrapper} className="h-full w-full">
+    <div ref={wrapper} className="@container h-full w-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -100,22 +113,49 @@ function Canvas({ flow, selected, onSelect, onChange }: Props) {
         <Background color="#2d2d32" gap={22} />
         <Controls showInteractive={false} />
         <Panel position="top-left">
-          {/* Una sola línea (en el móvil se desplaza de lado) para no tapar el primer mensaje. */}
-          <div className="flex max-w-[calc(100vw-90px)] gap-1.5 overflow-x-auto whitespace-nowrap rounded-xl border border-white/10 bg-g2/95 p-1.5 shadow-lg">
-            {ADD.map(({ type, label, icon: Icon }) => (
-              <button
-                key={type}
-                type="button"
-                disabled={flow.nodes.length >= MAX_STEPS}
-                onClick={() => add(type)}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-mist hover:bg-white/[0.06] hover:text-fog disabled:opacity-40"
-              >
-                <Icon size={13} /> {label}
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            disabled={full}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="btn-gold inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] shadow-lg"
+            title={full ? `Máximo ${MAX_STEPS} pasos por flujo` : undefined}
+          >
+            {menuOpen ? <X size={14} /> : <Plus size={14} />} Añadir paso
+          </button>
+          {menuOpen && <AddMenu onPick={add} />}
         </Panel>
       </ReactFlow>
+    </div>
+  );
+}
+
+/** Menú de "Añadir paso": los tres grupos de ManyChat, cada opción con lo que hace en una línea. */
+function AddMenu({ onPick }: { onPick: (type: StepType) => void }) {
+  return (
+    <div role="menu" aria-label="Añadir paso" className="mt-2 grid max-h-[60vh] w-[min(720px,calc(100cqw-32px))] grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3 overflow-y-auto rounded-2xl border border-white/10 bg-g2 p-3 shadow-2xl">
+      {GROUPS.map((group) => (
+        <div key={group}>
+          <p className="label mb-1.5 px-2">{GROUP_LABEL[group]}</p>
+          <ul className="space-y-0.5">
+            {STEP_TYPES_BY_GROUP[group].map((type) => {
+              const meta = STEP_META[type];
+              const Icon = meta.icon;
+              return (
+                <li key={type}>
+                  <button type="button" role="menuitem" onClick={() => onPick(type)} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-white/[0.05] focus-visible:bg-white/[0.05]">
+                    <Icon size={15} className={`mt-0.5 shrink-0 ${meta.accent}`} aria-hidden />
+                    <span>
+                      <span className="block text-[13px] font-semibold text-fog">{meta.label}</span>
+                      <span className="block text-xs leading-snug text-ash">{meta.description}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

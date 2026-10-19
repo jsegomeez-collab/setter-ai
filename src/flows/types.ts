@@ -19,7 +19,7 @@ export type { Button, Card, ConditionRule, FlowNode, MessageNode, QuickReply } f
 
 const keywordList = z.array(z.string().trim().min(1).max(50)).max(30);
 
-const triggerSchema = z.preprocess(
+export const triggerSchema = z.preprocess(
   // Los flujos guardados antes de la 7.3 no tienen "type": eran todos de comentarios.
   (value) => (value && typeof value === 'object' && !('type' in value) ? { ...value, type: 'comment' } : value),
   z.discriminatedUnion('type', [

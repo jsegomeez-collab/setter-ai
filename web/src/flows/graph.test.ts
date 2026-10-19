@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addStep, autoLayout, connect, disconnect, missingConnections, outputsOf, removeStep, setStart, toCanvas } from './graph';
+import { addStep, autoLayout, connect, disconnect, freeSpot, liveWarnings, missingConnections, outputsOf, removeStep, setStart, toCanvas } from './graph';
 import type { Flow } from './types';
 
 /** Lienzo del constructor (Fase 6.5b): pasar un flujo a cajas y flechas y editarlo sin mutar nada. */
@@ -8,7 +8,7 @@ const flow: Flow = {
   id: 'f1',
   name: 'Reel',
   enabled: false,
-  trigger: { mediaIds: 'all', keywords: [] },
+  trigger: { type: 'comment', mediaIds: 'all', keywords: [] },
   publicReplies: [],
   dmFailedReplies: [],
   startNodeId: 'start',
@@ -99,10 +99,69 @@ describe('editar', () => {
     expect(removeStep(flow, 'start')).toBe(flow);
   });
 
-  it('cambiar el primer mensaje: solo a un mensaje y le quita el "después" automático (Meta no lo permite)', () => {
-    const changed = setStart(flow, 'ok');
-    expect(changed.startNodeId).toBe('ok');
-    expect(changed.nodes[2]).not.toHaveProperty('next');
+  it('cambiar el primer paso: en comentarios solo a un mensaje; en las demás formas de empezar, a cualquiera', () => {
+    expect(setStart(flow, 'ok').startNodeId).toBe('ok');
     expect(setStart(flow, 'gate')).toBe(flow);
+    expect(setStart({ ...flow, trigger: { type: 'dm_keyword', keywords: ['guia'], exact: false } }, 'gate').startNodeId).toBe('gate');
+  });
+});
+
+/** Fase 7.3b: pasos nuevos en el lienzo y avisos en vivo (lo que el servidor rechazaría). */
+describe('pasos nuevos', () => {
+  const rich: Flow = {
+    ...flow,
+    trigger: { type: 'dm_keyword', keywords: ['guia'], exact: false },
+    nodes: [
+      { id: 'start', type: 'message', text: '¿Qué prefieres?', buttons: [], quickReplies: [{ title: 'Vídeo', next: 'v' }, { title: 'Texto', next: '' }] },
+      { id: 'v', type: 'carousel', cards: [{ title: 'A', buttons: [{ type: 'postback', title: 'Más', next: 'c' }] }] },
+      { id: 'c', type: 'condition', rule: { kind: 'random', percent: 50 }, ifTrue: 't', ifFalse: '' },
+      { id: 't', type: 'tag', op: 'add', tag: 'x' },
+      { id: 'g', type: 'goto', flowId: 'otro' },
+    ],
+  };
+
+  it('salidas: respuestas rápidas, botones de tarjeta, sí/no de la condición; "ir a otro flujo" no tiene', () => {
+    const [start, carousel, condition, tag, goto] = rich.nodes;
+    expect(outputsOf(start!).map((o) => o.handle)).toEqual(['qr-0', 'qr-1', 'next']);
+    expect(outputsOf(carousel!).map((o) => o.handle)).toEqual(['card-0-0', 'next']);
+    expect(outputsOf(condition!).map((o) => [o.handle, o.label])).toEqual([['true', 'Sí'], ['false', 'No']]);
+    expect(outputsOf(tag!).map((o) => o.optional)).toEqual([true]);
+    expect(outputsOf(goto!)).toEqual([]);
+  });
+
+  it('conectar una respuesta rápida, un botón de tarjeta y la rama "no"', () => {
+    let next = connect(rich, 'start', 'qr-1', 't');
+    next = connect(next, 'v', 'card-0-0', 'g');
+    next = connect(next, 'c', 'false', 'g');
+    expect(next.nodes[0]).toMatchObject({ quickReplies: [{ next: 'v' }, { next: 't' }] });
+    expect(next.nodes[1]).toMatchObject({ cards: [{ buttons: [{ next: 'g' }] }] });
+    expect(next.nodes[2]).toMatchObject({ ifTrue: 't', ifFalse: 'g' });
+    expect(disconnect(next, 'c', 'true').nodes[2]).toMatchObject({ ifTrue: '' });
+  });
+
+  it('avisos en vivo: salidas sin conectar en español', () => {
+    expect(liveWarnings(rich)).toEqual(['«Mensaje: ¿Qué prefieres?» (start): falta a dónde va «Texto».', '«Condición» (c): falta a dónde va «No».']);
+  });
+
+  it('avisos en vivo de comentarios: primer paso mensaje, sin respuestas rápidas y nada que se envíe solo tras el DM', () => {
+    const comment: Flow = { ...flow, nodes: flow.nodes.map((s) => (s.id === 'start' && s.type === 'message' ? { ...s, next: 'wait' } : s)) };
+    expect(liveWarnings(comment).join(' ')).toContain('Meta no lo permite');
+    const okAfter: Flow = { ...flow, nodes: [...flow.nodes.map((s) => (s.id === 'start' && s.type === 'message' ? { ...s, next: 'tag' } : s)), { id: 'tag', type: 'tag', op: 'add', tag: 'comento' }] };
+    expect(liveWarnings(okAfter)).toEqual([]);
+    expect(liveWarnings({ ...rich, trigger: flow.trigger }).join(' ')).toContain('respuestas rápidas');
+  });
+
+  it('un paso nuevo no cae encima de otro: busca el primer hueco libre hacia abajo', () => {
+    const placed: Flow = { ...rich, layout: { start: { x: 0, y: 0 }, v: { x: 0, y: 200 } } };
+    const spot = freeSpot(placed, { x: 10, y: 20 });
+    const boxes = Object.values(autoLayout(placed)).concat(Object.values(placed.layout ?? {}));
+    expect(boxes.some((box) => Math.abs(box.x - spot.x) < 260 && Math.abs(box.y - spot.y) < 170)).toBe(false);
+    expect(spot.x).toBe(10);
+    expect(freeSpot(placed, { x: 5000, y: 20 })).toEqual({ x: 5000, y: 20 });
+  });
+
+  it('añadir cualquier paso nuevo lo crea con sus valores iniciales', () => {
+    const { flow: added, id } = addStep(rich, 'condition', { x: 0, y: 0 });
+    expect(added.nodes.find((s) => s.id === id)).toMatchObject({ type: 'condition', ifTrue: '', ifFalse: '' });
   });
 });

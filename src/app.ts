@@ -373,7 +373,7 @@ export function createApp(deps: AppDeps): Hono {
     const media = createMediaLoader(deps.client, MEDIA_FOR_STATS);
     api.route('/contacts', createContactsApi({ store: deps.store, users: deps.users, media }));
     api.route('/metrics', createMetricsApi({ store: deps.store, users: deps.users, media }));
-    api.route('/flows', createFlowsApi({ store: deps.store, users: deps.users, media }));
+    api.route('/flows', createFlowsApi({ store: deps.store, users: deps.users, media, account: async () => (deps.client ? (await deps.client.getAccount()).username : null) }));
     api.route('/users', createUsersApi({ users: deps.users, store: deps.store }));
     api.route('/me', createMeApi({ users: deps.users, store: deps.store }));
     api.route(

@@ -1,9 +1,10 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { reelLabel } from './contacts.js';
-import { explainComment, findFlowForComment } from './flows/engine.js';
+import { explainComment, explainMessage, findFlowForComment, findFlowForMessage } from './flows/engine.js';
 import { newFlowId } from './flows/form.js';
-import { validateFlow, type Flow } from './flows/types.js';
+import { flowFromTemplate, TEMPLATE_IDS } from './flows/templates.js';
+import { triggerSchema, validateFlow, type Flow } from './flows/types.js';
 import type { MediaLoader } from './media-catalog.js';
 import { requireAdmin, requireUser, type ApiEnv } from './routes-api.js';
 import { SETTINGS, type Store } from './store.js';
@@ -18,25 +19,31 @@ export interface FlowsApiDeps {
   readonly store: Store;
   readonly users: UserStore;
   readonly media: MediaLoader;
+  /** Usuario de Instagram conectado (para enseñar el enlace ig.me), o null si no se puede leer. */
+  readonly account?: () => Promise<string | null>;
 }
 
 const MAX_NAME = 80;
 const COPY_SUFFIX = ' (copia)';
 /** Avisos para Jose que se enseñan en el Inicio. */
 const NOTICES_READ = 20;
-const nameSchema = z.object({ name: z.string().trim().min(1).max(MAX_NAME) });
+const createSchema = z.object({ name: z.string().trim().min(1).max(MAX_NAME), template: z.enum(TEMPLATE_IDS).default('blank') });
 const enableSchema = z.object({ enabled: z.boolean(), confirm: z.string().optional() });
 const deleteSchema = z.object({ confirm: z.literal('BORRAR') });
+const username = z.string().max(30).nullable().optional();
+/** Probar con el borrador sin guardar: un comentario (6.5c) o, desde la 7.3b, un DM (palabra, historia, mención, ig.me). */
 const probeSchema = z.object({
-  draft: z.object({
-    trigger: z.object({
-      type: z.literal('comment').default('comment'),
-      mediaIds: z.union([z.literal('all'), z.array(z.string().max(40)).max(200)]),
-      keywords: z.array(z.string().max(50)).max(30),
-    }),
-    testUsernames: z.array(z.string().max(30)).max(20),
-  }),
-  comment: z.object({ text: z.string().max(2200), username: z.string().max(30).nullable().optional(), mediaId: z.string().max(40).nullable().optional() }),
+  draft: z.object({ trigger: triggerSchema, testUsernames: z.array(z.string().max(30)).max(20) }),
+  comment: z.object({ text: z.string().max(2200), username, mediaId: z.string().max(40).nullable().optional() }).optional(),
+  message: z
+    .object({
+      text: z.string().max(2200).nullable().optional(),
+      username,
+      storyReply: z.boolean().optional(),
+      storyMention: z.boolean().optional(),
+      ref: z.string().max(40).nullable().optional(),
+    })
+    .optional(),
 });
 
 async function readJson(c: Context): Promise<unknown> {
@@ -45,24 +52,6 @@ async function readJson(c: Context): Promise<unknown> {
   } catch {
     return null;
   }
-}
-
-/** Flujo nuevo: un solo mensaje, desactivado. El disparador se elige en el constructor antes de activarlo. */
-function starterFlow(name: string): Flow {
-  return {
-    id: newFlowId(),
-    name,
-    enabled: false,
-    trigger: { type: 'comment', mediaIds: 'all', keywords: [] },
-    publicReplies: [],
-    dmFailedReplies: [],
-    startNodeId: 'inicio',
-    nodes: [{ id: 'inicio', type: 'message', text: '¡Hola! 👋 Aquí tienes lo que pediste.', buttons: [], quickReplies: [] }],
-    testUsernames: [],
-    oncePerUser: true,
-    onceScope: 'media',
-    template: 'builder',
-  };
 }
 
 export function createFlowsApi(deps: FlowsApiDeps): Hono<ApiEnv> {
@@ -75,18 +64,24 @@ export function createFlowsApi(deps: FlowsApiDeps): Hono<ApiEnv> {
   const who = (c: Context<ApiEnv>) => c.get('user').name;
 
   api.get('/', async (c) => {
-    const [flows, media, blockedUntil] = await Promise.all([store.listFlows(), deps.media(), store.getSetting(SETTINGS.sendsBlockedUntil)]);
+    const [flows, media, blockedUntil, account] = await Promise.all([
+      store.listFlows(),
+      deps.media(),
+      store.getSetting(SETTINGS.sendsBlockedUntil),
+      (deps.account?.() ?? Promise.resolve(null)).catch(() => null),
+    ]);
     return c.json({
       flows: flows.map((flow) => ({ id: flow.id, name: flow.name, enabled: flow.enabled, steps: flow.nodes.length, trigger: flow.trigger, testUsernames: flow.testUsernames })),
       reels: media.map((m) => ({ mediaId: m.id, label: reelLabel(m) })),
       sendsBlockedUntil: blockedUntil && Date.parse(blockedUntil) > Date.now() ? blockedUntil : null,
+      account,
     });
   });
 
   api.post('/', async (c) => {
-    const parsed = nameSchema.safeParse(await readJson(c));
-    if (!parsed.success) return c.json({ error: `Ponle un nombre (1-${MAX_NAME} caracteres).` }, 400);
-    const flow = starterFlow(parsed.data.name);
+    const parsed = createSchema.safeParse(await readJson(c));
+    if (!parsed.success) return c.json({ error: `Ponle un nombre (1-${MAX_NAME} caracteres) y elige una plantilla de la lista.` }, 400);
+    const flow = flowFromTemplate(parsed.data.template, newFlowId(), parsed.data.name);
     await store.saveFlow(flow);
     await store.logEvent('flujo', `${who(c)} creó el flujo "${flow.name}" (desactivado).`, { id: flow.id });
     return c.json({ flow }, 201);
@@ -152,21 +147,38 @@ export function createFlowsApi(deps: FlowsApiDeps): Hono<ApiEnv> {
     return c.json({ flow: result.flow });
   });
 
-  /** Probar un comentario (6.5c) con el borrador sin guardar. No envía nada: solo usa la regla del motor. */
+  /**
+   * Probar con el borrador sin guardar: un comentario (6.5c) o un DM (7.3b). No envía nada: usa las mismas reglas del
+   * motor (explainComment / explainMessage) y dice si otro flujo activo más concreto se quedaría con él.
+   */
   api.post('/:id/test', async (c) => {
     const current = await findFlow(c.req.param('id'));
     if (!current) return c.json({ error: 'Ese flujo no existe' }, 404);
     const parsed = probeSchema.safeParse(await readJson(c));
-    if (!parsed.success) return c.json({ error: 'Faltan datos para probar.' }, 400);
-    const { draft, comment } = parsed.data;
+    if (!parsed.success) return c.json({ error: 'Faltan datos para probar (o la forma de empezar no es válida: revisa los ajustes del flujo).' }, 400);
+    const { draft, comment, message } = parsed.data;
     const candidate: Flow = { ...current, trigger: draft.trigger, testUsernames: draft.testUsernames, enabled: true };
+    const flows = (await store.listFlows()).map((flow) => (flow.id === current.id ? candidate : flow));
+    const answer = (matches: boolean, reasons: string[], winner: Flow | null) =>
+      c.json({ matches, reasons, enabled: current.enabled, takenBy: winner && winner.id !== current.id ? { id: winner.id, name: winner.name } : null });
+
+    if (message) {
+      const probe = {
+        text: message.text ?? null,
+        username: message.username ?? null,
+        storyReply: message.storyReply === true,
+        storyMention: message.storyMention === true,
+        ref: message.ref ?? null,
+      };
+      const { matches, reasons } = explainMessage(candidate, probe);
+      return answer(matches, reasons, matches ? findFlowForMessage(flows, probe) : null);
+    }
+    if (!comment) return c.json({ error: 'Falta el comentario o el mensaje que quieres probar.' }, 400);
     const probe = { text: comment.text, username: comment.username ?? null, mediaId: comment.mediaId ?? null };
     const { matches, reasons } = explainComment(candidate, probe);
     // Si salta, ¿le ganaría otro flujo activo más específico? (el motor solo atiende un flujo por comentario)
-    const flows = (await store.listFlows()).map((flow) => (flow.id === current.id ? candidate : flow));
     const event = { kind: 'comment' as const, accountId: '', commentId: 'prueba', fromId: 'prueba', fromUsername: probe.username, mediaId: probe.mediaId, text: probe.text, parentId: null };
-    const winner = matches ? findFlowForComment(flows, event) : null;
-    return c.json({ matches, reasons, enabled: current.enabled, takenBy: winner && winner.id !== current.id ? { id: winner.id, name: winner.name } : null });
+    return answer(matches, reasons, matches ? findFlowForComment(flows, event) : null);
   });
 
   api.post('/:id/delete', async (c) => {
