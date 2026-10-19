@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { LoginPage } from './auth/LoginPage';
 import { SessionProvider, useSession } from './auth/SessionContext';
@@ -9,6 +10,10 @@ import { ConversationsPage } from './conversations/ConversationsPage';
 import { ContactDetailPage } from './contacts/ContactDetailPage';
 import { ContactsPage } from './contacts/ContactsPage';
 import { MetricsPage } from './metrics/MetricsPage';
+import { FlowsPage } from './flows/FlowsPage';
+
+// El constructor visual (React Flow) pesa: se descarga solo cuando se abre un flujo.
+const FlowEditorPage = lazy(() => import('./flows/FlowEditorPage').then((m) => ({ default: m.FlowEditorPage })));
 import { AppShell } from './shell/AppShell';
 import { navFor } from './shell/nav';
 
@@ -48,6 +53,17 @@ function Screens() {
         <Route path="contactos" element={<ContactsPage />} />
         <Route path="contactos/:igId" element={<ContactDetailPage />} />
         <Route path="metricas" element={<MetricsPage />} />
+        {user.role === 'admin' && <Route path="flujos" element={<FlowsPage />} />}
+        {user.role === 'admin' && (
+          <Route
+            path="flujos/:id"
+            element={
+              <Suspense fallback={<p className="p-8 text-sm text-smoke">Cargando el constructor…</p>}>
+                <FlowEditorPage />
+              </Suspense>
+            }
+          />
+        )}
         {pending.map((item) => (
           <Route key={item.path} path={item.path.slice(1)} element={<PendingModule item={item} />} />
         ))}

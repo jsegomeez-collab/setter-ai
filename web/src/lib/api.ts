@@ -18,6 +18,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** La respuesta entera (p. ej. la lista de errores al guardar un flujo). */
+    readonly data: unknown = null,
   ) {
     super(message);
   }
@@ -34,7 +36,7 @@ export async function api<T>(path: string, options: { method?: 'GET' | 'POST'; b
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const message = (data as { error?: unknown } | null)?.error;
-    throw new ApiError(typeof message === 'string' ? message : `Error ${response.status}`, response.status);
+    throw new ApiError(typeof message === 'string' ? message : `Error ${response.status}`, response.status, data);
   }
   return data as T;
 }

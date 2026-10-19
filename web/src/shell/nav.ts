@@ -23,7 +23,7 @@ export const NAV: readonly NavItem[] = [
   { path: '/conversaciones', label: 'Conversaciones', icon: MessagesSquare, roles: ALL, step: null, legacyPath: '/conversaciones', description: 'Bandeja, fichas, pausar la IA, borradores y responder a mano.' },
   { path: '/contactos', label: 'Contactos', icon: Contact, roles: ALL, step: null, legacyPath: '/contactos', description: 'Fichas, etiquetas, reel de origen e historial.' },
   { path: '/metricas', label: 'Métricas', icon: TrendingUp, roles: ALL, step: null, legacyPath: '/metricas', description: 'Embudo por reel y por día, setter y agenda.' },
-  { path: '/flujos', label: 'Flujos', icon: Workflow, roles: ADMIN, step: '6.5', legacyPath: '/flujos', description: 'Constructor visual: disparadores, mensajes, botones, condiciones y pausas.' },
+  { path: '/flujos', label: 'Flujos', icon: Workflow, roles: ADMIN, step: null, legacyPath: '/flujos', description: 'Constructor visual: disparadores, mensajes, botones, condiciones y pausas.' },
   { path: '/inteligencia', label: 'Inteligencia', icon: BrainCircuit, roles: ADMIN, step: '6.6', legacyPath: null, description: 'Objeciones, datos de mercado y ángulos de contenido.' },
   { path: '/configuracion', label: 'Configuración', icon: Settings, roles: ADMIN, step: '6.7', legacyPath: '/eventos', description: 'Usuarios, cuenta de Instagram, token y límites.' },
 ];
