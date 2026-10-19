@@ -85,6 +85,24 @@ export function buildFunnel(rows: readonly FunnelPersonRow[]): Funnel {
   };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const EMPTY_STEPS = Object.fromEntries(Object.keys(STEPS).map((step) => [step, 0])) as Record<Step, number>;
+
+/** Para el gráfico por día (Fase 6.4): del más antiguo al más reciente, con 0 en los días sin comentarios. */
+export function fillDays(days: readonly FunnelCounts[]): FunnelCounts[] {
+  if (days.length === 0) return [];
+  const byKey = new Map(days.map((day) => [day.key, day]));
+  const keys = [...byKey.keys()].sort();
+  const first = Date.parse(`${keys[0]}T00:00:00Z`);
+  const last = Date.parse(`${keys[keys.length - 1]}T00:00:00Z`);
+  const filled: FunnelCounts[] = [];
+  for (let time = first; time <= last; time += DAY_MS) {
+    const key = new Date(time).toISOString().slice(0, 10);
+    filled.push(byKey.get(key) ?? { key, commented: 0, ...EMPTY_STEPS });
+  }
+  return filled;
+}
+
 /** Porcentaje redondeado; null si no hay base (no se divide entre cero). */
 export function percent(part: number, base: number): number | null {
   return base > 0 ? Math.round((part / base) * 100) : null;

@@ -8,6 +8,7 @@ import { SetterPage } from './setter/SetterPage';
 import { ConversationsPage } from './conversations/ConversationsPage';
 import { ContactDetailPage } from './contacts/ContactDetailPage';
 import { ContactsPage } from './contacts/ContactsPage';
+import { MetricsPage } from './metrics/MetricsPage';
 import { AppShell } from './shell/AppShell';
 import { navFor } from './shell/nav';
 
@@ -46,6 +47,7 @@ function Screens() {
         <Route path="conversaciones/:igId" element={<ConversationsPage />} />
         <Route path="contactos" element={<ContactsPage />} />
         <Route path="contactos/:igId" element={<ContactDetailPage />} />
+        <Route path="metricas" element={<MetricsPage />} />
         {pending.map((item) => (
           <Route key={item.path} path={item.path.slice(1)} element={<PendingModule item={item} />} />
         ))}

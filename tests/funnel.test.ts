@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFunnel, percent, type FunnelPersonRow } from '../src/funnel.js';
+import { buildFunnel, fillDays, percent, type FunnelPersonRow } from '../src/funnel.js';
 
 /** Embudo (Fase 4, paso 1). Decisiones de Jose 2026-10-17: tabla por reel + total + por día; quien comenta en 2 reels cuenta en los dos. */
 
@@ -60,6 +60,25 @@ describe('buildFunnel', () => {
       ['2026-10-17', 1, 1],
       ['2026-10-16', 1, 0],
     ]);
+  });
+});
+
+describe('fillDays (gráfico por día, Fase 6.4)', () => {
+  const day = (key: string, commented: number) => ({ key, commented, reached: commented, rejected: 0, planB: 0, rescued: 0, asked: 0, follows: 0, clicked: 0, wrote: 0, qualified: 0 });
+
+  it('ordena del más antiguo al más reciente y rellena con 0 los días sin actividad', () => {
+    const filled = fillDays([day('2026-10-18', 5), day('2026-10-15', 2)]);
+    expect(filled.map((d) => [d.key, d.commented])).toEqual([
+      ['2026-10-15', 2],
+      ['2026-10-16', 0],
+      ['2026-10-17', 0],
+      ['2026-10-18', 5],
+    ]);
+  });
+
+  it('sin días → vacío; un solo día → ese día', () => {
+    expect(fillDays([])).toEqual([]);
+    expect(fillDays([day('2026-10-18', 1)]).map((d) => d.key)).toEqual(['2026-10-18']);
   });
 });
 
