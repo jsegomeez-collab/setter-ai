@@ -47,7 +47,7 @@ describe('normalize y payloads', () => {
 
 describe('qué flujo salta', () => {
   it('reel + palabra clave sin tildes ni mayúsculas', () => {
-    const flow = followFlow({ trigger: { mediaIds: [TEST_MEDIA_ID], keywords: ['información', 'info'] } });
+    const flow = followFlow({ trigger: { type: 'comment', mediaIds: [TEST_MEDIA_ID], keywords: ['información', 'info'] } });
     expect(findFlowForComment([flow], comment())?.id).toBe('flow1');
     expect(findFlowForComment([flow], comment({ text: 'qué bueno' }))).toBeNull();
   });
@@ -64,15 +64,15 @@ describe('qué flujo salta', () => {
   });
 
   it('gana el más específico: reel concreto con palabra > todos los reels', () => {
-    const general = followFlow({ id: 'general', trigger: { mediaIds: 'all', keywords: [] } });
-    const specific = followFlow({ id: 'especifico', trigger: { mediaIds: [TEST_MEDIA_ID], keywords: ['info'] } });
+    const general = followFlow({ id: 'general', trigger: { type: 'comment', mediaIds: 'all', keywords: [] } });
+    const specific = followFlow({ id: 'especifico', trigger: { type: 'comment', mediaIds: [TEST_MEDIA_ID], keywords: ['info'] } });
     expect(findFlowForComment([general, specific], comment())?.id).toBe('especifico');
     expect(findFlowForComment([general, specific], comment({ mediaId: '555555' }))?.id).toBe('general');
   });
 });
 
 describe('explainComment (probar un comentario, Fase 6.5c)', () => {
-  const flow = followFlow({ trigger: { mediaIds: [TEST_MEDIA_ID], keywords: ['info', 'link'] }, testUsernames: ['josegomezlife'] });
+  const flow = followFlow({ trigger: { type: 'comment', mediaIds: [TEST_MEDIA_ID], keywords: ['info', 'link'] }, testUsernames: ['josegomezlife'] });
   const probe = (overrides: Partial<{ text: string; username: string; mediaId: string | null }> = {}) =>
     explainComment(flow, { text: 'Quiero INFO', username: 'JoseGomezLife', mediaId: TEST_MEDIA_ID, ...overrides });
 

@@ -1,4 +1,5 @@
-import { planComment, planPostback, type Plan } from './flows/engine.js';
+import { planComment, planMessageTrigger, planPostback, planQuickReply, type MessageProbe, type Plan } from './flows/engine.js';
+import type { Flow } from './flows/types.js';
 import { handleDeleteRequest, isDeleteRequest } from './data-deletion.js';
 import { planDmRescue } from './flows/dm-rescue.js';
 import { planTextReply } from './flows/text-reply.js';
@@ -37,6 +38,8 @@ function logOnly(event: InstagramEvent): string {
       return 'STANDBY: otra app (p. ej. ManyChat) es dueña de esta conversación. Solo registro.';
     case 'receipt':
       return event.receipt === 'read' ? 'Aviso de "leído". Solo registro.' : 'Reacción a un mensaje. Solo registro.';
+    case 'referral':
+      return `Abrió el chat desde un enlace ig.me (ref "${event.ref}"): ningún flujo activo con ese ref. Solo registro.`;
     case 'other':
       return `Aviso de tipo "${event.field}". Solo registro.`;
     default:
@@ -44,13 +47,36 @@ function logOnly(event: InstagramEvent): string {
   }
 }
 
+/**
+ * Flujo que empieza por un DM (palabra clave, historia, mención, ig.me; Fase 7.3a). Si es "una vez por persona" y ya
+ * lo recibió, no salta: el mensaje sigue su camino (al setter) en vez de quedarse sin respuesta.
+ */
+async function planDmTrigger(flows: readonly Flow[], probe: Omit<MessageProbe, 'username'>, senderId: string, dedupBase: string, store: ProcessDeps['store']): Promise<Plan | null> {
+  const username = (await store.getContact(senderId))?.username ?? null;
+  const plan = planMessageTrigger(flows, { ...probe, username }, senderId, dedupBase);
+  if (plan?.onceKey && (await store.getAction(plan.onceKey))) return null;
+  return plan;
+}
+
 async function planFor(event: InstagramEvent, deps: ProcessDeps): Promise<Plan | null> {
   if (event.kind === 'comment') return planComment(await deps.store.listFlows(), event, deps.random);
   if (event.kind === 'postback') return planPostback(await deps.store.listFlows(), event);
-  // DM de una persona: un "sí" al mensaje del flujo cuenta como pulsar su botón; si su DM al comentario
-  // no salió, el flujo le manda su primer mensaje (plan B); cualquier otro texto es para el setter.
+  if (event.kind === 'referral') {
+    const probe = { text: null, storyReply: false, storyMention: false, ref: event.ref };
+    return planDmTrigger(await deps.store.listFlows(), probe, event.senderId, `ref:${event.senderId}:${event.timestamp}`, deps.store);
+  }
+  // DM de una persona, por orden: respuesta rápida pulsada; un "sí" al mensaje del flujo (cuenta como pulsar su botón);
+  // plan B si su DM al comentario no salió; un flujo que empieza por DM; y si nada de eso, es para el setter.
   if (event.kind === 'message' && !event.isEcho && event.senderId !== event.accountId) {
-    return (await planTextReply(event, deps.store)) ?? (await planDmRescue(event, deps.store));
+    const flows = await deps.store.listFlows();
+    const quick = event.quickReplyPayload ? planQuickReply(flows, event.quickReplyPayload, event.senderId, event.mid) : null;
+    const probe = { text: event.text, storyReply: event.storyReply === true, storyMention: event.storyMention === true, ref: event.ref ?? null };
+    return (
+      quick ??
+      (await planTextReply(event, deps.store)) ??
+      (await planDmRescue(event, deps.store)) ??
+      (await planDmTrigger(flows, probe, event.senderId, `msg:${event.mid}`, deps.store))
+    );
   }
   return null;
 }
@@ -67,7 +93,7 @@ async function touchContact(event: InstagramEvent, store: Store): Promise<void> 
       mediaId: event.mediaId,
       text: event.text,
     });
-  } else if ((event.kind === 'postback' || (event.kind === 'message' && !event.isEcho)) && event.senderId !== event.accountId) {
+  } else if ((event.kind === 'postback' || event.kind === 'referral' || (event.kind === 'message' && !event.isEcho)) && event.senderId !== event.accountId) {
     await store.touchContact(event.senderId, null);
   }
 }

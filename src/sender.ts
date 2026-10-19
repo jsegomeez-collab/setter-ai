@@ -1,7 +1,8 @@
 import type { SendDelays, SendLimits } from './config.js';
 import { planAfterFollowCheck, planNode, encodePayload, type Action, type OutMessage } from './flows/engine.js';
 import type { Flow } from './flows/types.js';
-import { buttonUrl, type LinkSigner } from './links.js';
+import { runFlowStep } from './flows/steps.js';
+import { buttonUrl, trackedUrl, type LinkSigner } from './links.js';
 import { MetaApiError, type ApiMessage, type InstagramClient } from './meta/client.js';
 import type { JobPayload } from './scheduler.js';
 import { SETTINGS, type Store } from './store.js';
@@ -47,7 +48,38 @@ export interface SenderOptions {
   readonly now?: () => Date;
 }
 
+/** Carrusel (generic template): hasta 10 tarjetas; los enlaces llevan seguimiento como los botones normales. */
+function toCarousel(message: OutMessage, signer: LinkSigner | null): ApiMessage {
+  const elements = (message.cards ?? []).map((card, cardIndex) => ({
+    title: card.title,
+    ...(card.subtitle ? { subtitle: card.subtitle } : {}),
+    ...(card.imageUrl ? { image_url: card.imageUrl } : {}),
+    ...(card.url ? { default_action: { type: 'web_url' as const, url: trackedUrl(signer, message, 100 + cardIndex * 10 + 9, { url: card.url, tags: [] }) } } : {}),
+    ...(card.buttons.length > 0
+      ? {
+          buttons: card.buttons.map((button, index) =>
+            button.type === 'url'
+              ? { type: 'web_url' as const, url: trackedUrl(signer, message, 100 + cardIndex * 10 + index, button), title: button.title }
+              : { type: 'postback' as const, payload: encodePayload(message.flowId, button.next), title: button.title },
+          ),
+        }
+      : {}),
+  }));
+  return { attachment: { type: 'template', payload: { template_type: 'generic', elements } } };
+}
+
 export function toApiMessage(message: OutMessage, signer: LinkSigner | null = null): ApiMessage {
+  if (message.media) {
+    const { kind, url } = message.media;
+    return kind === 'image' ? { attachments: [{ type: 'image', payload: { url } }] } : { attachment: { type: kind, payload: { url } } };
+  }
+  if (message.cards && message.cards.length > 0) return toCarousel(message, signer);
+  if (message.quickReplies && message.quickReplies.length > 0) {
+    return {
+      text: message.text,
+      quick_replies: message.quickReplies.map((reply) => ({ content_type: 'text' as const, title: reply.title, payload: encodePayload(message.flowId, reply.next) })),
+    };
+  }
   if (message.buttons.length === 0) return { text: message.text };
   return {
     attachment: {
@@ -178,7 +210,8 @@ export class Sender {
     const { limits } = this.options;
     if (type === 'private_reply') return { types: ['private_reply'], limit: limits.privateReplies };
     if (type === 'reply_comment') return { types: ['reply_comment'], limit: limits.publicReplies };
-    if (type === 'send_message') return { types: ['send_message', 'send_dm'], limit: limits.followUps };
+    // Las reacciones (Fase 7.3a) también salen hacia la persona: cuentan con los demás mensajes de seguimiento.
+    if (type === 'send_message' || type === 'react') return { types: ['send_message', 'send_dm', 'react'], limit: limits.followUps };
     return null;
   }
 
@@ -257,7 +290,33 @@ export class Sender {
         return this.schedule(action);
       case 'setter_opener':
         return this.openSetter(action);
+      case 'react':
+        return this.react(action, client);
+      case 'flow_step':
+        return this.flowStep(action, client);
     }
+  }
+
+  /** Reacción al último mensaje de la persona (Meta la pide por su id). Sin mensaje suyo guardado, no se envía. */
+  private async react(action: Extract<Action, { type: 'react' }>, client: InstagramClient): Promise<unknown> {
+    const recent = await this.options.store.listMessages(action.recipientId, 20);
+    const last = [...recent].reverse().find((message) => message.direction === 'in' && message.mid);
+    if (!last?.mid) return { skipped: 'No hay ningún mensaje suyo al que reaccionar' };
+    await client.sendReaction(action.recipientId, last.mid, action.emoji);
+    return { reacted: action.emoji, messageId: last.mid };
+  }
+
+  /** Paso de "hacer" o condición (steps.ts). Lo siguiente se encola detrás, como en checkFollow. */
+  private async flowStep(action: Extract<Action, { type: 'flow_step' }>, client: InstagramClient): Promise<unknown> {
+    const outcome = await runFlowStep(action, {
+      store: this.options.store,
+      getFlow: this.getFlow,
+      getProfile: (igId) => client.getProfile(igId),
+      now: this.now,
+      random: this.random,
+    });
+    void this.enqueue(outcome.next);
+    return { ...outcome.result, next: outcome.next.map((item) => item.dedupKey) };
   }
 
   private get signer(): LinkSigner | null {

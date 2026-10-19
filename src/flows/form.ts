@@ -109,19 +109,21 @@ function buildNodes(form: FlowForm): Flow['nodes'] {
         type: 'message',
         text: form.startText,
         buttons: form.linkUrl ? [{ type: 'url', title: form.linkTitle, url: form.linkUrl, tags: [] }] : [],
+        quickReplies: [],
       },
     ];
   }
   return [
-    { id: NODE.start, type: 'message', text: form.startText, buttons: [{ type: 'postback', title: form.startButtonTitle, next: NODE.gate }] },
+    { id: NODE.start, type: 'message', text: form.startText, buttons: [{ type: 'postback', title: form.startButtonTitle, next: NODE.gate }], quickReplies: [] },
     { id: NODE.gate, type: 'follow_gate', ifFollowing: NODE.resource, ifNotFollowing: NODE.notFollowing, ifUnknown: NODE.resource },
     {
       id: NODE.resource,
       type: 'message',
       text: form.resourceText,
       buttons: form.resourceUrl ? [{ type: 'url', title: form.resourceButtonTitle, url: form.resourceUrl, tags: [] }] : [],
+      quickReplies: [],
     },
-    { id: NODE.notFollowing, type: 'message', text: form.notFollowingText, buttons: [{ type: 'postback', title: form.retryButtonTitle, next: NODE.gate }] },
+    { id: NODE.notFollowing, type: 'message', text: form.notFollowingText, buttons: [{ type: 'postback', title: form.retryButtonTitle, next: NODE.gate }], quickReplies: [] },
   ];
 }
 
@@ -131,7 +133,7 @@ export function formToFlow(form: FlowForm, makeId: () => string = newFlowId): Va
     id: form.id || makeId(),
     name: form.name,
     enabled: form.enabled,
-    trigger: { mediaIds: form.allMedia ? 'all' : form.mediaIds, keywords: splitComma(form.keywords) },
+    trigger: { type: 'comment', mediaIds: form.allMedia ? 'all' : form.mediaIds, keywords: splitComma(form.keywords) },
     publicReplies: splitLines(form.publicReplies),
     startNodeId: NODE.start,
     nodes: buildNodes(form),
@@ -164,7 +166,8 @@ function postbackTitle(flow: Flow, nodeId: string): string {
 
 /** Para editar: solo los flujos creados con este formulario se pueden volver a abrir en él. */
 export function flowToForm(flow: Flow): FlowForm | null {
-  if (flow.template !== TEMPLATE) return null;
+  const { trigger } = flow;
+  if (flow.template !== TEMPLATE || trigger.type !== 'comment') return null;
   const mode = findNode(flow, NODE.gate) ? 'follow' : 'link';
   const link = urlButton(flow, NODE.start);
   const resource = urlButton(flow, NODE.resource);
@@ -172,9 +175,9 @@ export function flowToForm(flow: Flow): FlowForm | null {
     id: flow.id,
     name: flow.name,
     enabled: flow.enabled,
-    allMedia: flow.trigger.mediaIds === 'all',
-    mediaIds: flow.trigger.mediaIds === 'all' ? [] : [...flow.trigger.mediaIds],
-    keywords: flow.trigger.keywords.join(', '),
+    allMedia: trigger.mediaIds === 'all',
+    mediaIds: trigger.mediaIds === 'all' ? [] : [...trigger.mediaIds],
+    keywords: trigger.keywords.join(', '),
     publicReplies: flow.publicReplies.join('\n'),
     testUsernames: flow.testUsernames.join(', '),
     oncePerUser: flow.oncePerUser,

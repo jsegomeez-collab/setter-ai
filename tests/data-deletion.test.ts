@@ -18,7 +18,7 @@ describe('isDeleteRequest', () => {
 
 function setup() {
   const store = createMemoryStore();
-  store.flows.set('flow1', followFlow({ trigger: { mediaIds: 'all', keywords: [] } }));
+  store.flows.set('flow1', followFlow({ trigger: { type: 'comment', mediaIds: 'all', keywords: [] } }));
   const client = {
     replyToComment: vi.fn().mockResolvedValue({ id: 'r1' }),
     sendPrivateReply: vi.fn().mockResolvedValue({ recipientId: STRANGER_ID, messageId: 'm1' }),

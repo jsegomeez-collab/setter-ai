@@ -51,9 +51,33 @@ export interface SendResult {
   readonly messageId: string | null;
 }
 
-/** Mensaje en el formato de la API: texto simple o plantilla de botones. */
+type ApiButton = { readonly type: 'web_url'; readonly url: string; readonly title: string } | { readonly type: 'postback'; readonly payload: string; readonly title: string };
+
+/**
+ * Mensaje en el formato de la API: texto, respuestas rápidas, plantilla de botones, carrusel (generic) o archivo.
+ * Formatos de la doc oficial (Messaging API, quick replies y generic template; ver PLAN.md, Fase 7.3).
+ */
 export type ApiMessage =
   | { readonly text: string }
+  | { readonly text: string; readonly quick_replies: readonly { readonly content_type: 'text'; readonly title: string; readonly payload: string }[] }
+  | {
+      readonly attachment: {
+        readonly type: 'template';
+        readonly payload: {
+          readonly template_type: 'generic';
+          readonly elements: readonly {
+            readonly title: string;
+            readonly subtitle?: string;
+            readonly image_url?: string;
+            readonly default_action?: { readonly type: 'web_url'; readonly url: string };
+            readonly buttons?: readonly ApiButton[];
+          }[];
+        };
+      };
+    }
+  /** Imagen: la doc usa la lista "attachments" (hasta 10). */
+  | { readonly attachments: readonly { readonly type: 'image'; readonly payload: { readonly url: string } }[] }
+  | { readonly attachment: { readonly type: 'video' | 'audio' | 'file'; readonly payload: { readonly url: string } } }
   | {
       readonly attachment: {
         readonly type: 'template';
@@ -215,6 +239,28 @@ export class InstagramClient {
    */
   async sendTypingOn(recipientId: string): Promise<void> {
     await this.call('POST', 'me/messages', { recipient: { id: recipientId }, sender_action: 'typing_on' });
+  }
+
+  /** Reacción con un emoji a un mensaje de la persona (doc: Messaging API, sender_action "react"). */
+  async sendReaction(recipientId: string, messageId: string, emoji: string): Promise<Json> {
+    return this.call('POST', 'me/messages', { recipient: { id: recipientId }, sender_action: 'react', payload: { message_id: messageId, reaction: emoji } });
+  }
+
+  /**
+   * Seguidores y verificación de quien escribió (doc: User Profile API, follower_count e is_verified_user).
+   * Exige consentimiento (que haya escrito); si Meta no lo deja ver, null.
+   */
+  async getProfile(igsid: string): Promise<{ followerCount: number | null; isVerified: boolean | null } | null> {
+    try {
+      const data = await this.call('GET', `${encodeURIComponent(igsid)}?fields=follower_count,is_verified_user`);
+      return {
+        followerCount: typeof data.follower_count === 'number' ? data.follower_count : null,
+        isVerified: typeof data.is_verified_user === 'boolean' ? data.is_verified_user : null,
+      };
+    } catch (error) {
+      if (error instanceof MetaApiError && error.status >= 400 && error.status < 500) return null;
+      throw error;
+    }
   }
 
   /** Compatibilidad con la Fase 1. */

@@ -112,3 +112,22 @@ describe('InstagramClient', () => {
     await expect(refreshAccessToken('x', fetchReturning(200, {}))).rejects.toThrow('access_token');
   });
 });
+
+/** Fase 7.3a: reacción y perfil, con el formato de la doc oficial. */
+describe('InstagramClient · Fase 7.3a', () => {
+  it('reacción: sender_action react con message_id y el emoji', async () => {
+    const fetchFn = fetchReturning(200, { recipient_id: '9' });
+    await new InstagramClient('tok', 'v25.0', fetchFn).sendReaction('9', 'mid-1', '🔥');
+    const [url, init] = lastCall(fetchFn);
+    expect(url).toBe('https://graph.instagram.com/v25.0/me/messages');
+    expect(JSON.parse(init.body as string)).toEqual({ recipient: { id: '9' }, sender_action: 'react', payload: { message_id: 'mid-1', reaction: '🔥' } });
+  });
+
+  it('perfil: follower_count e is_verified_user; sin consentimiento, null; error de servidor, se lanza', async () => {
+    const fetchFn = fetchReturning(200, { follower_count: 1200, is_verified_user: false, id: '9' });
+    expect(await new InstagramClient('t', 'v25.0', fetchFn).getProfile('9')).toEqual({ followerCount: 1200, isVerified: false });
+    expect(lastCall(fetchFn)[0]).toBe('https://graph.instagram.com/v25.0/9?fields=follower_count,is_verified_user');
+    expect(await new InstagramClient('t', 'v25.0', fetchReturning(400, { error: { message: 'User consent is required' } })).getProfile('9')).toBeNull();
+    await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'boom' } })).getProfile('9')).rejects.toBeInstanceOf(MetaApiError);
+  });
+});

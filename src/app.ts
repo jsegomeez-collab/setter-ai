@@ -45,7 +45,7 @@ const MEDIA_FOR_STATS = 50;
 const EXAMPLE_JSON_FLOW = {
   name: 'Mi flujo avanzado',
   enabled: false,
-  trigger: { mediaIds: 'all', keywords: [] },
+  trigger: { type: 'comment', mediaIds: 'all', keywords: [] },
   publicReplies: ['¡Te escribí por DM! 📩'],
   startNodeId: 'inicio',
   nodes: [

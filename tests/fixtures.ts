@@ -5,7 +5,7 @@ export const JOSE_FLOW: FlowInput = {
   id: 'manychat1',
   name: 'Réplica ManyChat',
   enabled: true,
-  trigger: { mediaIds: 'all', keywords: [] },
+  trigger: { type: 'comment', mediaIds: 'all', keywords: [] },
   publicReplies: ['¡Te escribí por DM! 📩'],
   startNodeId: 'inicio',
   nodes: [

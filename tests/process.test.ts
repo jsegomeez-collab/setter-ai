@@ -39,7 +39,7 @@ describe('processWebhook con flujos', () => {
   });
 
   it('opción B: la misma persona en OTRO reel sí recibe el DM; en el mismo reel no', async () => {
-    const { client, deps } = setup([followFlow({ trigger: { mediaIds: 'all', keywords: [] } })]);
+    const { client, deps } = setup([followFlow({ trigger: { type: 'comment', mediaIds: 'all', keywords: [] } })]);
     await processWebhook(commentPayload(), deps);
     await processWebhook(commentPayload({ id: 'c-2' }), deps);
     await processWebhook(commentPayload({ id: 'c-3', media: { id: '18000000000000002' } }), deps);
@@ -88,7 +88,7 @@ describe('processWebhook con flujos', () => {
     await processWebhook(commentPayload({ id: 'h3', from: { id: '17841400000000001', username: 'josenews.ai' } }), deps);
     expect(client.sendPrivateReply).not.toHaveBeenCalled();
     // Se activa el flujo y se rescata.
-    store.flows.set('flow1', followFlow({ trigger: { mediaIds: 'all', keywords: [] } }));
+    store.flows.set('flow1', followFlow({ trigger: { type: 'comment', mediaIds: 'all', keywords: [] } }));
     const first = await rescueComments(new Date(Date.now() - 3600_000), deps);
     await sender.idle();
     expect(first).toMatchObject({ queued: 2, skipped: 1 });

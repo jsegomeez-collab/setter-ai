@@ -38,7 +38,7 @@ describe('validateFlow', () => {
   });
 
   it('rechaza IDs de reel que no son números y basura', () => {
-    expect(validateFlow(followFlow({ trigger: { mediaIds: ['abc'], keywords: [] } })).ok).toBe(false);
+    expect(validateFlow(followFlow({ trigger: { type: 'comment', mediaIds: ['abc'], keywords: [] } })).ok).toBe(false);
     expect(validateFlow(null).ok).toBe(false);
   });
 });

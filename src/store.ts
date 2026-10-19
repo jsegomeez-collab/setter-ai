@@ -71,6 +71,8 @@ export interface Store {
   addContactTags(igId: string, tags: readonly string[]): Promise<void>;
   /** Quita una etiqueta puesta a mano o por un flujo (Fase 6.3). Si no la tenía, no pasa nada. */
   removeContactTag(igId: string, tag: string): Promise<void>;
+  /** Campo propio de la ficha (Fase 7.3a, paso "guardar un dato"). Valor vacío = borrar el campo. */
+  setContactField(igId: string, field: string, value: string): Promise<void>;
   listContacts(limit: number): Promise<ContactRow[]>;
   /** Comentarios de una persona, lo más reciente primero (Fase 6.3). */
   listPersonComments(igId: string, limit: number): Promise<CommentRow[]>;
@@ -98,7 +100,8 @@ export interface Store {
   setSetting(key: string, value: string | null): Promise<void>;
   allowSender(igId: string): Promise<void>;
   listAllowedSenders(): Promise<string[]>;
-  recentEvents(limit: number): Promise<EventRow[]>;
+  /** Lo más nuevo primero. Con `kind`, solo los de ese tipo (p. ej. 'aviso', Fase 7.3a). */
+  recentEvents(limit: number, kind?: string): Promise<EventRow[]>;
   recentActions(limit: number): Promise<ActionRow[]>;
 }
 
@@ -131,6 +134,8 @@ export interface ContactRow {
   readonly aiPausedReason?: string | null;
   /** Ficha del lead extraída por la IA. */
   readonly lead?: unknown;
+  /** Campos propios (Fase 7.3a): nombre en minúsculas → valor. */
+  readonly fields?: Readonly<Record<string, string>>;
 }
 
 export type MessageDirection = 'in' | 'out';
@@ -302,6 +307,7 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ai_paused BOOLEAN NOT NULL DEFAULT
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ai_paused_reason TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead JSONB;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead_updated_at TIMESTAMPTZ;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS fields JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE TABLE IF NOT EXISTS messages (
   id BIGSERIAL PRIMARY KEY,
   ig_id TEXT NOT NULL,
@@ -385,9 +391,12 @@ export async function createPostgresStore(
       const rows = await sql<{ data: Flow }[]>`SELECT data FROM flows ORDER BY updated_at DESC`;
       // Se pasan por el esquema para rellenar los campos nuevos con su valor por defecto (flujos guardados antes).
       // Si uno antiguo no pasara la validación, se devuelve tal cual (como antes) para no dejar de atender comentarios.
+      // Fase 7.3a: un flujo antiguo sin "type" en el disparador era de comentarios; se marca así también en ese caso.
+      const legacyTrigger = (data: Flow): Flow =>
+        data.trigger && !('type' in data.trigger) ? { ...data, trigger: { ...(data.trigger as object), type: 'comment' } as Flow['trigger'] } : data;
       return rows.map((row) => {
         const parsed = flowSchema.safeParse(row.data);
-        return parsed.success ? parsed.data : row.data;
+        return parsed.success ? parsed.data : legacyTrigger(row.data);
       });
     },
     async saveFlow(flow) {
@@ -706,9 +715,9 @@ export async function createPostgresStore(
       const rows = await sql<{ ig_id: string }[]>`SELECT ig_id FROM allowed_senders ORDER BY added_at`;
       return rows.map((row) => row.ig_id);
     },
-    async recentEvents(limit) {
+    async recentEvents(limit, kind) {
       const rows = await sql<{ created_at: Date; kind: string; note: string; data: unknown }[]>`
-        SELECT created_at, kind, note, data FROM event_log ORDER BY id DESC LIMIT ${limit}`;
+        SELECT created_at, kind, note, data FROM event_log ${kind ? sql`WHERE kind = ${kind}` : sql``} ORDER BY id DESC LIMIT ${limit}`;
       return rows.map((row) => ({ createdAt: row.created_at, kind: row.kind, note: row.note, data: row.data }));
     },
     async recentActions(limit) {

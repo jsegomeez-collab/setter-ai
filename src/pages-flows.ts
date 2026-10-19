@@ -9,8 +9,11 @@ function reelLabel(media: readonly Media[], id: string): string {
 }
 
 function triggerSummary(flow: Flow, media: readonly Media[]): string {
-  const reels = flow.trigger.mediaIds === 'all' ? 'Todos los reels' : flow.trigger.mediaIds.map((id) => reelLabel(media, id)).join(' | ');
-  const words = flow.trigger.keywords.length ? `palabras: ${flow.trigger.keywords.join(', ')}` : 'cualquier comentario';
+  const { trigger } = flow;
+  // El panel antiguo solo sabe de comentarios; los flujos nuevos (Fase 7.3) se ven en la web nueva.
+  if (trigger.type !== 'comment') return `<small>Empieza por: ${escapeHtml(trigger.type)} (ver en la web nueva)</small>`;
+  const reels = trigger.mediaIds === 'all' ? 'Todos los reels' : trigger.mediaIds.map((id) => reelLabel(media, id)).join(' | ');
+  const words = trigger.keywords.length ? `palabras: ${trigger.keywords.join(', ')}` : 'cualquier comentario';
   return `${escapeHtml(reels)}<br><small>${escapeHtml(words)}</small>`;
 }
 

@@ -22,12 +22,18 @@ export interface FlowsApiDeps {
 
 const MAX_NAME = 80;
 const COPY_SUFFIX = ' (copia)';
+/** Avisos para Jose que se enseñan en el Inicio. */
+const NOTICES_READ = 20;
 const nameSchema = z.object({ name: z.string().trim().min(1).max(MAX_NAME) });
 const enableSchema = z.object({ enabled: z.boolean(), confirm: z.string().optional() });
 const deleteSchema = z.object({ confirm: z.literal('BORRAR') });
 const probeSchema = z.object({
   draft: z.object({
-    trigger: z.object({ mediaIds: z.union([z.literal('all'), z.array(z.string().max(40)).max(200)]), keywords: z.array(z.string().max(50)).max(30) }),
+    trigger: z.object({
+      type: z.literal('comment').default('comment'),
+      mediaIds: z.union([z.literal('all'), z.array(z.string().max(40)).max(200)]),
+      keywords: z.array(z.string().max(50)).max(30),
+    }),
     testUsernames: z.array(z.string().max(30)).max(20),
   }),
   comment: z.object({ text: z.string().max(2200), username: z.string().max(30).nullable().optional(), mediaId: z.string().max(40).nullable().optional() }),
@@ -47,11 +53,11 @@ function starterFlow(name: string): Flow {
     id: newFlowId(),
     name,
     enabled: false,
-    trigger: { mediaIds: 'all', keywords: [] },
+    trigger: { type: 'comment', mediaIds: 'all', keywords: [] },
     publicReplies: [],
     dmFailedReplies: [],
     startNodeId: 'inicio',
-    nodes: [{ id: 'inicio', type: 'message', text: '¡Hola! 👋 Aquí tienes lo que pediste.', buttons: [] }],
+    nodes: [{ id: 'inicio', type: 'message', text: '¡Hola! 👋 Aquí tienes lo que pediste.', buttons: [], quickReplies: [] }],
     testUsernames: [],
     oncePerUser: true,
     onceScope: 'media',
@@ -84,6 +90,26 @@ export function createFlowsApi(deps: FlowsApiDeps): Hono<ApiEnv> {
     await store.saveFlow(flow);
     await store.logEvent('flujo', `${who(c)} creó el flujo "${flow.name}" (desactivado).`, { id: flow.id });
     return c.json({ flow }, 201);
+  });
+
+  /** Avisos que los flujos dejan para Jose (paso "Avisar a Jose", Fase 7.3a), con el usuario de la persona. */
+  api.get('/notices', async (c) => {
+    const events = await store.recentEvents(NOTICES_READ, 'aviso');
+    const notices = await Promise.all(
+      events.map(async (event) => {
+        const data = (event.data ?? {}) as { igId?: unknown; flowId?: unknown; flowName?: unknown };
+        const igId = typeof data.igId === 'string' ? data.igId : null;
+        return {
+          createdAt: event.createdAt.toISOString(),
+          text: event.note,
+          igId,
+          username: igId ? ((await store.getContact(igId))?.username ?? null) : null,
+          flowId: typeof data.flowId === 'string' ? data.flowId : null,
+          flowName: typeof data.flowName === 'string' ? data.flowName : null,
+        };
+      }),
+    );
+    return c.json({ notices });
   });
 
   api.get('/:id', async (c) => {

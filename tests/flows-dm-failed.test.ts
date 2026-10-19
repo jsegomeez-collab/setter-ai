@@ -19,20 +19,20 @@ const comment = { kind: 'comment' as const, commentId: 'c-1', fromId: STRANGER_I
 
 describe('planComment con plan B', () => {
   it('lleva el texto del plan B dentro de la respuesta privada (para usarlo solo si falla)', () => {
-    const flow = followFlow({ trigger: { mediaIds: 'all', keywords: [] }, dmFailedReplies: PLAN_B });
+    const flow = followFlow({ trigger: { type: 'comment', mediaIds: 'all', keywords: [] }, dmFailedReplies: PLAN_B });
     const plan = planComment([flow], comment, () => 0);
     expect(plan.actions[0]).toMatchObject({ type: 'private_reply', failReply: PLAN_B[0] });
   });
 
   it('sin textos de plan B no lleva nada (como hasta ahora)', () => {
-    const plan = planComment([followFlow({ trigger: { mediaIds: 'all', keywords: [] } })], comment, () => 0);
+    const plan = planComment([followFlow({ trigger: { type: 'comment', mediaIds: 'all', keywords: [] } })], comment, () => 0);
     expect(plan.actions[0]).not.toHaveProperty('failReply');
   });
 });
 
 function setup(sendPrivateReply = vi.fn().mockRejectedValue(INVALID)) {
   const store = createMemoryStore();
-  const flow = followFlow({ trigger: { mediaIds: 'all', keywords: [] }, dmFailedReplies: PLAN_B });
+  const flow = followFlow({ trigger: { type: 'comment', mediaIds: 'all', keywords: [] }, dmFailedReplies: PLAN_B });
   store.flows.set(flow.id, flow);
   const client = {
     replyToComment: vi.fn().mockResolvedValue({ id: 'r1' }),

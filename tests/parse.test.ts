@@ -102,3 +102,41 @@ describe('parseWebhook', () => {
     expect(parseWebhook({ entry: [{ id: ACCOUNT_ID, changes: [{ field: 'comments', value: { text: 'sin id' } }] }] })).toEqual([]);
   });
 });
+
+/** Fase 7.3a: formatos de la doc oficial (webhooks/examples): respuesta rápida, historia, mención, ig.me. */
+describe('parseWebhook · avisos nuevos de la Fase 7.3', () => {
+  const dm = (message: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+    object: 'instagram',
+    entry: [{ id: ACCOUNT_ID, time: 1, messaging: [{ sender: { id: STRANGER_ID }, recipient: { id: ACCOUNT_ID }, timestamp: 1760000000000, message, ...extra }] }],
+  });
+
+  it('respuesta rápida pulsada: trae su payload', () => {
+    const [event] = parseWebhook(dm({ mid: 'm-qr', text: 'Vídeo', quick_reply: { payload: 'F:f:v' } }));
+    expect(event).toMatchObject({ kind: 'message', mid: 'm-qr', text: 'Vídeo', quickReplyPayload: 'F:f:v' });
+  });
+
+  it('respuesta a una historia y mención en una historia', () => {
+    const [reply] = parseWebhook(dm({ mid: 'm-st', text: '🔥', reply_to: { story: { url: 'https://cdn/x', id: '123' } } }));
+    expect(reply).toMatchObject({ kind: 'message', storyReply: true });
+    const [mention] = parseWebhook(dm({ mid: 'm-me', attachments: [{ type: 'story_mention', payload: { url: 'https://cdn/y' } }] }));
+    expect(mention).toMatchObject({ kind: 'message', text: null, storyMention: true });
+  });
+
+  it('un DM normal no lleva nada de esto (igual que antes)', () => {
+    const [event] = parseWebhook(messagePayload('hola'));
+    expect(event).not.toHaveProperty('quickReplyPayload');
+    expect(event).not.toHaveProperty('storyReply');
+    expect(event).not.toHaveProperty('storyMention');
+    expect(event).not.toHaveProperty('ref');
+  });
+
+  it('enlace ig.me: aviso de referral suelto y ref dentro de un mensaje', () => {
+    const referral = {
+      object: 'instagram',
+      entry: [{ id: ACCOUNT_ID, time: 1, messaging: [{ sender: { id: STRANGER_ID }, recipient: { id: ACCOUNT_ID }, timestamp: 1760000000123, referral: { ref: 'guia_n8n', source: 'SHORTLINKS', type: 'OPEN_THREAD' } }] }],
+    };
+    expect(parseWebhook(referral)).toEqual([{ kind: 'referral', accountId: ACCOUNT_ID, senderId: STRANGER_ID, ref: 'guia_n8n', timestamp: '1760000000123' }]);
+    const [inMessage] = parseWebhook(dm({ mid: 'm-ref', text: 'hola', referral: { ref: 'guia_n8n' } }));
+    expect(inMessage).toMatchObject({ kind: 'message', ref: 'guia_n8n' });
+  });
+});

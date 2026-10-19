@@ -94,15 +94,15 @@ describe('API Flujos (Fase 6.5a)', () => {
     const flow = (await (await send('GET', '/api/flows/manychat', admin)).json()).flow;
     const probe = (draft: unknown, comment: Record<string, unknown>) => send('POST', '/api/flows/manychat/test', admin, { draft, comment });
 
-    const ok = await (await probe({ ...flow, trigger: { mediaIds: 'all', keywords: ['info'] } }, { text: 'Quiero INFO', username: 'ana', mediaId: '18000000000000001' })).json();
+    const ok = await (await probe({ ...flow, trigger: { type: 'comment', mediaIds: 'all', keywords: ['info'] } }, { text: 'Quiero INFO', username: 'ana', mediaId: '18000000000000001' })).json();
     expect(ok).toEqual({ matches: true, reasons: [], enabled: false, takenBy: null });
 
-    const no = await (await probe({ ...flow, trigger: { mediaIds: 'all', keywords: ['info'] } }, { text: 'qué bonito', username: 'ana', mediaId: null })).json();
+    const no = await (await probe({ ...flow, trigger: { type: 'comment', mediaIds: 'all', keywords: ['info'] } }, { text: 'qué bonito', username: 'ana', mediaId: null })).json();
     expect(no).toMatchObject({ matches: false, reasons: ['El comentario no tiene ninguna palabra clave (info).'] });
 
     // Otro flujo ACTIVO más específico (reel concreto + palabra) gana al de "todos los reels".
-    await store.saveFlow(followFlow({ id: 'otro', name: 'Reel concreto', enabled: true, trigger: { mediaIds: ['18000000000000001'], keywords: ['info'] } }));
-    const taken = await (await probe({ ...flow, trigger: { mediaIds: 'all', keywords: ['info'] } }, { text: 'info', username: 'ana', mediaId: '18000000000000001' })).json();
+    await store.saveFlow(followFlow({ id: 'otro', name: 'Reel concreto', enabled: true, trigger: { type: 'comment', mediaIds: ['18000000000000001'], keywords: ['info'] } }));
+    const taken = await (await probe({ ...flow, trigger: { type: 'comment', mediaIds: 'all', keywords: ['info'] } }, { text: 'info', username: 'ana', mediaId: '18000000000000001' })).json();
     expect(taken.takenBy).toEqual({ id: 'otro', name: 'Reel concreto' });
 
     expect((await probe({ nada: true }, { text: 'x' })).status).toBe(400);
@@ -120,5 +120,21 @@ describe('API Flujos (Fase 6.5a)', () => {
     expect((await send('POST', '/api/flows/manychat/delete', admin, {})).status).toBe(400);
     expect((await send('POST', '/api/flows/manychat/delete', admin, { confirm: 'BORRAR' })).status).toBe(200);
     expect(await getFlow('manychat')).toBeUndefined();
+  });
+});
+
+describe('API Flujos · avisos para Jose (Fase 7.3a)', () => {
+  it('lista los avisos de los flujos (lo más nuevo primero) con el usuario de la persona; solo admin', async () => {
+    const { store, send, admin, team } = await setup();
+    await store.touchContact('900', 'ana_ig');
+    await store.logEvent('aviso', 'Quiere una llamada', { igId: '900', flowId: 'f1', flowName: 'Agenda' });
+    await store.logEvent('flujo', 'Otra cosa que no es un aviso', {});
+    await store.logEvent('aviso', 'Pidió la guía', { igId: '901', flowId: 'f2', flowName: 'Guía' });
+    expect((await send('GET', '/api/flows/notices', team)).status).toBe(403);
+    const data = await (await send('GET', '/api/flows/notices', admin)).json();
+    expect(data.notices).toEqual([
+      { createdAt: expect.any(String), text: 'Pidió la guía', igId: '901', username: null, flowId: 'f2', flowName: 'Guía' },
+      { createdAt: expect.any(String), text: 'Quiere una llamada', igId: '900', username: 'ana_ig', flowId: 'f1', flowName: 'Agenda' },
+    ]);
   });
 });

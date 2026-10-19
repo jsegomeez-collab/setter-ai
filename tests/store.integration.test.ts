@@ -397,6 +397,37 @@ describe('createPostgresStore (Postgres real)', () => {
     expect((await store.listKnowledgeVersions(10)).map((v) => v.id)).toEqual([second, first]);
   });
 
+  it('Fase 7.3a · campos propios: guardar, cambiar, borrar y crear el contacto si no existe', async () => {
+    await store.setContactField('c73', 'ciudad', 'Miami');
+    await store.setContactField('c73', 'interes', 'guia');
+    await store.setContactField('c73', 'ciudad', 'Nueva York');
+    expect((await store.getContact('c73'))?.fields).toEqual({ ciudad: 'Nueva York', interes: 'guia' });
+    await store.setContactField('c73', 'ciudad', '');
+    expect((await store.getContact('c73'))?.fields).toEqual({ interes: 'guia' });
+    await store.setContactField('nadie73', 'x', '');
+    expect(await store.getContact('nadie73')).toBeNull();
+    await store.touchContact('c73b', 'sin_campos');
+    expect((await store.getContact('c73b'))?.fields).toEqual({});
+  });
+
+  it('Fase 7.3a · un flujo antiguo (sin "type") se lee como de comentarios, aunque no pase la validación', async () => {
+    const { trigger, ...rest } = followFlow({ id: 'viejo73' });
+    const legacy = { ...rest, trigger: { mediaIds: trigger.type === 'comment' ? trigger.mediaIds : 'all', keywords: [] }, startNodeId: 'no-existe' };
+    await store.saveFlow(legacy as unknown as Flow);
+    const read = (await store.listFlows()).find((flow) => flow.id === 'viejo73');
+    expect(read?.trigger.type).toBe('comment');
+    await store.deleteFlow('viejo73');
+  });
+
+  it('Fase 7.3a · eventos de un solo tipo (avisos para Jose), lo más nuevo primero', async () => {
+    await store.logEvent('aviso', 'aviso 1', { igId: 'a' });
+    await store.logEvent('otro', 'no es aviso', {});
+    await store.logEvent('aviso', 'aviso 2', { igId: 'b' });
+    const notices = await store.recentEvents(10, 'aviso');
+    expect(notices.slice(0, 2).map((e) => e.note)).toEqual(['aviso 2', 'aviso 1']);
+    expect(notices.every((e) => e.kind === 'aviso')).toBe(true);
+  });
+
   it('Fase 6.3 · contactos: quitar una etiqueta, ver los comentarios de una persona y la ficha en la lista', async () => {
     await store.touchContact('c63', 'contacto63', '6300001');
     await store.addContactTags('c63', ['cliente', 'EMPRESA DFY']);

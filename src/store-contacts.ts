@@ -17,6 +17,7 @@ type ContactDbRow = {
   ai_paused: boolean;
   ai_paused_reason: string | null;
   lead: unknown;
+  fields: Record<string, string> | null;
 };
 
 const toContact = (r: ContactDbRow): ContactRow => ({
@@ -30,6 +31,7 @@ const toContact = (r: ContactDbRow): ContactRow => ({
   aiPaused: r.ai_paused,
   aiPausedReason: r.ai_paused_reason,
   lead: r.lead,
+  fields: r.fields ?? {},
 });
 
 export function contactMethods(sql: Sql) {
@@ -98,6 +100,16 @@ export function contactMethods(sql: Sql) {
     },
     async removeContactTag(igId: string, tag: string): Promise<void> {
       await sql`UPDATE contacts SET tags = array_remove(tags, ${tag}) WHERE ig_id = ${igId}`;
+    },
+    async setContactField(igId: string, field: string, value: string): Promise<void> {
+      if (value === '') {
+        await sql`UPDATE contacts SET fields = fields - ${field} WHERE ig_id = ${igId}`;
+        return;
+      }
+      const json = toJson(sql, { [field]: value });
+      await sql`
+        INSERT INTO contacts (ig_id, fields) VALUES (${igId}, ${json})
+        ON CONFLICT (ig_id) DO UPDATE SET fields = contacts.fields || EXCLUDED.fields`;
     },
     /** Lo más reciente primero; incluye la ficha para poder filtrar por etapa. */
     async listContacts(limit: number): Promise<ContactRow[]> {

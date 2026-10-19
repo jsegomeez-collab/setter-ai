@@ -27,15 +27,15 @@ describe('formulario → flujo', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.flow.nodes).toEqual([
-      { id: 'start', type: 'message', text: EMPTY_FORM.startText, buttons: [{ type: 'url', title: 'Ver recurso', url: 'https://example.com/x', tags: [] }] },
+      { id: 'start', type: 'message', text: EMPTY_FORM.startText, buttons: [{ type: 'url', title: 'Ver recurso', url: 'https://example.com/x', tags: [] }], quickReplies: [] },
     ]);
-    expect(result.flow.trigger.keywords).toEqual(['info', 'guía']);
+    expect(result.flow.trigger).toMatchObject({ keywords: ['info', 'guía'] });
   });
 
   it('exige elegir reel o "todos", y quita la @ de los usuarios de prueba', () => {
     expect(formToFlow(form({ mediaIds: [] })).ok).toBe(false);
     const result = formToFlow(form({ allMedia: true, mediaIds: [], testUsernames: '@josegomezlife, otra' }));
-    expect(result.ok && result.flow.trigger.mediaIds === 'all' && result.flow.testUsernames).toEqual(['josegomezlife', 'otra']);
+    expect(result.ok && result.flow.trigger.type === 'comment' && result.flow.trigger.mediaIds === 'all' && result.flow.testUsernames).toEqual(['josegomezlife', 'otra']);
   });
 
   it('devuelve los errores de validación (URL mala)', () => {

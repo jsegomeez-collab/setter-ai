@@ -53,18 +53,26 @@ export function readLinkToken(secret: string, token: string): LinkData | null {
   }
 }
 
-/** URL que se pone en el botón: la de seguimiento si hay firmante, si no la real. */
-export function buttonUrl(signer: LinkSigner | null, message: OutMessage, index: number): string {
-  const button = message.buttons[index];
-  if (!button || button.type !== 'url') throw new Error(`El botón ${index} no es un enlace`);
-  if (!signer) return button.url;
+/**
+ * Enlace con seguimiento para un destino del mensaje. `index` solo sirve para el registro: los botones del mensaje
+ * van del 0 al 2; los de las tarjetas del carrusel, 100 + tarjeta × 10 + botón (y el toque en la tarjeta, + 9).
+ */
+export function trackedUrl(signer: LinkSigner | null, message: OutMessage, index: number, target: { readonly url: string; readonly tags: readonly string[] }): string {
+  if (!signer) return target.url;
   const token = createLinkToken(signer.secret, {
     f: message.flowId,
     n: message.nodeId,
     b: index,
     r: message.recipientId,
-    u: button.url,
-    t: button.tags,
+    u: target.url,
+    t: target.tags,
   });
   return `${signer.baseUrl.replace(/\/$/, '')}/l/${token}`;
+}
+
+/** URL que se pone en el botón: la de seguimiento si hay firmante, si no la real. */
+export function buttonUrl(signer: LinkSigner | null, message: OutMessage, index: number): string {
+  const button = message.buttons[index];
+  if (!button || button.type !== 'url') throw new Error(`El botón ${index} no es un enlace`);
+  return trackedUrl(signer, message, index, button);
 }

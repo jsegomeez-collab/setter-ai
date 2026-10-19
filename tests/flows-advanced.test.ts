@@ -59,7 +59,7 @@ describe('motor con siguiente paso y pausas', () => {
   });
 
   it('la réplica salta en cualquier reel (mediaIds "all")', () => {
-    expect(flow.trigger.mediaIds).toBe('all');
+    expect(flow.trigger).toMatchObject({ type: 'comment', mediaIds: 'all' });
     expect(TEST_MEDIA_ID).toBeTruthy();
   });
 });

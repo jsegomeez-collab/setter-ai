@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, FilePen, MessageCircleWarning, PauseCircle, Workflow, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BellRing, Bot, FilePen, MessageCircleWarning, PauseCircle, Workflow, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useSession } from '../auth/SessionContext';
@@ -26,10 +26,22 @@ function greeting(hour: number): string {
 
 /** Modos del setter tal y como se guardan (SETTINGS.setterMode: off · test · live). */
 const MODE_LABEL: Readonly<Record<string, string>> = { off: 'Apagado', test: 'Prueba', live: 'Público' };
+/** Avisos de flujos que caben en el Inicio (el resto, en el registro de Configuración). */
+const NOTICES_SHOWN = 5;
+
+/** Aviso que deja un flujo con el paso "Avisar a Jose" (Fase 7.3a, GET /api/flows/notices). */
+interface Notice {
+  readonly createdAt: string;
+  readonly text: string;
+  readonly igId: string | null;
+  readonly username: string | null;
+  readonly flowName: string | null;
+}
 
 interface AdminInfo {
   readonly setter: SetterData | null;
   readonly flows: FlowsResponse | null;
+  readonly notices: readonly Notice[];
 }
 
 export function HomePage() {
@@ -45,7 +57,11 @@ export function HomePage() {
     api<InboxResponse>('/conversations').then(setInbox).catch(fail);
     api<MetricsResponse>('/metrics?days=7').then(setMetrics).catch(fail);
     if (isAdmin) {
-      Promise.all([api<SetterData>('/setter').catch(() => null), api<FlowsResponse>('/flows').catch(() => null)]).then(([setter, flows]) => setAdmin({ setter, flows }));
+      Promise.all([
+        api<SetterData>('/setter').catch(() => null),
+        api<FlowsResponse>('/flows').catch(() => null),
+        api<{ notices: Notice[] }>('/flows/notices').catch(() => ({ notices: [] })),
+      ]).then(([setter, flows, { notices }]) => setAdmin({ setter, flows, notices }));
     }
   }, [isAdmin]);
 
@@ -81,6 +97,8 @@ export function HomePage() {
             <ActionTile icon={PauseCircle} label="IA parada" value={count((i) => i.aiPaused)} to="/conversaciones?filtro=paused" hint="Conversaciones en manos de una persona" />
           </div>
         </section>
+
+        {admin && admin.notices.length > 0 && <NoticesList notices={admin.notices} />}
 
         <section aria-labelledby="embudo">
           <div className="flex items-end justify-between gap-3">
@@ -168,6 +186,36 @@ function ActionTile({ icon: Icon, label, value, to, hint }: { icon: LucideIcon; 
       </span>
       {value === null ? <Skeleton className="h-7 w-8" /> : <span className={['font-display text-[28px] font-extrabold tabular-nums', pending ? 'text-snow' : 'text-smoke'].join(' ')}>{value}</span>}
     </Link>
+  );
+}
+
+/** Los últimos avisos de los flujos; cada uno lleva a la conversación de esa persona. */
+function NoticesList({ notices }: { notices: readonly Notice[] }) {
+  return (
+    <section aria-labelledby="avisos">
+      <h2 id="avisos" className="label">
+        Avisos de tus flujos
+      </h2>
+      <ul className="card mt-3 divide-y divide-white/[0.06]">
+        {notices.slice(0, NOTICES_SHOWN).map((notice) => (
+          <li key={`${notice.createdAt}-${notice.igId ?? ''}`}>
+            <Link
+              to={notice.igId ? `/conversaciones/${encodeURIComponent(notice.igId)}` : '/conversaciones'}
+              className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-white/[0.03]"
+            >
+              <BellRing size={16} className="mt-0.5 shrink-0 text-ember-400" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm text-fog">{notice.text}</span>
+                <span className="block truncate text-xs text-ash">
+                  {notice.username ? `@${notice.username}` : 'Persona sin usuario conocido'}
+                  {notice.flowName ? ` · ${notice.flowName}` : ''} · {formatDate(notice.createdAt)}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

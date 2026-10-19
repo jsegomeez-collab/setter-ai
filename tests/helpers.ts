@@ -53,7 +53,7 @@ export function createMemoryStore(): Store & {
   /** Contacto nuevo con los mismos valores por defecto que la tabla contacts. */
   const blankContact = (igId: string): ContactRow => {
     const now = new Date();
-    return { igId, username: null, tags: [], firstSeen: now, lastSeen: now, sourceMediaId: null, lastMediaId: null, aiPaused: false, aiPausedReason: null, lead: null };
+    return { igId, username: null, tags: [], firstSeen: now, lastSeen: now, sourceMediaId: null, lastMediaId: null, aiPaused: false, aiPausedReason: null, lead: null, fields: {} };
   };
   const messageIdOf = (response: unknown): unknown => {
     const r = response as { messageId?: unknown; result?: { messageId?: unknown } } | null;
@@ -350,6 +350,13 @@ export function createMemoryStore(): Store & {
       const current = contacts.get(igId);
       if (current) contacts.set(igId, { ...current, tags: current.tags.filter((t) => t !== tag) });
     },
+    async setContactField(igId, field, value) {
+      const current = contacts.get(igId);
+      if (value === '' && !current) return;
+      const base = current ?? blankContact(igId);
+      const { [field]: _removed, ...rest } = base.fields ?? {};
+      contacts.set(igId, { ...base, fields: value === '' ? rest : { ...rest, [field]: value } });
+    },
     async listContacts(limit) {
       return [...contacts.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime()).slice(0, limit);
     },
@@ -433,8 +440,11 @@ export function createMemoryStore(): Store & {
     async listAllowedSenders() {
       return [...allowed];
     },
-    async recentEvents(limit) {
-      return [...events].reverse().slice(0, limit);
+    async recentEvents(limit, kind) {
+      return [...events]
+        .reverse()
+        .filter((event) => !kind || event.kind === kind)
+        .slice(0, limit);
     },
     async recentActions(limit) {
       return [...actions.values()].reverse().slice(0, limit);
@@ -510,15 +520,15 @@ export function followFlow(overrides: Partial<Flow> = {}): Flow {
     id: 'flow1',
     name: 'Reel n8n',
     enabled: true,
-    trigger: { mediaIds: [TEST_MEDIA_ID], keywords: [] },
+    trigger: { type: 'comment', mediaIds: [TEST_MEDIA_ID], keywords: [] },
     publicReplies: ['¡Te escribí por DM! 📩'],
     dmFailedReplies: [],
     startNodeId: 'start',
     nodes: [
-      { id: 'start', type: 'message', text: 'Hola, pulsa el botón', buttons: [{ type: 'postback', title: 'Lo quiero', next: 'gate' }] },
+      { id: 'start', type: 'message', text: 'Hola, pulsa el botón', buttons: [{ type: 'postback', title: 'Lo quiero', next: 'gate' }], quickReplies: [] },
       { id: 'gate', type: 'follow_gate', ifFollowing: 'resource', ifNotFollowing: 'notfollow', ifUnknown: 'resource' },
-      { id: 'resource', type: 'message', text: 'Aquí lo tienes', buttons: [{ type: 'url', title: 'Abrir', url: 'https://example.com/recurso', tags: ['biblioteca'] }] },
-      { id: 'notfollow', type: 'message', text: 'Sígueme primero', buttons: [{ type: 'postback', title: 'Ya te sigo', next: 'gate' }] },
+      { id: 'resource', type: 'message', text: 'Aquí lo tienes', buttons: [{ type: 'url', title: 'Abrir', url: 'https://example.com/recurso', tags: ['biblioteca'] }], quickReplies: [] },
+      { id: 'notfollow', type: 'message', text: 'Sígueme primero', buttons: [{ type: 'postback', title: 'Ya te sigo', next: 'gate' }], quickReplies: [] },
     ],
     testUsernames: [],
     oncePerUser: true,

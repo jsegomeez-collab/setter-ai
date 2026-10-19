@@ -23,6 +23,20 @@ export type InstagramEvent =
       readonly mid: string;
       readonly text: string | null;
       readonly isEcho: boolean;
+      /** Fase 7.3a (solo vienen si existen): respuesta rápida pulsada, respuesta a historia, mención, ref de ig.me. */
+      readonly quickReplyPayload?: string;
+      readonly storyReply?: true;
+      readonly storyMention?: true;
+      readonly ref?: string;
+    }
+  | {
+      /** Abrió el chat desde un enlace ig.me con ?ref= (aviso messaging_referral). */
+      readonly kind: 'referral';
+      readonly accountId: string;
+      readonly senderId: string;
+      readonly ref: string;
+      /** Hora del aviso: sirve de clave para no repetirlo si Meta lo reenvía. */
+      readonly timestamp: string;
     }
   | {
       readonly kind: 'postback';
@@ -106,17 +120,31 @@ function parseMessaging(accountId: string, item: Json): InstagramEvent | null {
   }
 
   if (isObject(item.message)) {
-    const mid = str(item.message.mid);
+    const message = item.message;
+    const mid = str(message.mid);
     if (!mid) return null;
+    const quickReplyPayload = isObject(message.quick_reply) ? str(message.quick_reply.payload) : null;
+    const storyReply = isObject(message.reply_to) && isObject(message.reply_to.story);
+    const storyMention = list(message.attachments).some((attachment) => attachment.type === 'story_mention');
+    const ref = isObject(message.referral) ? str(message.referral.ref) : null;
     return {
       kind: 'message',
       accountId,
       senderId: sender,
       recipientId: recipient ?? '',
       mid,
-      text: str(item.message.text),
-      isEcho: item.message.is_echo === true,
+      text: str(message.text),
+      isEcho: message.is_echo === true,
+      ...(quickReplyPayload ? { quickReplyPayload } : {}),
+      ...(storyReply ? { storyReply: true as const } : {}),
+      ...(storyMention ? { storyMention: true as const } : {}),
+      ...(ref ? { ref } : {}),
     };
+  }
+
+  if (isObject(item.referral)) {
+    const ref = str(item.referral.ref);
+    if (ref) return { kind: 'referral', accountId, senderId: sender, ref, timestamp: str(item.timestamp) ?? '' };
   }
 
   return { kind: 'other', accountId, field: 'messaging' };
