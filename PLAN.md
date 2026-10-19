@@ -270,7 +270,7 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
   - Sin probar en real: responder a mano y aprobar borradores (bloqueo de Meta de 30 días).
   - `store.ts` va por 787 líneas (máximo 800): partirlo la próxima vez que haya que tocarlo.
 - [x] **6.3 Contactos** (2026-10-19): `/app/contactos` con pestañas Personas (búsqueda y filtros por etiqueta, reel de origen y etapa) y Por reel (comentarios, personas y etiquetas con el título del reel). Ficha de cada persona `/app/contactos/:id`: etiquetas a mano (añadir/quitar), reels de origen y último, comentarios, ficha de la IA e historial, enlace a su conversación. **Exportar CSV** (solo admin; protegido contra fórmulas de Excel) y **borrar sus datos** (solo admin, escribiendo BORRAR; igual que el BORRAR por DM). API `src/routes-api-contacts.ts`, lógica `src/contacts.ts`. `store.ts` partido: contactos y comentarios en `src/store-contacts.ts` (708 + 108 líneas). 457 pruebas. Probado en local.
-- [ ] 6.4 Métricas · 6.4 Métricas · 6.5 Constructor visual de flujos · 6.6 Inteligencia (cuando haya conversaciones reales) · 6.7 Configuración (usuarios, cuenta de Instagram, token, límites).
+- [ ] 6.4 Métricas · 6.5 Constructor visual de flujos · 6.6 Inteligencia (cuando haya conversaciones reales) · 6.7 Configuración (usuarios, cuenta de Instagram, token, límites).
 
 ---
 
