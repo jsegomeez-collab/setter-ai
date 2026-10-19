@@ -1,10 +1,11 @@
 import { Plus, Workflow, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { EmptyState } from '../ui/EmptyState';
-import { Notice, formatDate } from '../ui/kit';
+import { Notice, Tabs, formatDate } from '../ui/kit';
 import { Page, PageHeader } from '../ui/PageHeader';
+import { ChatEntryPanel } from './ChatEntryPanel';
 import { TRIGGER_LABEL, triggerSummary, type Flow, type FlowsResponse } from './types';
 
 /** Lista de flujos (Fase 6.5b; 7.3b: crear desde plantillas y ver cómo empieza cada uno). Solo admin. */
@@ -20,11 +21,19 @@ const TEMPLATES = [
 ] as const;
 type TemplateId = (typeof TEMPLATES)[number]['id'];
 
+type TabId = 'flujos' | 'chat';
+const TABS: readonly { value: TabId; label: string }[] = [
+  { value: 'flujos', label: 'Flujos' },
+  { value: 'chat', label: 'Rompehielos y menú' },
+];
+
 export function FlowsPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<FlowsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const tab: TabId = params.get('tab') === 'chat' ? 'chat' : 'flujos';
 
   useEffect(() => {
     api<FlowsResponse>('/flows')
@@ -47,42 +56,60 @@ export function FlowsPage() {
         title="Flujos"
         description="Qué pasa cuando alguien comenta un reel, te escribe una palabra, responde a tu historia o te menciona."
         actions={
-          <button type="button" onClick={() => setCreatorOpen(!creatorOpen)} aria-expanded={creatorOpen} className="btn-gold inline-flex items-center gap-1.5 px-4 py-2 text-[13px]">
-            {creatorOpen ? <X size={14} /> : <Plus size={14} />} Crear flujo
-          </button>
+          tab === 'flujos' && (
+            <button type="button" onClick={() => setCreatorOpen(!creatorOpen)} aria-expanded={creatorOpen} className="btn-gold inline-flex items-center gap-1.5 px-4 py-2 text-[13px]">
+              {creatorOpen ? <X size={14} /> : <Plus size={14} />} Crear flujo
+            </button>
+          )
         }
       />
 
-      <div className="mt-6 space-y-4">
-        {creatorOpen && <Creator onCreate={create} />}
-        {data?.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados hasta el {formatDate(data.sendsBlockedUntil)} (bloqueo de Meta): ningún flujo manda mensajes hasta entonces.</Notice>}
-        {error && <Notice tone="bad">{error}</Notice>}
-        {!data && !error && <p className="text-sm text-smoke">Cargando…</p>}
-        {data?.flows.length === 0 && (
-          <EmptyState icon={Workflow} title="Todavía no hay flujos">
-            Crea el primero con una plantilla: luego cambias los textos en el constructor.
-          </EmptyState>
-        )}
-        <ul className="grid gap-3 md:grid-cols-2">
-          {data?.flows.map((flow) => (
-            <li key={flow.id}>
-              <Link to={`/flujos/${encodeURIComponent(flow.id)}`} className="card flex h-full flex-col gap-2 p-5 transition-colors hover:border-white/15">
-                <span className="flex items-center gap-2">
-                  <Workflow size={16} className="text-ember-400" aria-hidden />
-                  <span className="truncate font-semibold text-fog">{flow.name}</span>
-                  <span className={['ml-auto rounded-md px-2 py-0.5 text-xs font-bold', flow.enabled ? 'bg-ok/15 text-ok' : 'bg-white/[0.06] text-ash'].join(' ')}>{flow.enabled ? 'ACTIVO' : 'INACTIVO'}</span>
-                </span>
-                <span className="text-xs font-semibold text-ember-400">{TRIGGER_LABEL[flow.trigger.type]}</span>
-                <span className="text-[13px] text-ash">{triggerSummary(flow.trigger)}</span>
-                <span className="text-xs text-smoke">
-                  {flow.steps} paso(s){flow.testUsernames.length ? ` · modo prueba: ${flow.testUsernames.map((u) => `@${u}`).join(', ')}` : ''}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      <div className="mt-5">
+        <Tabs tabs={TABS} value={tab} onChange={(value) => setParams(value === 'flujos' ? {} : { tab: value })} />
       </div>
+
+      {tab === 'chat' ? (
+        <div className="mt-5">{data ? <ChatEntryPanel flows={data.flows} /> : <p className="text-sm text-smoke">Cargando…</p>}</div>
+      ) : (
+        <div className="mt-5 space-y-4">
+          {creatorOpen && <Creator onCreate={create} />}
+          {data?.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados hasta el {formatDate(data.sendsBlockedUntil)} (bloqueo de Meta): ningún flujo manda mensajes hasta entonces.</Notice>}
+          {error && <Notice tone="bad">{error}</Notice>}
+          {!data && !error && <p className="text-sm text-smoke">Cargando…</p>}
+          {data && <FlowList flows={data.flows} />}
+        </div>
+      )}
     </Page>
+  );
+}
+
+function FlowList({ flows }: { flows: FlowsResponse['flows'] }) {
+  if (flows.length === 0) {
+    return (
+      <EmptyState icon={Workflow} title="Todavía no hay flujos">
+        Crea el primero con una plantilla: luego cambias los textos en el constructor.
+      </EmptyState>
+    );
+  }
+  return (
+    <ul className="grid gap-3 md:grid-cols-2">
+      {flows.map((flow) => (
+        <li key={flow.id}>
+          <Link to={`/flujos/${encodeURIComponent(flow.id)}`} className="card flex h-full flex-col gap-2 p-5 transition-colors hover:border-white/15">
+            <span className="flex items-center gap-2">
+              <Workflow size={16} className="text-ember-400" aria-hidden />
+              <span className="truncate font-semibold text-fog">{flow.name}</span>
+              <span className={['ml-auto rounded-md px-2 py-0.5 text-xs font-bold', flow.enabled ? 'bg-ok/15 text-ok' : 'bg-white/[0.06] text-ash'].join(' ')}>{flow.enabled ? 'ACTIVO' : 'INACTIVO'}</span>
+            </span>
+            <span className="text-xs font-semibold text-ember-400">{TRIGGER_LABEL[flow.trigger.type]}</span>
+            <span className="text-[13px] text-ash">{triggerSummary(flow.trigger)}</span>
+            <span className="text-xs text-smoke">
+              {flow.steps} paso(s){flow.testUsernames.length ? ` · modo prueba: ${flow.testUsernames.map((u) => `@${u}`).join(', ')}` : ''}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 

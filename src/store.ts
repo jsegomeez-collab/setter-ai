@@ -242,6 +242,9 @@ export const SETTINGS = {
   setterTestUsernames: 'setter_test_usernames',
   /** Fase 7.2: 'docs' = la IA usa los documentos por tema; si no, el documento único de siempre (por defecto). */
   knowledgeMode: 'knowledge_mode',
+  /** Fase 7.3c: borrador de rompehielos y menú fijo (JSON) y lo último publicado en Instagram (JSON: at, by, entry). */
+  chatEntry: 'chat_entry',
+  chatEntryPublished: 'chat_entry_published',
 } as const;
 
 /** Tipos de acción que cuentan como envío a Instagram (para el límite por hora). */

@@ -94,6 +94,21 @@ export type ApiMessage =
 
 export type FollowStatus = 'yes' | 'no' | 'unknown';
 
+export type MessengerProfileField = 'ice_breakers' | 'persistent_menu';
+
+/** Cuerpo de /me/messenger_profile (rompehielos y menú fijo), tal cual lo pide Meta. */
+export interface MessengerProfile {
+  readonly platform: 'instagram';
+  readonly ice_breakers?: readonly { readonly locale: string; readonly call_to_actions: readonly { readonly question: string; readonly payload: string }[] }[];
+  readonly persistent_menu?: readonly {
+    readonly locale: string;
+    readonly call_to_actions: readonly (
+      | { readonly type: 'postback'; readonly title: string; readonly payload: string }
+      | { readonly type: 'web_url'; readonly title: string; readonly url: string }
+    )[];
+  }[];
+}
+
 export interface RefreshedToken {
   readonly accessToken: string;
   readonly expiresInSeconds: number | null;
@@ -160,7 +175,7 @@ export class InstagramClient {
     return token;
   }
 
-  private async call(method: 'GET' | 'POST', path: string, body?: Json): Promise<Json> {
+  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: Json): Promise<Json> {
     const response = await this.fetchFn(`${HOST}/${this.version}/${path}`, {
       method,
       headers: {
@@ -261,6 +276,22 @@ export class InstagramClient {
       if (error instanceof MetaApiError && error.status >= 400 && error.status < 500) return null;
       throw error;
     }
+  }
+
+  /**
+   * Rompehielos y menú fijo del chat (Fase 7.3c; doc: Messaging API › Ice Breakers / Persistent Menu).
+   * Se publican en /me/messenger_profile con platform "instagram"; al pulsarlos llega un aviso de botón (postback).
+   */
+  async setMessengerProfile(profile: MessengerProfile): Promise<Json> {
+    return this.call('POST', 'me/messenger_profile', profile as unknown as Json);
+  }
+
+  async getMessengerProfile(fields: readonly MessengerProfileField[]): Promise<Json> {
+    return this.call('GET', `me/messenger_profile?fields=${fields.join(',')}&platform=instagram`);
+  }
+
+  async deleteMessengerProfile(fields: readonly MessengerProfileField[]): Promise<Json> {
+    return this.call('DELETE', 'me/messenger_profile', { platform: 'instagram', fields: [...fields] });
   }
 
   /** Compatibilidad con la Fase 1. */

@@ -25,6 +25,7 @@ import { createConversationsApi } from './routes-api-conversations.js';
 import { createContactsApi } from './routes-api-contacts.js';
 import { createMetricsApi } from './routes-api-metrics.js';
 import { createMediaLoader } from './media-catalog.js';
+import { createChatEntryApi } from './routes-api-chat-entry.js';
 import { createFlowsApi } from './routes-api-flows.js';
 import { createIntelligenceApi } from './routes-api-intelligence.js';
 import { createMeApi, createUsersApi } from './routes-api-users.js';
@@ -374,6 +375,7 @@ export function createApp(deps: AppDeps): Hono {
     api.route('/contacts', createContactsApi({ store: deps.store, users: deps.users, media }));
     api.route('/metrics', createMetricsApi({ store: deps.store, users: deps.users, media }));
     api.route('/flows', createFlowsApi({ store: deps.store, users: deps.users, media, account: async () => (deps.client ? (await deps.client.getAccount()).username : null) }));
+    api.route('/chat-entry', createChatEntryApi({ store: deps.store, users: deps.users, client: deps.client }));
     api.route('/users', createUsersApi({ users: deps.users, store: deps.store }));
     api.route('/me', createMeApi({ users: deps.users, store: deps.store }));
     api.route(

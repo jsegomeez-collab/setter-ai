@@ -131,3 +131,23 @@ describe('InstagramClient · Fase 7.3a', () => {
     await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'boom' } })).getProfile('9')).rejects.toBeInstanceOf(MetaApiError);
   });
 });
+
+/** Fase 7.3c: rompehielos y menú fijo (doc oficial: POST/GET/DELETE /me/messenger_profile, platform instagram). */
+describe('InstagramClient · messenger_profile', () => {
+  it('publicar, leer y borrar', async () => {
+    const fetchFn = fetchReturning(200, { result: 'success' });
+    const client = new InstagramClient('tok', 'v25.0', fetchFn);
+    const body = { platform: 'instagram' as const, ice_breakers: [{ locale: 'default', call_to_actions: [{ question: '¿Precio?', payload: 'S:f1' }] }] };
+    await client.setMessengerProfile(body);
+    let [url, init] = lastCall(fetchFn);
+    expect([url, init.method, JSON.parse(init.body as string)]).toEqual(['https://graph.instagram.com/v25.0/me/messenger_profile', 'POST', body]);
+
+    await client.getMessengerProfile(['ice_breakers', 'persistent_menu']);
+    [url, init] = lastCall(fetchFn);
+    expect([url, init.method]).toEqual(['https://graph.instagram.com/v25.0/me/messenger_profile?fields=ice_breakers,persistent_menu&platform=instagram', 'GET']);
+
+    await client.deleteMessengerProfile(['persistent_menu']);
+    [url, init] = lastCall(fetchFn);
+    expect([url, init.method, JSON.parse(init.body as string)]).toEqual(['https://graph.instagram.com/v25.0/me/messenger_profile', 'DELETE', { platform: 'instagram', fields: ['persistent_menu'] }]);
+  });
+});
