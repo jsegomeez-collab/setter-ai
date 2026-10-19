@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { contactsCsv, filterContacts, reelLabel, toContactItem, type ContactFilters } from './contacts.js';
+import type { MediaLoader } from './media-catalog.js';
 import type { Media } from './meta/client.js';
 import { requireAdmin, requireUser, type ApiEnv } from './routes-api.js';
 import type { Store } from './store.js';
@@ -11,8 +12,8 @@ import type { UserStore } from './users.js';
 export interface ContactsApiDeps {
   readonly store: Store;
   readonly users: UserStore;
-  /** Últimos reels de la cuenta (para el título de cada uno). Vacío si Instagram no responde. */
-  readonly media: () => Promise<Media[]>;
+  /** Reels de la cuenta (los últimos + los de estos ids) para el título de cada uno. Vacío si Instagram no responde. */
+  readonly media: MediaLoader;
 }
 
 const CONTACTS_LIMIT = 5000;
@@ -41,18 +42,18 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
   const api = new Hono<ApiEnv>();
   api.use('*', requireUser(deps.users));
 
-  const titles = async (): Promise<{ label: (id: string) => string; media: Media[] }> => {
-    const media = await deps.media();
+  const titles = async (ids: readonly (string | null | undefined)[]): Promise<{ label: (id: string) => string; media: Media[] }> => {
+    const media = await deps.media(ids.filter((id): id is string => Boolean(id)));
     const byId = new Map(media.map((m) => [m.id, m]));
     return { media, label: (id: string) => reelLabel(byId.get(id), id) };
   };
 
   api.get('/', async (c) => {
-    const [rows, { media, label }] = await Promise.all([store.listContacts(CONTACTS_LIMIT), titles()]);
-    const all = rows.map(toContactItem);
+    const all = (await store.listContacts(CONTACTS_LIMIT)).map(toContactItem);
+    const sources = new Set(all.map((item) => item.sourceMediaId).filter((id): id is string => id !== null));
+    const { media, label } = await titles([...sources]);
     const items = filterContacts(all, filtersOf(c));
     const counts = all.flatMap((item) => item.tags).reduce((map, tag) => map.set(tag, (map.get(tag) ?? 0) + 1), new Map<string, number>());
-    const sources = new Set(all.map((item) => item.sourceMediaId).filter((id): id is string => id !== null));
     return c.json({
       items: items.slice(0, LIST_SHOWN).map((item) => ({ ...item, sourceLabel: item.sourceMediaId ? label(item.sourceMediaId) : null })),
       total: items.length,
@@ -62,8 +63,8 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
   });
 
   api.get('/export.csv', requireAdmin, async (c) => {
-    const [rows, { label }] = await Promise.all([store.listContacts(CONTACTS_LIMIT), titles()]);
-    const items = filterContacts(rows.map(toContactItem), filtersOf(c));
+    const items = filterContacts((await store.listContacts(CONTACTS_LIMIT)).map(toContactItem), filtersOf(c));
+    const { label } = await titles(items.map((item) => item.sourceMediaId));
     await store.logEvent('contactos', `${c.get('user').name} exportó ${items.length} contacto(s) a CSV.`, null);
     const day = new Date().toISOString().slice(0, 10);
     return c.body(contactsCsv(items, label), 200, {
@@ -74,7 +75,8 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
   });
 
   api.get('/reels', async (c) => {
-    const [stats, media] = await Promise.all([store.reelStats(), deps.media()]);
+    const stats = await store.reelStats();
+    const media = await deps.media(stats.map((s) => s.mediaId));
     const byId = new Map(media.map((m) => [m.id, m]));
     return c.json({
       reels: stats.map((s) => ({ ...s, label: reelLabel(byId.get(s.mediaId), s.mediaId), permalink: byId.get(s.mediaId)?.permalink ?? null })),
@@ -83,15 +85,15 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
 
   api.get('/:igId', async (c) => {
     const igId = c.req.param('igId');
-    const [contact, comments, leadHistory, messages, { label }] = await Promise.all([
+    const [contact, comments, leadHistory, messages] = await Promise.all([
       store.getContact(igId),
       store.listPersonComments(igId, COMMENTS_SHOWN),
       store.listLeadHistory(igId, LEAD_HISTORY),
       store.listMessages(igId, 1),
-      titles(),
     ]);
     if (!contact) return c.json({ error: 'Ese contacto no existe' }, 404);
     const item = toContactItem(contact);
+    const { label } = await titles([item.sourceMediaId, item.lastMediaId, ...comments.map((comment) => comment.mediaId)]);
     return c.json({
       contact: { ...item, lead: contact.lead ?? null, sourceLabel: item.sourceMediaId ? label(item.sourceMediaId) : null, lastLabel: item.lastMediaId ? label(item.lastMediaId) : null },
       comments: comments.map((comment) => ({ ...comment, reelLabel: comment.mediaId ? label(comment.mediaId) : null })),

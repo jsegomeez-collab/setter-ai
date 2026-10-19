@@ -44,6 +44,16 @@ describe('InstagramClient', () => {
     expect(lastCall(sub)[0]).toContain('subscribed_fields=comments,messages');
   });
 
+  it('lee un reel suelto por su id (para los que no están entre los últimos); si Meta dice que no existe → null', async () => {
+    const fetchFn = fetchReturning(200, { id: '77', caption: 'Reel viejo', permalink: 'https://instagram.com/reel/x', timestamp: '2026-09-01T10:00:00+0000', media_product_type: 'REELS' });
+    expect(await new InstagramClient('t', 'v25.0', fetchFn).getMedia('77')).toEqual({ id: '77', caption: 'Reel viejo', permalink: 'https://instagram.com/reel/x', timestamp: '2026-09-01T10:00:00+0000', mediaProductType: 'REELS' });
+    expect(lastCall(fetchFn)[0]).toBe('https://graph.instagram.com/v25.0/77?fields=id,caption,permalink,timestamp,media_product_type');
+    const missing = fetchReturning(400, { error: { message: 'Unsupported get request. Object with ID does not exist', code: 100 } });
+    expect(await new InstagramClient('t', 'v25.0', missing).getMedia('88')).toBeNull();
+    // Otros fallos (token, caída de Meta) no se esconden: se lanza el error.
+    await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'caído' } })).getMedia('99')).rejects.toThrow('caído');
+  });
+
   it('lee los comentarios principales de un reel con su autor (doc: /<media>/comments, más nuevos primero, máx. 50)', async () => {
     const fetchFn = fetchReturning(200, {
       data: [

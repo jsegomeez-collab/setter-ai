@@ -33,9 +33,12 @@ async function setup() {
   await store.addContactTags(STRANGER_ID, ['biblioteca']);
   await store.recordComment({ commentId: 'c1', igId: STRANGER_ID, username: 'ana_ventas', mediaId: 'reel-1', text: 'Bolsa' });
   await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'hola', mid: 'm1', status: 'sent', dedupKey: null });
-  const client = { listMedia: vi.fn().mockResolvedValue([{ id: 'reel-1', caption: 'Mi reel de prueba', permalink: 'https://instagram.com/p/x', timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS' }]) } as unknown as InstagramClient;
+  const client: { listMedia: ReturnType<typeof vi.fn>; getMedia: ReturnType<typeof vi.fn> } = {
+    listMedia: vi.fn().mockResolvedValue([{ id: 'reel-1', caption: 'Mi reel de prueba', permalink: 'https://instagram.com/p/x', timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS' }]),
+    getMedia: vi.fn().mockResolvedValue(null),
+  };
   const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
-  const app = createApp({ config, store, client, tokens, processPayload: vi.fn(), linkSecret: null, users });
+  const app = createApp({ config, store, client: client as unknown as InstagramClient, tokens, processPayload: vi.fn(), linkSecret: null, users });
   const send = (method: 'GET' | 'POST', path: string, cookie: string, body?: unknown) =>
     app.request(`${HOST}${path}`, {
       method,
@@ -47,7 +50,7 @@ async function setup() {
   await users.createUser({ email: 'equipo@x.com', name: 'Laura', role: 'team', passwordHash: await hashPassword('clave-del-equipo-1') });
   const loginRes = await send('POST', '/api/login', '', { email: 'equipo@x.com', password: 'clave-del-equipo-1' });
   const team = (loginRes.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-  return { store, send, admin, team };
+  return { store, send, admin, team, client };
 }
 
 describe('API Contactos (Fase 6.3)', () => {
@@ -105,5 +108,14 @@ describe('API Contactos (Fase 6.3)', () => {
     const { send, team } = await setup();
     const data = await (await send('GET', '/api/contacts/reels', team)).json();
     expect(data.reels).toEqual([expect.objectContaining({ mediaId: 'reel-1', label: '2026-10-16 · Mi reel de prueba', comments: 1, people: 1, permalink: 'https://instagram.com/p/x' })]);
+  });
+
+  it('un reel que ya no está entre los últimos también sale con su título (se pide por su id)', async () => {
+    const { store, send, team, client } = await setup();
+    client.getMedia = vi.fn().mockResolvedValue({ id: 'reel-viejo', caption: 'Reel de septiembre', permalink: null, timestamp: '2026-09-01T09:00:00+0000', mediaProductType: 'REELS' });
+    await store.recordComment({ commentId: 'c9', igId: STRANGER_ID, username: 'ana_ventas', mediaId: 'reel-viejo', text: 'Info' });
+    const data = await (await send('GET', '/api/contacts/reels', team)).json();
+    expect(data.reels.map((r: { label: string }) => r.label)).toContain('2026-09-01 · Reel de septiembre');
+    expect(client.getMedia).toHaveBeenCalledWith('reel-viejo');
   });
 });

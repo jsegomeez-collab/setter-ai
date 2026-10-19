@@ -31,8 +31,13 @@ async function setup() {
   const users = createMemoryUserStore();
   await store.recordComment({ commentId: 'c1', igId: STRANGER_ID, username: 'ana', mediaId: 'reel-1', text: 'Bolsa' });
   await store.recordComment({ commentId: 'c2', igId: 'otra-persona', username: 'luis', mediaId: 'reel-1', text: 'Link' });
+  await store.recordComment({ commentId: 'c3', igId: 'tercera', username: 'eva', mediaId: 'reel-viejo', text: 'Info' });
   await store.saveLead(STRANGER_ID, { siguiente_paso: 'agendar_llamada' });
-  const client = { listMedia: vi.fn().mockResolvedValue([{ id: 'reel-1', caption: 'Mi reel', permalink: null, timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS' }]) } as unknown as InstagramClient;
+  const client = {
+    listMedia: vi.fn().mockResolvedValue([{ id: 'reel-1', caption: 'Mi reel', permalink: null, timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS' }]),
+    // No está entre los últimos: se pide por su id.
+    getMedia: vi.fn().mockImplementation(async (id: string) => (id === 'reel-viejo' ? { id, caption: 'Reel de septiembre', permalink: null, timestamp: '2026-09-01T09:00:00+0000', mediaProductType: 'REELS' } : null)),
+  } as unknown as InstagramClient;
   const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
   const app = createApp({ config, store, client, tokens, processPayload: vi.fn(), linkSecret: null, users });
   const send = (method: 'GET' | 'POST', path: string, cookie: string, body?: unknown) =>
@@ -54,9 +59,12 @@ describe('API Métricas (Fase 6.4)', () => {
     expect((await send('GET', '/api/metrics', '')).status).toBe(401);
     const data = await (await send('GET', '/api/metrics?days=30', team)).json();
     expect(data.period).toBe(30);
-    expect(data.funnel.total).toMatchObject({ commented: 2 });
-    expect(data.funnel.byReel).toEqual([expect.objectContaining({ key: 'reel-1', commented: 2, label: '2026-10-16 · Mi reel' })]);
-    expect(data.funnel.byDay).toEqual([expect.objectContaining({ commented: 2 })]);
+    expect(data.funnel.total).toMatchObject({ commented: 3 });
+    expect(data.funnel.byReel).toEqual([
+      expect.objectContaining({ key: 'reel-1', commented: 2, label: '2026-10-16 · Mi reel' }),
+      expect.objectContaining({ key: 'reel-viejo', commented: 1, label: '2026-09-01 · Reel de septiembre' }),
+    ]);
+    expect(data.funnel.byDay).toEqual([expect.objectContaining({ commented: 3 })]);
     expect(data.setter.stages).toEqual([{ step: 'agendar_llamada', n: 1 }]);
     expect(data.agenda).toEqual({ offered: 0, clicked: 0 });
   });

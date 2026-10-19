@@ -85,6 +85,20 @@ function asString(value: unknown): string | null {
   return null;
 }
 
+const MEDIA_FIELDS = 'id,caption,permalink,timestamp,media_product_type';
+/** Graph API: "Object with ID does not exist, cannot be loaded due to missing permissions…". */
+const OBJECT_NOT_FOUND_CODE = 100;
+
+function toMedia(item: Json): Media {
+  return {
+    id: asString(item.id) ?? '',
+    caption: asString(item.caption),
+    permalink: asString(item.permalink),
+    timestamp: asString(item.timestamp),
+    mediaProductType: asString(item.media_product_type),
+  };
+}
+
 async function parseResponse(response: Response): Promise<Json> {
   const text = await response.text();
   let parsed: unknown = null;
@@ -143,17 +157,20 @@ export class InstagramClient {
   }
 
   async listMedia(limit = 12): Promise<Media[]> {
-    const data = await this.call('GET', `me/media?fields=id,caption,permalink,timestamp,media_product_type&limit=${limit}`);
+    const data = await this.call('GET', `me/media?fields=${MEDIA_FIELDS}&limit=${limit}`);
     const items = Array.isArray(data.data) ? (data.data as Json[]) : [];
-    return items
-      .map((item) => ({
-        id: asString(item.id) ?? '',
-        caption: asString(item.caption),
-        permalink: asString(item.permalink),
-        timestamp: asString(item.timestamp),
-        mediaProductType: asString(item.media_product_type),
-      }))
-      .filter((item) => item.id !== '');
+    return items.map(toMedia).filter((item) => item.id !== '');
+  }
+
+  /** Un reel por su id (los que ya no están entre los últimos). null si Meta dice que no existe o no se puede ver (código 100). */
+  async getMedia(mediaId: string): Promise<Media | null> {
+    try {
+      const media = toMedia(await this.call('GET', `${encodeURIComponent(mediaId)}?fields=${MEDIA_FIELDS}`));
+      return media.id === '' ? null : media;
+    } catch (error) {
+      if (error instanceof MetaApiError && error.code === OBJECT_NOT_FOUND_CODE) return null;
+      throw error;
+    }
   }
 
   /** Los 50 comentarios principales más recientes de un reel, con su autor (para recuperar los que no nos llegaron). */

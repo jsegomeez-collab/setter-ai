@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { reelLabel } from './contacts.js';
 import { buildFunnel, fillDays } from './funnel.js';
-import type { Media } from './meta/client.js';
+import type { MediaLoader } from './media-catalog.js';
 import { parsePeriod, periodStart } from './pages-metrics.js';
 import { requireUser, type ApiEnv } from './routes-api.js';
 import type { Store } from './store.js';
@@ -12,8 +12,8 @@ import type { UserStore } from './users.js';
 export interface MetricsApiDeps {
   readonly store: Store;
   readonly users: UserStore;
-  /** Últimos reels de la cuenta (para el título de cada uno). Vacío si Instagram no responde. */
-  readonly media: () => Promise<Media[]>;
+  /** Reels de la cuenta (los últimos + los de estos ids) para el título de cada uno. Vacío si Instagram no responde. */
+  readonly media: MediaLoader;
 }
 
 export function createMetricsApi(deps: MetricsApiDeps): Hono<ApiEnv> {
@@ -23,8 +23,9 @@ export function createMetricsApi(deps: MetricsApiDeps): Hono<ApiEnv> {
 
   api.get('/', async (c) => {
     const period = parsePeriod(c.req.query('days'));
-    const [rows, media, setter, agenda] = await Promise.all([store.funnelRows(periodStart(period)), deps.media(), store.setterStageStats(), store.agendaStats()]);
+    const [rows, setter, agenda] = await Promise.all([store.funnelRows(periodStart(period)), store.setterStageStats(), store.agendaStats()]);
     const funnel = buildFunnel(rows);
+    const media = await deps.media(funnel.byReel.map((reel) => reel.key));
     const byId = new Map(media.map((m) => [m.id, m]));
     return c.json({
       period,
