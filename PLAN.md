@@ -281,7 +281,11 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
   - Análisis guardados (tabla `analysis_runs`, `src/store-analysis.ts`) con coste real medido. **BORRAR también quita a la persona de los análisis.**
   - **Tráfico por reel** sin IA: fichas sumadas por reel de origen (tipo, nivel, ¿invierte?, etapa).
   - 496 pruebas (incl. Postgres real). Probado en local con IA falsa. **Sin probar con Claude de verdad** (Jose: no hace falta ahora).
-- [ ] 6.7 Configuración (usuarios, cuenta de Instagram, token, límites).
+- [x] **6.7 Configuración** (2026-10-19). Decisiones de Jose: alta con **clave temporal**; del panel antiguo pasan el **registro de eventos** y **suscribir avisos de Meta** (el rescate de comentarios NO: desaparecerá con el panel antiguo); los **límites solo se ven** (se cambian en Render) y la pausa del 368 y el bloqueo se quitan/ponen escribiendo una palabra.
+  - [x] **6.7a Usuarios** (`src/routes-api-users.ts`, `/app/configuracion`): dar acceso (correo, nombre, rol) → clave temporal de 16 caracteres que se ve una vez; mientras no la cambie, el servidor le da 403 en todo (`requireUser`) y la web le enseña "pon una tuya"; cambiar rol, nueva clave temporal (cierra sus sesiones), quitar acceso con BORRAR; nunca a uno mismo. "Mi cuenta" (`/app/cuenta`, todos): cambiar la clave (cierra las demás sesiones; 5 fallos = 15 min). Columna `must_change_password` en `app_users`.
+  - [x] **6.7b Instagram y envíos** (`src/routes-api-settings.ts`): cuenta conectada, firma de Meta, seguimiento de clics, clave de Anthropic, flujos activos; token (origen, renovado, caduca en N días, último error, "Renovar ahora"); bloqueo largo (quitar con QUITAR / poner N días con BLOQUEAR), pausa del 368 (REANUDAR); envíos de la última hora frente a los límites; "Volver a suscribir los avisos de Meta"; **Registro** (200 más recientes, filtro por tipo, datos al pulsar).
+  - 506 pruebas. Probado en local (alta → clave temporal → Laura entra, 403 hasta cambiarla, menú de equipo; quitar/poner bloqueo; renovar token sin clave de cifrado; registro con filtro; móvil).
+- [ ] Siguiente (fuera de la 6.7, pedir OK a Jose): borrar el panel antiguo y sus rutas (`/eventos`, `/flujos`, `/setter`, `/conversaciones`, `/contactos`, `/metricas`) cuando Jose dé el visto bueno a la web nueva. Configuración (usuarios, cuenta de Instagram, token, límites).
 
 ---
 
