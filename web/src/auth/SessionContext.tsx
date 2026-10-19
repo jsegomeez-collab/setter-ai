@@ -18,6 +18,8 @@ interface SessionValue {
   login(email: string, password: string): Promise<void>;
   setup(input: SetupInput): Promise<void>;
   logout(): Promise<void>;
+  /** Tras cambiar la clave temporal: ya puede entrar al resto. */
+  passwordChanged(): void;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -47,9 +49,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setInfo({ needsSetup: false, user: null });
   }, []);
 
+  const passwordChanged = useCallback(() => {
+    setInfo((current) => (current?.user ? { ...current, user: { ...current.user, mustChangePassword: false } } : current));
+  }, []);
+
   const value = useMemo<SessionValue>(
-    () => ({ loading: info === null && loadError === null, needsSetup: info?.needsSetup ?? false, user: info?.user ?? null, loadError, login, setup, logout }),
-    [info, loadError, login, setup, logout],
+    () => ({ loading: info === null && loadError === null, needsSetup: info?.needsSetup ?? false, user: info?.user ?? null, loadError, login, setup, logout, passwordChanged }),
+    [info, loadError, login, setup, logout, passwordChanged],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

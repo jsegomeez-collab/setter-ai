@@ -62,7 +62,7 @@ function clientIp(c: Context): string {
   return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
 }
 
-const publicUser = (user: User) => ({ id: user.id, email: user.email, name: user.name, role: user.role });
+export const publicUser = (user: User) => ({ id: user.id, email: user.email, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword });
 
 async function readJson(c: Context): Promise<unknown> {
   try {
@@ -78,16 +78,28 @@ async function startSession(c: Context, users: UserStore, user: User): Promise<v
   setCookie(c, SESSION_COOKIE, token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: SESSION_DAYS * DAY_SECONDS });
 }
 
-async function currentUser(c: Context, users: UserStore): Promise<User | null> {
+/** Huella de la sesión de esta petición (la cookie nunca se guarda tal cual). */
+export function sessionTokenHash(c: Context): string | null {
   const token = getCookie(c, SESSION_COOKIE);
-  return token ? users.findSession(hashToken(token)) : null;
+  return token ? hashToken(token) : null;
 }
 
-/** Para las rutas privadas de /api: sin sesión, 401. Deja el usuario en c.get('user'). */
-export function requireUser(users: UserStore): MiddlewareHandler<ApiEnv> {
+async function currentUser(c: Context, users: UserStore): Promise<User | null> {
+  const tokenHash = sessionTokenHash(c);
+  return tokenHash ? users.findSession(tokenHash) : null;
+}
+
+/**
+ * Para las rutas privadas de /api: sin sesión, 401. Deja el usuario en c.get('user').
+ * Con clave temporal sin cambiar (Fase 6.7), 403 en todo salvo en la ruta de cambiarla (`allowPendingPassword`).
+ */
+export function requireUser(users: UserStore, options: { allowPendingPassword?: boolean } = {}): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
     const user = await currentUser(c, users);
     if (!user) return c.json({ error: 'Inicia sesión' }, 401);
+    if (user.mustChangePassword && !options.allowPendingPassword) {
+      return c.json({ error: 'Cambia tu clave temporal para continuar.', mustChangePassword: true }, 403);
+    }
     c.set('user', user);
     return next();
   };

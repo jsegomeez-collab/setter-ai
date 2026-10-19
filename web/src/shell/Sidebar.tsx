@@ -46,11 +46,13 @@ export function Sidebar({ onNavigate }: Props) {
       </nav>
       <div className="mt-3 h-px bg-white/7" />
       <div className="flex items-center gap-3 px-2 pt-4">
-        <div className="grid h-9 w-9 place-items-center rounded-full border border-ember-500/40 bg-ember-500/10 font-display text-sm font-bold text-ember-300">{initial}</div>
-        <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-sm font-semibold text-fog">{user.name}</p>
-          <p className="text-xs text-smoke">{ROLE_LABEL[user.role]}</p>
-        </div>
+        <NavLink to="/cuenta" title="Mi cuenta (cambiar la clave)" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors hover:bg-white/[0.03]">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-ember-500/40 bg-ember-500/10 font-display text-sm font-bold text-ember-300">{initial}</div>
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-sm font-semibold text-fog">{user.name}</p>
+            <p className="text-xs text-smoke">{ROLE_LABEL[user.role]} · Mi cuenta</p>
+          </div>
+        </NavLink>
         <button
           type="button"
           onClick={() => void logout()}

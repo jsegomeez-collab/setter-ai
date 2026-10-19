@@ -15,6 +15,8 @@ export interface User {
   readonly name: string;
   readonly role: Role;
   readonly createdAt: Date;
+  /** Entró con una clave temporal (Fase 6.7): hasta que la cambie no puede usar nada más. */
+  readonly mustChangePassword: boolean;
 }
 
 export interface StoredUser extends User {
@@ -26,6 +28,7 @@ export interface NewUser {
   readonly name: string;
   readonly role: Role;
   readonly passwordHash: string;
+  readonly mustChangePassword?: boolean;
 }
 
 export interface UserStore {
@@ -39,6 +42,16 @@ export interface UserStore {
   /** Usuario de una sesión no caducada (sin el hash de la contraseña). */
   findSession(tokenHash: string): Promise<User | null>;
   deleteSession(tokenHash: string): Promise<void>;
+  // Gestión de usuarios (Fase 6.7).
+  /** Todos, del más antiguo al más nuevo (sin hashes). */
+  listUsers(): Promise<User[]>;
+  findUserById(id: string): Promise<StoredUser | null>;
+  updateUserRole(id: string, role: Role): Promise<User | null>;
+  setPassword(id: string, passwordHash: string, mustChange: boolean): Promise<void>;
+  /** Cierra sus sesiones (menos `exceptTokenHash`, la de quien cambia su propia clave). */
+  deleteUserSessions(userId: string, exceptTokenHash?: string): Promise<void>;
+  /** Quita el acceso (y sus sesiones). false si no existía. */
+  deleteUser(id: string): Promise<boolean>;
 }
 
 const SCHEMA = `
@@ -57,6 +70,7 @@ CREATE TABLE IF NOT EXISTS app_sessions (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS app_sessions_expires_idx ON app_sessions (expires_at);
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
 `;
 
 interface UserRow {
@@ -66,9 +80,17 @@ interface UserRow {
   role: Role;
   password_hash: string;
   created_at: Date;
+  must_change_password: boolean;
 }
 
-const toUser = (row: UserRow): User => ({ id: row.id, email: row.email, name: row.name, role: row.role, createdAt: row.created_at });
+const toUser = (row: UserRow): User => ({
+  id: row.id,
+  email: row.email,
+  name: row.name,
+  role: row.role,
+  createdAt: row.created_at,
+  mustChangePassword: row.must_change_password,
+});
 
 export async function createPostgresUserStore(databaseUrl: string, options: StoreOptions = {}): Promise<UserStore & { close(): Promise<void> }> {
   const sql = postgres(databaseUrl, {
@@ -93,8 +115,8 @@ export async function createPostgresUserStore(databaseUrl: string, options: Stor
     },
     async createUser(input) {
       const [row] = await sql<UserRow[]>`
-        INSERT INTO app_users (id, email, name, role, password_hash)
-        VALUES (${randomUUID()}, ${input.email.toLowerCase()}, ${input.name}, ${input.role}, ${input.passwordHash})
+        INSERT INTO app_users (id, email, name, role, password_hash, must_change_password)
+        VALUES (${randomUUID()}, ${input.email.toLowerCase()}, ${input.name}, ${input.role}, ${input.passwordHash}, ${input.mustChangePassword ?? false})
         RETURNING *`;
       if (!row) throw new Error('No se pudo crear el usuario');
       return toUser(row);
@@ -116,6 +138,27 @@ export async function createPostgresUserStore(databaseUrl: string, options: Stor
     },
     async deleteSession(tokenHash) {
       await sql`DELETE FROM app_sessions WHERE token_hash = ${tokenHash}`;
+    },
+    async listUsers() {
+      const rows = await sql<UserRow[]>`SELECT * FROM app_users ORDER BY created_at, id`;
+      return rows.map(toUser);
+    },
+    async findUserById(id) {
+      const [row] = await sql<UserRow[]>`SELECT * FROM app_users WHERE id = ${id}`;
+      return row ? { ...toUser(row), passwordHash: row.password_hash } : null;
+    },
+    async updateUserRole(id, role) {
+      const [row] = await sql<UserRow[]>`UPDATE app_users SET role = ${role} WHERE id = ${id} RETURNING *`;
+      return row ? toUser(row) : null;
+    },
+    async setPassword(id, passwordHash, mustChange) {
+      await sql`UPDATE app_users SET password_hash = ${passwordHash}, must_change_password = ${mustChange} WHERE id = ${id}`;
+    },
+    async deleteUserSessions(userId, exceptTokenHash) {
+      await sql`DELETE FROM app_sessions WHERE user_id = ${userId} AND token_hash <> ${exceptTokenHash ?? ''}`;
+    },
+    async deleteUser(id) {
+      return (await sql`DELETE FROM app_users WHERE id = ${id}`).count > 0;
     },
     async close() {
       await sql.end();

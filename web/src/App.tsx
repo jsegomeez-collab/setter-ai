@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { ForcedPasswordPage } from './auth/ForcedPasswordPage';
 import { LoginPage } from './auth/LoginPage';
 import { SessionProvider, useSession } from './auth/SessionContext';
 import { SetupPage } from './auth/SetupPage';
@@ -12,6 +13,8 @@ import { ContactsPage } from './contacts/ContactsPage';
 import { MetricsPage } from './metrics/MetricsPage';
 import { FlowsPage } from './flows/FlowsPage';
 import { IntelligencePage } from './intelligence/IntelligencePage';
+import { AccountPage } from './settings/AccountPage';
+import { SettingsPage } from './settings/SettingsPage';
 
 // El constructor visual (React Flow) pesa: se descarga solo cuando se abre un flujo.
 const FlowEditorPage = lazy(() => import('./flows/FlowEditorPage').then((m) => ({ default: m.FlowEditorPage })));
@@ -43,6 +46,7 @@ function Screens() {
   if (loading || loadError) return <Splash error={loadError} />;
   if (needsSetup) return <SetupPage />;
   if (!user) return <LoginPage />;
+  if (user.mustChangePassword) return <ForcedPasswordPage />;
   const pending = navFor(user.role).filter((item) => item.step !== null);
   return (
     <Routes>
@@ -56,6 +60,8 @@ function Screens() {
         <Route path="metricas" element={<MetricsPage />} />
         {user.role === 'admin' && <Route path="flujos" element={<FlowsPage />} />}
         {user.role === 'admin' && <Route path="inteligencia" element={<IntelligencePage />} />}
+        {user.role === 'admin' && <Route path="configuracion" element={<SettingsPage />} />}
+        <Route path="cuenta" element={<AccountPage />} />
         {user.role === 'admin' && (
           <Route
             path="flujos/:id"

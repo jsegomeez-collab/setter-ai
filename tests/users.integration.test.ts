@@ -61,4 +61,31 @@ describe('createPostgresUserStore (Postgres real)', () => {
     await users.deleteSession('huella-ok');
     expect(await users.findSession('huella-ok')).toBeNull();
   });
+
+  it('Fase 6.7 · clave temporal: el usuario nuevo debe cambiarla; cambiarla la quita y cierra las otras sesiones', async () => {
+    const temp = await users.createUser({ email: 'nuevo@example.com', name: 'Nuevo', role: 'team', passwordHash: 'temp', mustChangePassword: true });
+    expect(temp.mustChangePassword).toBe(true);
+    await users.createSession('nuevo-a', temp.id, IN_ONE_HOUR());
+    await users.createSession('nuevo-b', temp.id, IN_ONE_HOUR());
+    expect((await users.findSession('nuevo-a'))?.mustChangePassword).toBe(true);
+
+    await users.setPassword(temp.id, 'nueva', false);
+    await users.deleteUserSessions(temp.id, 'nuevo-a');
+    expect((await users.findUserById(temp.id))?.passwordHash).toBe('nueva');
+    expect((await users.findSession('nuevo-a'))?.mustChangePassword).toBe(false);
+    expect(await users.findSession('nuevo-b')).toBeNull();
+  });
+
+  it('Fase 6.7 · listar (sin hashes), cambiar rol y quitar el acceso (con sus sesiones)', async () => {
+    const list = await users.listUsers();
+    expect(list.map((u) => u.email)).toEqual(['jose@example.com', 'equipo@example.com', 'nuevo@example.com']);
+    expect(list[0]).not.toHaveProperty('passwordHash');
+    const nuevo = list[2]!;
+    expect(await users.updateUserRole(nuevo.id, 'admin')).toMatchObject({ role: 'admin' });
+    expect(await users.updateUserRole('no-existe', 'admin')).toBeNull();
+    await users.createSession('nuevo-c', nuevo.id, IN_ONE_HOUR());
+    expect(await users.deleteUser(nuevo.id)).toBe(true);
+    expect(await users.findSession('nuevo-c')).toBeNull();
+    expect(await users.deleteUser(nuevo.id)).toBe(false);
+  });
 });

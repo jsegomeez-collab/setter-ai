@@ -25,6 +25,7 @@ import { createMetricsApi } from './routes-api-metrics.js';
 import { createMediaLoader } from './media-catalog.js';
 import { createFlowsApi } from './routes-api-flows.js';
 import { createIntelligenceApi } from './routes-api-intelligence.js';
+import { createMeApi, createUsersApi } from './routes-api-users.js';
 import type { Analyzer } from './intelligence/analyzer.js';
 import type { UserStore } from './users.js';
 import { registerWebApp } from './web.js';
@@ -325,6 +326,8 @@ export function createApp(deps: AppDeps): Hono {
     api.route('/contacts', createContactsApi({ store: deps.store, users: deps.users, media }));
     api.route('/metrics', createMetricsApi({ store: deps.store, users: deps.users, media }));
     api.route('/flows', createFlowsApi({ store: deps.store, users: deps.users, media }));
+    api.route('/users', createUsersApi({ users: deps.users, store: deps.store }));
+    api.route('/me', createMeApi({ users: deps.users, store: deps.store }));
     api.route('/intelligence', createIntelligenceApi({ store: deps.store, users: deps.users, media, analyzer: deps.analyzer ?? null }));
     api.route(
       '/conversations',

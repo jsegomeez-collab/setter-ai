@@ -7,6 +7,8 @@ export interface SessionUser {
   readonly email: string;
   readonly name: string;
   readonly role: Role;
+  /** Entró con una clave temporal: tiene que cambiarla antes de usar nada (Fase 6.7). */
+  readonly mustChangePassword: boolean;
 }
 
 export interface SessionInfo {
