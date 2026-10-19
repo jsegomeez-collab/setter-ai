@@ -1,14 +1,20 @@
 import { formatDate } from '../ui/kit';
-import { STAGE_LABEL, type ConversationDetail } from './types';
+import { STAGE_LABEL } from './types';
+
+type Props = {
+  readonly lead: Record<string, unknown> | null;
+  readonly tags?: readonly string[];
+  readonly leadHistory: readonly { readonly lead: Record<string, unknown> | null; readonly createdAt: string }[];
+};
 
 /** Campos de la ficha en el orden en que más importan (los demás van detrás). */
 const FIRST_FIELDS = ['siguiente_paso', 'nivel', 'tipo_lead', 'puede_invertir', 'resumen', 'objeciones'];
 
 const show = (value: unknown): string => (Array.isArray(value) ? value.join(' · ') : String(value));
 
-/** Ficha del lead (lo que la IA ha ido apuntando) y cómo ha cambiado su etapa. */
-export function LeadPanel({ detail }: { detail: ConversationDetail }) {
-  const lead = detail.contact.lead ?? {};
+/** Ficha del lead (lo que la IA ha ido apuntando) y cómo ha cambiado su etapa. Lo usan Conversaciones y Contactos. */
+export function LeadPanel({ lead: rawLead, tags = [], leadHistory }: Props) {
+  const lead = rawLead ?? {};
   const fields = Object.entries(lead)
     .filter(([, value]) => value !== null && value !== '' && value !== 'desconocido' && !(Array.isArray(value) && value.length === 0))
     .sort(([a], [b]) => rank(a) - rank(b));
@@ -30,11 +36,11 @@ export function LeadPanel({ detail }: { detail: ConversationDetail }) {
           </dl>
         )}
       </div>
-      {detail.contact.tags.length > 0 && (
+      {tags.length > 0 && (
         <div>
           <p className="label">Etiquetas</p>
           <p className="mt-2 flex flex-wrap gap-1">
-            {detail.contact.tags.map((tag) => (
+            {tags.map((tag) => (
               <span key={tag} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-ash">
                 {tag}
               </span>
@@ -42,11 +48,11 @@ export function LeadPanel({ detail }: { detail: ConversationDetail }) {
           </p>
         </div>
       )}
-      {detail.leadHistory.length > 0 && (
+      {leadHistory.length > 0 && (
         <div>
           <p className="label">Historial de la ficha</p>
           <ol className="mt-2 space-y-1.5">
-            {detail.leadHistory.map((h, i) => {
+            {leadHistory.map((h, i) => {
               const step = typeof h.lead?.siguiente_paso === 'string' ? h.lead.siguiente_paso : null;
               return (
                 <li key={i} className="flex justify-between gap-3 text-xs">

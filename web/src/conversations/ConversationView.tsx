@@ -86,7 +86,7 @@ export function ConversationView({ igId, onChanged }: Props) {
         </header>
         {showLead && (
           <div className="max-h-[45%] overflow-y-auto border-b border-white/[0.06] bg-white/[0.02] p-4 xl:hidden">
-            <LeadPanel detail={detail} />
+            <LeadPanel lead={detail.contact.lead} tags={detail.contact.tags} leadHistory={detail.leadHistory} />
           </div>
         )}
 
@@ -128,7 +128,7 @@ export function ConversationView({ igId, onChanged }: Props) {
         </div>
       </div>
       <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-white/[0.06] p-5 xl:block">
-        <LeadPanel detail={detail} />
+        <LeadPanel lead={detail.contact.lead} tags={detail.contact.tags} leadHistory={detail.leadHistory} />
       </aside>
     </div>
   );
