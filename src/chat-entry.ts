@@ -62,9 +62,15 @@ type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
 const list = (value: unknown): Json[] => (Array.isArray(value) ? value.filter(isObject) : []);
 
-/** Las opciones de un campo (rompehielos o menú), venga como venga (la doc no da el formato exacto de la respuesta). */
+/**
+ * Las opciones de un campo (rompehielos o menú), venga como venga (la doc no da el formato exacto de la respuesta).
+ * Un idioma sin opciones (respuesta real de producción: `{ persistent_menu: [{ locale: 'default' }] }`) no aporta nada.
+ */
 function actionsOf(container: Json, field: string): Json[] {
-  return list(container[field]).flatMap((item) => (Array.isArray(item.call_to_actions) ? list(item.call_to_actions) : [item]));
+  return list(container[field]).flatMap((item) => {
+    if (Array.isArray(item.call_to_actions)) return list(item.call_to_actions);
+    return 'question' in item || 'title' in item ? [item] : [];
+  });
 }
 
 /** Lo que hay publicado ahora en Instagram (respuesta de GET /me/messenger_profile), leído a la defensiva. */
