@@ -82,6 +82,13 @@ describe('runSimulation', () => {
     expect(result.stopped).toBe(false);
   });
 
+  it('usa el marco técnico guardado si se le pasa (Fase 6.1)', async () => {
+    const { decide, deps } = fakes(['hola', null]);
+    await runSimulation({ ...deps, frame: '---\nMARCO PROPIO [CORREO]' }, { persona: 'x' });
+    expect(decide.mock.calls[0]?.[0]).toContain(`MARCO PROPIO ${TEST_SETTER_LINKS.contactEmail}`);
+    expect(decide.mock.calls[0]?.[0]).not.toContain('INSTRUCCIONES TÉCNICAS');
+  });
+
   it('usa el primer mensaje fijo del escenario (p. ej. un audio)', async () => {
     const { next, deps } = fakes([null]);
     const result = await runSimulation(deps, { persona: 'x', firstMessage: NO_TEXT_PLACEHOLDER });

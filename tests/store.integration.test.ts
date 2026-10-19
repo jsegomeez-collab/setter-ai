@@ -341,4 +341,14 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.getKnowledge()).toMatchObject({ id: second, text: 'versión 2 con ñ y emojis 🚀' });
     expect((await store.listKnowledgeVersions(10)).map((v) => v.id)).toEqual([second, first]);
   });
+
+  it('Fase 6.1 · el marco técnico tiene sus propias versiones y no se mezcla con el documento', async () => {
+    const doc = await store.getKnowledge();
+    expect(await store.getKnowledge('frame')).toBeNull();
+    const frame = await store.saveKnowledge('MARCO PROPIO', 'frame');
+    expect(await store.getKnowledge('frame')).toMatchObject({ id: frame, text: 'MARCO PROPIO' });
+    expect(await store.getKnowledge()).toEqual(doc);
+    expect((await store.listKnowledgeVersions(10, 'frame')).map((v) => v.text)).toEqual(['MARCO PROPIO']);
+    expect((await store.listKnowledgeVersions(10)).every((v) => v.text !== 'MARCO PROPIO')).toBe(true);
+  });
 });

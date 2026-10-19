@@ -62,6 +62,17 @@ async function setup(options: SetupOptions = {}) {
 }
 
 describe('SetterService', () => {
+  it('usa el marco técnico guardado desde el panel (Fase 6.1) en vez del original', async () => {
+    const { store, decide, service, flush } = await setup();
+    await store.saveKnowledge('---\nMARCO PROPIO. Agenda: [LINK AGENDA]', 'frame');
+    await service.onIncoming(dm('hola', 'm-frame'));
+    await flush();
+    const [system] = decide.mock.calls[0] ?? [];
+    expect(system).toContain(`MARCO PROPIO. Agenda: ${TEST_SETTER_LINKS.agenda}`);
+    expect(system).toContain('Eres el setter de Jose.');
+    expect(system).not.toContain('INSTRUCCIONES TÉCNICAS');
+  });
+
   it('responde en varios mensajitos por la cola, cada uno con "escribiendo…" y pausa, y guarda la ficha', async () => {
     const { store, decide, enqueue, showTyping, sleep, service, flush } = await setup();
     await service.onIncoming(dm('hola, quiero info', 'm-1'));

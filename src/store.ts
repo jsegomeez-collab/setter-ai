@@ -47,9 +47,10 @@ export interface Store {
   /** Acción que produjo un mensaje enviado (por su message_id de Meta), para distinguir ecos propios de mensajes a mano. */
   findActionByMessageId(mid: string): Promise<{ readonly dedupKey: string; readonly request: unknown } | null>;
   /** Base de conocimiento del setter, con historial de versiones. */
-  saveKnowledge(text: string): Promise<number>;
-  getKnowledge(): Promise<KnowledgeRow | null>;
-  listKnowledgeVersions(limit: number): Promise<KnowledgeRow[]>;
+  /** `kind`: 'document' (documento del setter, por defecto) o 'frame' (marco técnico, Fase 6.1). */
+  saveKnowledge(text: string, kind?: KnowledgeKind): Promise<number>;
+  getKnowledge(kind?: KnowledgeKind): Promise<KnowledgeRow | null>;
+  listKnowledgeVersions(limit: number, kind?: KnowledgeKind): Promise<KnowledgeRow[]>;
   /** Comentarios registrados desde una fecha que NO recibieron respuesta privada (para rescatarlos). */
   unansweredCommentEvents(since: Date): Promise<unknown[]>;
   /** Agenda (Fase 5): personas a las que se envió bien el botón de agenda y que hicieron clic en él. */
@@ -154,6 +155,8 @@ export interface SetterStageStats {
   readonly stages: readonly { readonly step: string; readonly n: number }[];
   readonly transitions: readonly { readonly from: string; readonly to: string; readonly n: number }[];
 }
+
+export type KnowledgeKind = 'document' | 'frame';
 
 export interface KnowledgeRow {
   readonly id: number;
@@ -284,6 +287,7 @@ CREATE TABLE IF NOT EXISTS knowledge_versions (
   text TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE knowledge_versions ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'document';
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
   id BIGSERIAL PRIMARY KEY,
   dedup_key TEXT NOT NULL UNIQUE,
@@ -558,16 +562,18 @@ export async function createPostgresStore(
            OR response->'result'->>'messageId' = ${mid} LIMIT 1`;
       return rows[0] ? { dedupKey: rows[0].dedup_key, request: rows[0].request } : null;
     },
-    async saveKnowledge(text) {
-      const rows = await sql<{ id: string }[]>`INSERT INTO knowledge_versions (text) VALUES (${text}) RETURNING id`;
+    async saveKnowledge(text, kind = 'document') {
+      const rows = await sql<{ id: string }[]>`INSERT INTO knowledge_versions (text, kind) VALUES (${text}, ${kind}) RETURNING id`;
       return Number(rows[0]?.id);
     },
-    async getKnowledge() {
-      const rows = await sql<{ id: string; text: string; created_at: Date }[]>`SELECT id, text, created_at FROM knowledge_versions ORDER BY id DESC LIMIT 1`;
+    async getKnowledge(kind = 'document') {
+      const rows = await sql<{ id: string; text: string; created_at: Date }[]>`
+        SELECT id, text, created_at FROM knowledge_versions WHERE kind = ${kind} ORDER BY id DESC LIMIT 1`;
       return rows[0] ? { id: Number(rows[0].id), text: rows[0].text, createdAt: rows[0].created_at } : null;
     },
-    async listKnowledgeVersions(limit) {
-      const rows = await sql<{ id: string; text: string; created_at: Date }[]>`SELECT id, text, created_at FROM knowledge_versions ORDER BY id DESC LIMIT ${limit}`;
+    async listKnowledgeVersions(limit, kind = 'document') {
+      const rows = await sql<{ id: string; text: string; created_at: Date }[]>`
+        SELECT id, text, created_at FROM knowledge_versions WHERE kind = ${kind} ORDER BY id DESC LIMIT ${limit}`;
       return rows.map((r) => ({ id: Number(r.id), text: r.text, createdAt: r.created_at }));
     },
     async unansweredCommentEvents(since) {

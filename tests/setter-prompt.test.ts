@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSystemPrompt, fillLinks, toClaudeTurns } from '../src/setter/prompt.js';
+import { DEFAULT_FRAME, buildSystemPrompt, fillLinks, toClaudeTurns } from '../src/setter/prompt.js';
 import type { MessageRow, NewMessage } from '../src/store.js';
 import { STRANGER_ID, TEST_SETTER_LINKS } from './helpers.js';
 
@@ -74,6 +74,21 @@ describe('prompt del setter', () => {
     const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS);
     expect(prompt).toContain('No supongas nada de la persona que no te haya dicho');
     expect(prompt).toContain('Tú no estás en la llamada');
+  });
+
+  it('marco técnico editable (Fase 6.1): si hay uno guardado se usa en lugar del original, con los enlaces rellenados', () => {
+    const prompt = buildSystemPrompt('DOC', TEST_SETTER_LINKS, [], '---\nMARCO PROPIO: agenda [LINK AGENDA], correo [CORREO]');
+    expect(prompt).toContain(`MARCO PROPIO: agenda ${TEST_SETTER_LINKS.agenda}, correo ${TEST_SETTER_LINKS.contactEmail}`);
+    expect(prompt).not.toContain('INSTRUCCIONES TÉCNICAS');
+    expect(prompt.startsWith('DOC\n')).toBe(true);
+  });
+
+  it('sin marco guardado (o vacío = "volver al original") se usa el original, que lleva huecos y no enlaces reales', () => {
+    expect(buildSystemPrompt('DOC', TEST_SETTER_LINKS, [], '  ')).toBe(buildSystemPrompt('DOC', TEST_SETTER_LINKS));
+    expect(buildSystemPrompt('DOC', TEST_SETTER_LINKS, [], null)).toContain('INSTRUCCIONES TÉCNICAS');
+    expect(DEFAULT_FRAME).toContain('[LINK AGENDA]');
+    expect(DEFAULT_FRAME).toContain('[CORREO]');
+    expect(DEFAULT_FRAME).not.toContain(TEST_SETTER_LINKS.agenda);
   });
 
   it('el historial empieza por la persona; lo que la cuenta mandó antes va aparte al prompt', () => {

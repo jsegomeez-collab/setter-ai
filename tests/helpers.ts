@@ -31,6 +31,8 @@ export function createMemoryStore(): Store & {
   const contacts = new Map<string, ContactRow>();
   const messages: MessageRow[] = [];
   const knowledge: KnowledgeRow[] = [];
+  /** Versiones del marco técnico (Fase 6.1), aparte del documento. */
+  const frames: KnowledgeRow[] = [];
   /** Contacto nuevo con los mismos valores por defecto que la tabla contacts. */
   const blankContact = (igId: string): ContactRow => {
     const now = new Date();
@@ -201,16 +203,16 @@ export function createMemoryStore(): Store & {
       const action = [...actions.values()].find((a) => messageIdOf(a.response) === mid);
       return action ? { dedupKey: action.dedupKey, request: action.request } : null;
     },
-    async saveKnowledge(text) {
-      const id = knowledge.length + 1;
-      knowledge.push({ id, text, createdAt: new Date() });
+    async saveKnowledge(text, kind = 'document') {
+      const id = knowledge.length + frames.length + 1;
+      (kind === 'frame' ? frames : knowledge).push({ id, text, createdAt: new Date() });
       return id;
     },
-    async getKnowledge() {
-      return knowledge.at(-1) ?? null;
+    async getKnowledge(kind = 'document') {
+      return (kind === 'frame' ? frames : knowledge).at(-1) ?? null;
     },
-    async listKnowledgeVersions(limit) {
-      return [...knowledge].reverse().slice(0, limit);
+    async listKnowledgeVersions(limit, kind = 'document') {
+      return [...(kind === 'frame' ? frames : knowledge)].reverse().slice(0, limit);
     },
     async touchContact(igId, username, mediaId = null) {
       const now = new Date();

@@ -46,6 +46,8 @@ export interface SimulatorDeps {
   readonly lead: LeadPlayer;
   readonly knowledge: string;
   readonly links: SetterLinks;
+  /** Marco técnico guardado en el panel (Fase 6.1); sin él, el original. */
+  readonly frame?: string | null;
   readonly maxTurns?: number;
 }
 
@@ -86,7 +88,7 @@ async function simulate(deps: SimulatorDeps, scenario: Pick<Scenario, 'persona' 
   let lead: Lead | null = null;
   // Texto de inicio (Fase 5.4): la cuenta escribe primero; el setter lo recibe como en producción.
   const { opener } = scenario;
-  const system = buildSystemPrompt(deps.knowledge, deps.links, opener ? [opener] : []);
+  const system = buildSystemPrompt(deps.knowledge, deps.links, opener ? [opener] : [], deps.frame ?? null);
   if (opener) turns.push({ who: 'setter', texts: [opener], note: 'Texto de inicio (fijo, sin IA)' });
   let incoming = opener ? await deps.lead.next(scenario.persona, turns) : (scenario.firstMessage ?? (await deps.lead.next(scenario.persona, turns)));
   for (let turn = 0; turn < (deps.maxTurns ?? MAX_SIM_TURNS); turn += 1) {

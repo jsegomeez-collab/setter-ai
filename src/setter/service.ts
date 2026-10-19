@@ -270,7 +270,8 @@ export class SetterService {
     if (!last || last.direction !== 'in' || last.note === FLOW_HANDLED_NOTE) return;
     const dedupKey = `ai:${last.mid ?? last.id}`;
     const turns = toClaudeTurns(history);
-    const system = buildSystemPrompt(knowledge.text, links, turns.earlyAccountMessages);
+    const frame = await store.getKnowledge('frame');
+    const system = buildSystemPrompt(knowledge.text, links, turns.earlyAccountMessages, frame?.text ?? null);
     const result = await decideChecked(brain, system, turns.messages, { urls: [links.agenda, links.membership], emails: [links.contactEmail] }, links);
     if (result.kind !== 'ok') {
       return this.stop(igId, `${result.kind === 'refusal' ? 'Claude rechazó responder' : 'Fallo al llamar a Claude'}: ${result.detail}`);
