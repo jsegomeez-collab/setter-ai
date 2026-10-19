@@ -1,13 +1,13 @@
 # Plan — Setter IA para Instagram
 
-> Última actualización: 2026-10-17
+> Última actualización: 2026-10-19 · **Fase 6 terminada; planificada la Fase 7** (diseño, documentos del setter, flujos tipo ManyChat, varias cuentas). Envíos bloqueados por Meta hasta el 19-11.
 > Estado general: **Fases 2 y 3 en producción.** Flujos de comentarios atendiendo a seguidores reales; setter IA en modo **PRUEBA** (solo @josegomezlife). ManyChat desconectado.
 > Fase 4 hecha salvo el paso 3 (análisis, espera conversaciones reales). Fase 5: botón de agenda e inicio del setter (5.4) **probados en real el 2026-10-17** (flujo → inicio → conversación → botón → clic medido). Setter **NO público** (Jose: "no está bien entrenado"); el tono se pulirá desde el frontend.
 > **En curso: Fase 6 (frontend), rama `fase6`.** Producción = `main` (Render despliega solo al hacer push a `main`).
 
 ## Objetivo
 
-Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para la cuenta de Jose**:
+Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, para la cuenta de Jose y, desde la Fase 7.5, también para su socio y futuros clientes (cada uno en su espacio):
 
 1. **Automatización de comentarios:** responde en público a los comentarios de los reels y manda un DM con el recurso, con **botones** (enlaces o acciones) y **condiciones** (p. ej. "¿me sigue?").
 2. **Setter con IA (corazón del proyecto):** con la información del negocio de Jose (oferta, FAQs, objeciones), habla con quien **responde** por DM como lo haría un setter: crea rapport, cualifica (¿tiene negocio?, tipo, facturación…) y más adelante ofrece llamada.
@@ -29,6 +29,8 @@ Un sistema propio (tipo ManyChat + setter con IA), en internet 24/7, **solo para
 | 2026-10-16 | Setter: Claude Haiku 5.5 responde y rellena la ficha; Sonnet 5.5 para el análisis masivo; nunca Opus. Solo español. Detalle en la Fase 3. |
 | 2026-10-17 | **Primero terminar el programa (Fases 4-6); el marketing del setter (documento, objeciones, tono) lo pule Jose después.** |
 | 2026-10-17 | Setter con **Haiku 5.5 + reglas de conversación en código** (`src/setter/rules.ts`); Sonnet se probó (≈12× más caro, mejor conversación) y Jose eligió Haiku. Setter **no público** hasta estar bien entrenado; el tono y las reglas se ajustarán desde el frontend (Fase 6). |
+| 2026-10-19 | **Ya no es solo para la cuenta de Jose:** la app tendrá "espacios" separados (cada uno con su Instagram) para su socio y, en el futuro, para venderla. Detalle en la Fase 7.5. |
+| 2026-10-19 | Fase 7: estilo oscuro + dorado rehecho a fondo; documentos del setter separados (lista base + propios); flujos con todo lo que permite Meta (sin moderar comentarios por ahora). |
 | 2026-10-17 (tarde) | **Cambio de Jose:** la IA también escribe primero a quien **pulsó el botón del flujo** (dentro de las 24 h que abre esa pulsación), con un inicio cercano; habla con **todos los que respondan**; las 5 preguntas eran solo orientación (mejorarlas y preguntar de forma cercana); **pasar a gente real ya** (aviso dado: restricción de Meta hace <1 h). La agenda va en **botón**, nunca en texto. |
 
 Datos de Jose: cuenta Creator pública @josenews.ai (Meta Verified), cuenta de pruebas @josegomezlife, LLC en USA con EIN, ManyChat Pro, GitHub + Render + Neon, API key de Anthropic, oferta/FAQs/objeciones por escrito.
@@ -285,7 +287,59 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
   - [x] **6.7a Usuarios** (`src/routes-api-users.ts`, `/app/configuracion`): dar acceso (correo, nombre, rol) → clave temporal de 16 caracteres que se ve una vez; mientras no la cambie, el servidor le da 403 en todo (`requireUser`) y la web le enseña "pon una tuya"; cambiar rol, nueva clave temporal (cierra sus sesiones), quitar acceso con BORRAR; nunca a uno mismo. "Mi cuenta" (`/app/cuenta`, todos): cambiar la clave (cierra las demás sesiones; 5 fallos = 15 min). Columna `must_change_password` en `app_users`.
   - [x] **6.7b Instagram y envíos** (`src/routes-api-settings.ts`): cuenta conectada, firma de Meta, seguimiento de clics, clave de Anthropic, flujos activos; token (origen, renovado, caduca en N días, último error, "Renovar ahora"); bloqueo largo (quitar con QUITAR / poner N días con BLOQUEAR), pausa del 368 (REANUDAR); envíos de la última hora frente a los límites; "Volver a suscribir los avisos de Meta"; **Registro** (200 más recientes, filtro por tipo, datos al pulsar).
   - 506 pruebas. Probado en local (alta → clave temporal → Laura entra, 403 hasta cambiarla, menú de equipo; quitar/poner bloqueo; renovar token sin clave de cifrado; registro con filtro; móvil).
-- [ ] Siguiente (fuera de la 6.7, pedir OK a Jose): borrar el panel antiguo y sus rutas (`/eventos`, `/flujos`, `/setter`, `/conversaciones`, `/contactos`, `/metricas`) cuando Jose dé el visto bueno a la web nueva. Configuración (usuarios, cuenta de Instagram, token, límites).
+- [ ] Siguiente (fuera de la 6.7, pedir OK a Jose): borrar el panel antiguo y sus rutas (`/eventos`, `/flujos`, `/setter`, `/conversaciones`, `/contactos`, `/metricas`) cuando Jose dé el visto bueno a la web nueva.
+
+### Fase 7 — Plataforma de verdad: diseño, documentos del setter, flujos tipo ManyChat y varias cuentas ⏳ (planificada 2026-10-19)
+
+**Para qué:** que la web se vea y se use como un producto profesional, que la IA entienda mejor el negocio, que los flujos hagan todo lo que permite Meta, y que puedan usarla el socio de Jose y, en el futuro, clientes.
+
+**Lo que pidió Jose (2026-10-19):** "mejorar muchísimo el UI/UX… a full" con la skill `ui-ux-pro-max`; flujos con todo lo que deja hacer la API de Meta (hoy "no se puede meter tags, no hay apenas conditions, no se puede añadir flujos", "la creación es súper rara, igual con toda la plataforma"); conocimientos del setter en documentos separados (cliente ideal, oferta…) en vez de un texto fusionado; que se pueda registrar su socio y poder venderla. "Apuntarlo en el plan y luego implementarlo, no por partes."
+
+**Decisiones de Jose (2026-10-19, no reabrir):**
+- Estilo: **oscuro + dorado (referencia Better Angles), rehecho a fondo**. La skill proponía azul oscuro + verde + fuente Fira: descartado. Lo que falla hoy es la ejecución, no la paleta.
+- Documentos del setter: **lista base + poder crear más**.
+- Socio y venta: **cada uno con su propio Instagram** ("espacios" separados).
+- Flujos: entran seguro **etiquetas, condiciones e "ir a otro flujo"**, más **historias y menciones**, **más formas de responder** y **más formas de empezar**. Moderar comentarios (ocultar/borrar): **no por ahora**.
+- Saludar a los nuevos seguidores: **no se puede** con la API pública (comprobado 2026-10-19: no hay aviso de "nuevo seguidor" en la [lista oficial de avisos](https://developers.facebook.com/documentation/instagram-platform/webhooks/fields); según fuentes no oficiales lo lanzó Meta en exclusiva con ManyChat el 22-10-2025 para cuentas que elige Meta). Revisar cada cierto tiempo.
+
+**Qué deja hacer Meta (leído en la doc oficial el 2026-10-19; Instagram API con Instagram Login, la nuestra):**
+- Avisos que podemos recibir: comentarios, comentarios en directo, menciones (dentro de comentarios), mensajes (incluye respuestas a historias), reacciones, pulsaciones de botones (postbacks), lecturas, enlaces de referencia (`messaging_referral`, p. ej. ig.me), opt-ins, handover/standby. Estadísticas de historias: **no** con nuestro login. ([campos](https://developers.facebook.com/documentation/instagram-platform/webhooks/fields))
+- Lo que se puede enviar: texto (≤1000 bytes), imágenes PNG/JPEG ≤8 MB (hasta 10), audio ≤25 MB, vídeo ≤25 MB, PDF ≤25 MB, corazón, reacción con emoji, una publicación propia, responder a un mensaje concreto, plantillas. ([enviar](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/))
+- Respuestas rápidas: hasta **13**, título ≤20 caracteres, solo texto, **no salen en ordenador**. ([quick replies](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/quick-replies.md))
+- Carrusel: hasta **10 tarjetas**, título y subtítulo ≤80, foto, hasta 3 botones (enlace o acción); no en ordenador. ([generic template](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/generic-template.md))
+- Rompehielos: hasta **4 preguntas** al abrir el chat; llegan como pulsación de botón; no en ordenador. ([ice breakers](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/ice-breakers.md))
+- Menú fijo del chat: enlaces o acciones (Meta recomienda ≤5); no se actualiza al momento en chats abiertos. ([persistent menu](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/persistent-menu.md))
+- Ficha de la persona: nombre, usuario, foto, nº de seguidores, ¿te sigue?, ¿la sigues?, ¿verificada? — **solo si ya escribió** (o pulsó rompehielos/menú). ([user profile](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/user-profile.md))
+- Ventana para escribir: 24 h desde su último mensaje (hasta 7 días si viene de un anuncio "Click-to-Direct"; 7 días con la etiqueta de agente humano).
+- **Usar la app con cuentas que no son tuyas exige "Advanced Access"** (revisión de Meta). ([user profile](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/user-profile.md), [comment moderation](https://developers.facebook.com/documentation/instagram-platform/comment-moderation.md))
+- Por verificar al llegar: aviso de "mención en historia" y el parámetro `ref` de los enlaces ig.me.
+
+**Plan (en orden; cada paso probado, desplegado y enseñado a Jose antes del siguiente):**
+
+- [ ] **7.1 Sistema de diseño** (la base de todo lo demás). Con la skill `ui-ux-pro-max`:
+  - Una sola fuente de verdad: colores, tipografía, espacios, bordes, sombras, movimiento (respetando "reducir movimiento").
+  - Componentes únicos y reutilizados: botones (principal, secundario, peligro), campos con etiqueta y ayuda, errores junto al campo, desplegables, pestañas, tablas, tarjetas, ventanas, avisos, notificaciones (toasts), estados vacíos con qué hacer, carga con esqueletos.
+  - Menú lateral y cabeceras rehechos; accesibilidad (contraste 4.5:1, foco visible, zonas táctiles de 44 px, teclado); probado a 375 / 768 / 1024 / 1440 px.
+  - Guardarlo en `design-system/setter-ia/MASTER.md` (**.md nuevo: pedir OK a Jose antes de crearlo**).
+- [ ] **7.2 Documentos del setter** (en vez de un texto fusionado):
+  - Lista base: **Cliente ideal · Oferta y precios · Preguntas frecuentes · Objeciones y respuestas · Tono y estilo · Casos de éxito · Lo que nunca debe decir** + documentos propios con título.
+  - Cada uno con su historial, activar/desactivar y orden. La IA los recibe por secciones con su título (el marco técnico sigue aparte).
+  - El documento actual se reparte en los nuevos: **propuesta de reparto que Jose revisa antes de activarla**. Comparar antes/después con el simulador.
+- [ ] **7.3 Flujos tipo ManyChat** (motor + constructor nuevo):
+  - **Cómo empieza:** comentario (todos los reels o reels elegidos, palabras clave) · DM con palabra clave · respuesta a una historia · mención (verificar) · rompehielos · menú fijo · enlace ig.me (verificar `ref`) · desde otro flujo.
+  - **Qué envía:** texto · botones (3) · respuestas rápidas (13) · carrusel (10 tarjetas) · imagen / vídeo / audio / PDF · reacción con emoji · respuesta pública al comentario.
+  - **Qué hace:** poner / quitar etiqueta · guardar un dato en la ficha (campos propios) · pausar / activar la IA · avisar a Jose · ir a otro flujo · empezar el setter IA · esperar.
+  - **Condiciones:** ¿me sigue? · tiene / no tiene etiqueta · dato de la ficha · palabra en su mensaje · ¿verificado? · nº de seguidores · horario · al azar (prueba A/B por %).
+  - **Rompehielos y menú fijo** se editan en el constructor y se publican en Meta.
+  - **Crear fácil:** plantillas ("Recurso por comentario", "Recurso solo si me sigue", "Palabra clave por DM", "Respuesta a historia"), avisos en vivo de lo que falta, vista previa del chat y "Probar" para cada forma de empezar.
+  - El motor sigue respetando las reglas de Meta (24 h, 1 DM por comentario, límites, nunca en frío) y las del incidente del 18-10.
+- [ ] **7.4 Rediseño de todas las pantallas** con el sistema de 7.1 y formas de crear más simples: Inicio (resumen útil de verdad), Conversaciones, Contactos (+ campos propios), Métricas, Setter IA (documentos), Flujos, Inteligencia, Configuración. Revisión final con la lista de comprobación de la skill.
+- [ ] **7.5 Varias cuentas ("espacios") — para el socio y para vender.** Explicado simple:
+  - Hoy hay **un espacio** (el de Jose). Después, cada persona o empresa tendrá **su espacio** con su Instagram, flujos, documentos, contactos, conversaciones y equipo. **Nadie ve lo de otro espacio.**
+  - Pasos: (a) cada dato de la base de datos lleva su espacio; (b) **registrarse** crea una cuenta y su espacio, y el Instagram se **conecta con un botón** (inicio de sesión de Instagram de Meta) en vez de pegar un token en Render; (c) los avisos de Meta van al espacio de esa cuenta; (d) invitar gente a tu espacio (lo de 6.7a); (e) **revisión de Meta ("Advanced Access") + verificación del negocio** (la LLC de Jose) — obligatoria para cuentas que no son de Jose; (f) para vender, más adelante: planes, cobro (p. ej. Stripe), límites por plan, términos y privacidad.
+  - Va al final porque cambia toda la base de datos. Mientras tanto, el socio puede entrar como usuario del espacio de Jose (ya se puede: Configuración → Usuarios).
+  - Por decidir al llegar: ¿una clave de Anthropic de Jose para todos o cada espacio la suya?; base de datos de pago (Neon gratis no aguanta varios clientes); nombre del producto y precios.
+  - Riesgo: la revisión de Meta puede tardar semanas o rechazarse; **no sabemos** si el bloqueo del 18-10 influye.
 
 ---
 
@@ -362,3 +416,4 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
 - 2026-10-17 — Decisión de Jose: terminar el programa (Fases 4-6) antes de pulir el marketing del setter. Siguiente: Fase 4.
 - 2026-10-17 — Fase 4 repasada con Jose: embudo primero, ficha actual, análisis con botón manual. Rama `fase4-wip`.
 - 2026-10-17 — Setter pulido con reglas en código (Haiku), prueba real del inicio del setter y del botón de agenda OK. Setter sigue en prueba. Siguiente: Fase 6 (frontend).
+- 2026-10-19 — Fase 6 terminada (6.0-6.7 en producción, 506 pruebas). Fase 7 planificada con Jose: sistema de diseño, documentos del setter, flujos tipo ManyChat (doc de Meta revisada), varias cuentas.
