@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodePayload,
   encodePayload,
+  explainComment,
   findFlowForComment,
   normalize,
   planAfterFollowCheck,
@@ -67,6 +68,29 @@ describe('qué flujo salta', () => {
     const specific = followFlow({ id: 'especifico', trigger: { mediaIds: [TEST_MEDIA_ID], keywords: ['info'] } });
     expect(findFlowForComment([general, specific], comment())?.id).toBe('especifico');
     expect(findFlowForComment([general, specific], comment({ mediaId: '555555' }))?.id).toBe('general');
+  });
+});
+
+describe('explainComment (probar un comentario, Fase 6.5c)', () => {
+  const flow = followFlow({ trigger: { mediaIds: [TEST_MEDIA_ID], keywords: ['info', 'link'] }, testUsernames: ['josegomezlife'] });
+  const probe = (overrides: Partial<{ text: string; username: string; mediaId: string | null }> = {}) =>
+    explainComment(flow, { text: 'Quiero INFO', username: 'JoseGomezLife', mediaId: TEST_MEDIA_ID, ...overrides });
+
+  it('coincide → sin motivos en contra; con la misma regla que el motor (mayúsculas, tildes, @)', () => {
+    expect(probe()).toEqual({ matches: true, reasons: [] });
+    expect(probe({ text: 'pásame el LÍNK', username: '@josegomezlife' }).matches).toBe(true);
+  });
+
+  it('explica cada motivo por el que no salta', () => {
+    expect(probe({ mediaId: '999' }).reasons).toEqual(['Ese reel no está entre los elegidos del flujo.']);
+    expect(probe({ username: 'otra_persona' }).reasons).toEqual(['El flujo está en modo prueba y @otra_persona no está en la lista.']);
+    expect(probe({ text: 'qué bonito' }).reasons).toEqual(['El comentario no tiene ninguna palabra clave (info, link).']);
+    expect(probe({ mediaId: '999', text: 'hola' }).reasons).toHaveLength(2);
+  });
+
+  it('findFlowForComment sigue igual: un flujo desactivado nunca salta', () => {
+    expect(findFlowForComment([{ ...flow, enabled: false }], comment({ fromUsername: 'josegomezlife' }))).toBeNull();
+    expect(findFlowForComment([flow], comment({ fromUsername: 'josegomezlife' }))?.id).toBe(flow.id);
   });
 });
 

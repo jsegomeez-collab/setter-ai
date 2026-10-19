@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { reelLabel } from './contacts.js';
+import { explainComment, findFlowForComment } from './flows/engine.js';
 import { newFlowId } from './flows/form.js';
 import { validateFlow, type Flow } from './flows/types.js';
 import type { MediaLoader } from './media-catalog.js';
@@ -24,6 +25,13 @@ const COPY_SUFFIX = ' (copia)';
 const nameSchema = z.object({ name: z.string().trim().min(1).max(MAX_NAME) });
 const enableSchema = z.object({ enabled: z.boolean(), confirm: z.string().optional() });
 const deleteSchema = z.object({ confirm: z.literal('BORRAR') });
+const probeSchema = z.object({
+  draft: z.object({
+    trigger: z.object({ mediaIds: z.union([z.literal('all'), z.array(z.string().max(40)).max(200)]), keywords: z.array(z.string().max(50)).max(30) }),
+    testUsernames: z.array(z.string().max(30)).max(20),
+  }),
+  comment: z.object({ text: z.string().max(2200), username: z.string().max(30).nullable().optional(), mediaId: z.string().max(40).nullable().optional() }),
+});
 
 async function readJson(c: Context): Promise<unknown> {
   try {
@@ -116,6 +124,23 @@ export function createFlowsApi(deps: FlowsApiDeps): Hono<ApiEnv> {
     await store.saveFlow(result.flow);
     await store.logEvent('flujo', `${who(c)} ${parsed.data.enabled ? 'activó' : 'desactivó'} el flujo "${flow.name}".`, { id: flow.id });
     return c.json({ flow: result.flow });
+  });
+
+  /** Probar un comentario (6.5c) con el borrador sin guardar. No envía nada: solo usa la regla del motor. */
+  api.post('/:id/test', async (c) => {
+    const current = await findFlow(c.req.param('id'));
+    if (!current) return c.json({ error: 'Ese flujo no existe' }, 404);
+    const parsed = probeSchema.safeParse(await readJson(c));
+    if (!parsed.success) return c.json({ error: 'Faltan datos para probar.' }, 400);
+    const { draft, comment } = parsed.data;
+    const candidate: Flow = { ...current, trigger: draft.trigger, testUsernames: draft.testUsernames, enabled: true };
+    const probe = { text: comment.text, username: comment.username ?? null, mediaId: comment.mediaId ?? null };
+    const { matches, reasons } = explainComment(candidate, probe);
+    // Si salta, ¿le ganaría otro flujo activo más específico? (el motor solo atiende un flujo por comentario)
+    const flows = (await store.listFlows()).map((flow) => (flow.id === current.id ? candidate : flow));
+    const event = { kind: 'comment' as const, accountId: '', commentId: 'prueba', fromId: 'prueba', fromUsername: probe.username, mediaId: probe.mediaId, text: probe.text, parentId: null };
+    const winner = matches ? findFlowForComment(flows, event) : null;
+    return c.json({ matches, reasons, enabled: current.enabled, takenBy: winner && winner.id !== current.id ? { id: winner.id, name: winner.name } : null });
   });
 
   api.post('/:id/delete', async (c) => {

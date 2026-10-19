@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, Power, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, FlaskConical, Power, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError, api } from '../lib/api';
@@ -8,6 +8,7 @@ import { FlowCanvas } from './FlowCanvas';
 import { missingConnections } from './graph';
 import { FlowSettings } from './FlowSettings';
 import { StepEditor } from './StepEditor';
+import { TestPanel } from './TestPanel';
 import type { Flow, FlowsResponse } from './types';
 
 /** Constructor visual de un flujo (Fase 6.5b): lienzo + panel lateral. Solo admin. */
@@ -42,6 +43,7 @@ export function FlowEditorPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'enable' | 'delete' | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     Promise.all([api<{ flow: Flow }>(`/flows/${encodeURIComponent(id)}`), api<FlowsResponse>('/flows')])
@@ -131,6 +133,9 @@ export function FlowEditorPage() {
         <span className={['rounded-md px-2 py-0.5 text-[11px] font-bold', saved.enabled ? 'bg-ok/15 text-ok' : 'bg-white/[0.06] text-ash'].join(' ')}>{saved.enabled ? 'ACTIVO' : 'INACTIVO'}</span>
         {dirty && <span className="text-xs text-warn">Cambios sin guardar</span>}
         <div className="ml-auto flex flex-wrap gap-2">
+          <SecondaryButton onClick={() => setTesting(!testing)}>
+            <FlaskConical size={14} /> {testing ? 'Cerrar prueba' : 'Probar'}
+          </SecondaryButton>
           <button type="button" disabled={!dirty || busy} onClick={save} className="btn-gold inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px]">
             <Save size={14} /> Guardar
           </button>
@@ -167,7 +172,13 @@ export function FlowEditorPage() {
           <FlowCanvas flow={draft} selected={selected} onSelect={setSelected} onChange={setDraft} />
         </div>
         <aside className="card max-h-[68vh] min-h-[300px] overflow-y-auto p-5">
-          {step ? <StepEditor flow={draft} step={step} onChange={setDraft} onClose={() => setSelected(null)} /> : <FlowSettings flow={draft} reels={meta.reels} onChange={setDraft} />}
+          {testing ? (
+            <TestPanel flow={draft} reels={meta.reels} onFocus={setSelected} onClose={() => setTesting(false)} />
+          ) : step ? (
+            <StepEditor flow={draft} step={step} onChange={setDraft} onClose={() => setSelected(null)} />
+          ) : (
+            <FlowSettings flow={draft} reels={meta.reels} onChange={setDraft} />
+          )}
         </aside>
       </div>
 

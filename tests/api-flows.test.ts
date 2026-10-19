@@ -89,6 +89,25 @@ describe('API Flujos (Fase 6.5a)', () => {
     expect(await getFlow(copy.flow.id)).toMatchObject({ name: 'Réplica ManyChat (copia)', enabled: false });
   });
 
+  it('probar un comentario (6.5c): con el borrador sin guardar, dice si salta, por qué no, y si otro flujo activo se lo quitaría', async () => {
+    const { store, send, admin } = await setup();
+    const flow = (await (await send('GET', '/api/flows/manychat', admin)).json()).flow;
+    const probe = (draft: unknown, comment: Record<string, unknown>) => send('POST', '/api/flows/manychat/test', admin, { draft, comment });
+
+    const ok = await (await probe({ ...flow, trigger: { mediaIds: 'all', keywords: ['info'] } }, { text: 'Quiero INFO', username: 'ana', mediaId: '18000000000000001' })).json();
+    expect(ok).toEqual({ matches: true, reasons: [], enabled: false, takenBy: null });
+
+    const no = await (await probe({ ...flow, trigger: { mediaIds: 'all', keywords: ['info'] } }, { text: 'qué bonito', username: 'ana', mediaId: null })).json();
+    expect(no).toMatchObject({ matches: false, reasons: ['El comentario no tiene ninguna palabra clave (info).'] });
+
+    // Otro flujo ACTIVO más específico (reel concreto + palabra) gana al de "todos los reels".
+    await store.saveFlow(followFlow({ id: 'otro', name: 'Reel concreto', enabled: true, trigger: { mediaIds: ['18000000000000001'], keywords: ['info'] } }));
+    const taken = await (await probe({ ...flow, trigger: { mediaIds: 'all', keywords: ['info'] } }, { text: 'info', username: 'ana', mediaId: '18000000000000001' })).json();
+    expect(taken.takenBy).toEqual({ id: 'otro', name: 'Reel concreto' });
+
+    expect((await probe({ nada: true }, { text: 'x' })).status).toBe(400);
+  });
+
   it('activar pide escribir ACTIVAR; desactivar no; borrar pide BORRAR', async () => {
     const { send, admin, getFlow } = await setup();
     expect((await send('POST', '/api/flows/manychat/enable', admin, { enabled: true })).status).toBe(400);

@@ -96,17 +96,33 @@ export function decodePayload(payload: string | null): { flowId: string; nodeId:
 
 type CommentEvent = Extract<InstagramEvent, { kind: 'comment' }>;
 
-function commentMatches(flow: Flow, event: CommentEvent): boolean {
-  if (!flow.enabled) return false;
+export interface CommentProbe {
+  readonly text: string;
+  readonly username: string | null;
+  readonly mediaId: string | null;
+}
+
+/**
+ * Si un comentario hace saltar el flujo (sin mirar si está activo) y, si no, por qué. Es LA regla del motor:
+ * commentMatches la usa, así que "probar un comentario" (Fase 6.5c) nunca puede decir algo distinto de lo que pasará.
+ */
+export function explainComment(flow: Flow, probe: CommentProbe): { matches: boolean; reasons: string[] } {
+  const reasons: string[] = [];
   const { mediaIds, keywords } = flow.trigger;
-  if (mediaIds !== 'all' && (!event.mediaId || !mediaIds.includes(event.mediaId))) return false;
-  if (flow.testUsernames.length > 0) {
-    const username = normalize(event.fromUsername ?? '');
-    if (!flow.testUsernames.some((allowed) => normalize(allowed) === username)) return false;
+  if (mediaIds !== 'all' && (!probe.mediaId || !mediaIds.includes(probe.mediaId))) reasons.push('Ese reel no está entre los elegidos del flujo.');
+  const username = normalize(probe.username ?? '');
+  if (flow.testUsernames.length > 0 && !flow.testUsernames.some((allowed) => normalize(allowed) === username)) {
+    reasons.push(`El flujo está en modo prueba y @${username || '(sin usuario)'} no está en la lista.`);
   }
-  if (keywords.length === 0) return true;
-  const text = normalize(event.text);
-  return keywords.some((keyword) => text.includes(normalize(keyword)));
+  const text = normalize(probe.text);
+  if (keywords.length > 0 && !keywords.some((keyword) => text.includes(normalize(keyword)))) {
+    reasons.push(`El comentario no tiene ninguna palabra clave (${keywords.join(', ')}).`);
+  }
+  return { matches: reasons.length === 0, reasons };
+}
+
+function commentMatches(flow: Flow, event: CommentEvent): boolean {
+  return flow.enabled && explainComment(flow, { text: event.text, username: event.fromUsername, mediaId: event.mediaId }).matches;
 }
 
 /** Más específico primero: reel concreto antes que "todos"; con palabras clave antes que "cualquier comentario". */
