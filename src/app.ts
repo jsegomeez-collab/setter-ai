@@ -18,6 +18,7 @@ import type { DiscardResult, DraftResult } from './setter/service.js';
 import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
+import { createSetterApi } from './routes-api-setter.js';
 import type { UserStore } from './users.js';
 import { registerWebApp } from './web.js';
 
@@ -305,7 +306,11 @@ export function createApp(deps: AppDeps): Hono {
 
   registerWebhook(app, deps);
   registerLinks(app, deps);
-  if (deps.users) app.route('/api', createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword }));
+  if (deps.users) {
+    const api = createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword });
+    api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null }));
+    app.route('/api', api);
+  }
   registerWebApp(app);
 
   // Panel privado: contraseña + protección contra formularios enviados desde otras webs.
