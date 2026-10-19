@@ -322,8 +322,15 @@ function registerInstagramCallback(app: Hono, deps: AppDeps): void {
   app.get('/oauth/instagram/callback', async (c) => {
     const connect = deps.instagramConnect;
     if (!connect) return c.html(page('No disponible', '<p>Falta la dirección pública del servidor.</p>'), 503);
-    if (c.req.query('error')) return c.html(page('Conexión cancelada', `<p>Instagram dice: ${escapeHtml(c.req.query('error_description') ?? c.req.query('error') ?? '')}</p>`), 400);
-    if (!connect.consumeState(c.req.query('state') ?? '')) return c.html(page('Enlace caducado', '<p>Vuelve a pulsar "Conectar Instagram" (el enlace dura 10 minutos y vale una vez).</p>'), 400);
+    if (c.req.query('error')) {
+      const reason = c.req.query('error_description') ?? c.req.query('error') ?? '';
+      await deps.store.logEvent('instagram-conectar', `Prueba de conexión cancelada: ${reason}`, { error: c.req.query('error'), reason: c.req.query('error_reason') ?? null });
+      return c.html(page('Conexión cancelada', `<p>Instagram dice: ${escapeHtml(reason)}</p>`), 400);
+    }
+    if (!connect.consumeState(c.req.query('state') ?? '')) {
+      await deps.store.logEvent('instagram-conectar', 'Prueba de conexión: enlace caducado o ya usado (se pidió otra vez).', null);
+      return c.html(page('Enlace caducado', '<p>Vuelve a pulsar "Conectar Instagram" (el enlace dura 10 minutos y vale una vez).</p>'), 400);
+    }
     const result = await connect.exchange(c.req.query('code') ?? '');
     if (!result.ok) {
       await deps.store.logEvent('instagram-conectar', `Prueba de conexión FALLIDA: ${result.error}`, null);

@@ -118,6 +118,11 @@ describe('API Configuración · Instagram y envíos (Fase 6.7b)', () => {
     const state = new URL(url).searchParams.get('state') ?? '';
     expect((await send(`/oauth/instagram/callback?code=abc&state=otro`)).status).toBe(400);
     expect(await (await send('/oauth/instagram/callback?error=access_denied&state=x')).text()).toContain('cancel');
+    // Todo intento queda en el registro (también cancelado y enlace caducado).
+    expect((await store.recentEvents(10)).filter((e) => e.kind === 'instagram-conectar').map((e) => e.note)).toEqual([
+      expect.stringContaining('cancelada'),
+      expect.stringContaining('caducado'),
+    ]);
 
     const ok = await send(`/oauth/instagram/callback?code=abc%23_&state=${state}`);
     expect(ok.status).toBe(200);
