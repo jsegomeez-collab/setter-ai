@@ -3,19 +3,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { Notice, SecondaryButton, Tabs } from '../ui/kit';
+import { DocsTab } from './DocsTab';
 import { ModeTab } from './ModeTab';
 import { OpenerTab } from './OpenerTab';
 import { SimulatorTab } from './SimulatorTab';
 import type { SaveResponse, SetterData } from './types';
 import { VersionedTextTab } from './VersionedTextTab';
 
-const MAX_DOCUMENT_CHARS = 60_000;
 const MAX_FRAME_CHARS = 20_000;
 
 type TabId = 'modo' | 'documento' | 'marco' | 'inicio' | 'simulador';
 const TABS: readonly { value: TabId; label: string }[] = [
   { value: 'modo', label: 'Modo' },
-  { value: 'documento', label: 'Documento' },
+  { value: 'documento', label: 'Documentos' },
   { value: 'marco', label: 'Marco técnico' },
   { value: 'inicio', label: 'Inicio' },
   { value: 'simulador', label: 'Simulador' },
@@ -81,18 +81,7 @@ export function SetterPage() {
         {error && <Notice tone="bad">{error}</Notice>}
         {!data && !error && <p className="text-sm text-smoke">Cargando…</p>}
         {data && tab === 'modo' && <ModeTab key={version} data={data} onSaved={saved} />}
-        {data && tab === 'documento' && (
-          <VersionedTextTab
-            key={version}
-            endpoint="/setter/knowledge"
-            label="Documento del setter"
-            description="Oferta, tono, preguntas, objeciones… Es lo principal que lee la IA en cada respuesta."
-            text={data.knowledge?.text ?? ''}
-            maxChars={MAX_DOCUMENT_CHARS}
-            versions={data.knowledgeVersions}
-            onSaved={saved}
-          />
-        )}
+        {data && tab === 'documento' && <DocsTab key={version} setter={data} onSingleSaved={saved} />}
         {data && tab === 'marco' && (
           <VersionedTextTab
             key={version}

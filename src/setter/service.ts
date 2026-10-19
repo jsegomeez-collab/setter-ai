@@ -4,6 +4,7 @@ import type { Button } from '../flows/types.js';
 import type { InstagramEvent } from '../meta/parse.js';
 import { SETTINGS, type MessageRow, type MessageSource, type Store } from '../store.js';
 import type { SetterBrain } from './brain.js';
+import { loadKnowledge } from './knowledge-source.js';
 import { decideChecked, type CheckedReply } from './reply.js';
 import { AGENDA_BUTTON_TITLE } from './rules.js';
 import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks } from './prompt.js';
@@ -290,8 +291,9 @@ export class SetterService {
     if (!brain) return this.log('Setter sin ANTHROPIC_API_KEY: el mensaje se guarda pero no se responde.', { igId });
     const blocked = await this.blockedReason(igId);
     if (blocked) return blocked === 'off' ? undefined : this.log(blocked, { igId });
-    const knowledge = await store.getKnowledge();
-    if (!knowledge) return this.log('No hay documento del setter cargado: no se responde.', { igId });
+    // Documento único o documentos por tema, según lo que haya elegido Jose (Fase 7.2).
+    const knowledge = await loadKnowledge(store);
+    if (!knowledge) return this.log('No hay documento del setter cargado (ni documentos por tema activos): no se responde.', { igId });
     const history = await store.listMessages(igId, HISTORY_LIMIT);
     const last = history.at(-1);
     // Ya se contestó (o escribió Jose) después. La respuesta se guarda antes de enviarse, así que esto

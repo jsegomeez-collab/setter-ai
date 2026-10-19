@@ -24,7 +24,8 @@ function greeting(hour: number): string {
   return 'Buenas tardes';
 }
 
-const MODE_LABEL: Readonly<Record<string, string>> = { off: 'Apagado', test: 'Prueba', public: 'Público' };
+/** Modos del setter tal y como se guardan (SETTINGS.setterMode: off · test · live). */
+const MODE_LABEL: Readonly<Record<string, string>> = { off: 'Apagado', test: 'Prueba', live: 'Público' };
 
 interface AdminInfo {
   readonly setter: SetterData | null;

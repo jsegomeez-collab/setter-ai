@@ -20,6 +20,7 @@ import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
 import { createSetterApi } from './routes-api-setter.js';
+import { createSetterDocsApi } from './routes-api-setter-docs.js';
 import { createConversationsApi } from './routes-api-conversations.js';
 import { createContactsApi } from './routes-api-contacts.js';
 import { createMetricsApi } from './routes-api-metrics.js';
@@ -366,6 +367,7 @@ export function createApp(deps: AppDeps): Hono {
   registerLinks(app, deps);
   if (deps.users) {
     const api = createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword });
+    api.route('/setter/docs', createSetterDocsApi({ store: deps.store, users: deps.users }));
     api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null }));
     // Títulos de reels: los últimos 50 + los más antiguos pedidos por id (se recuerdan mientras el servidor esté en marcha).
     const media = createMediaLoader(deps.client, MEDIA_FOR_STATS);

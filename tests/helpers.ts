@@ -12,10 +12,12 @@ import {
   type ConversationRow,
   type EventRow,
   type JobRow,
+  type KnowledgeKind,
   type KnowledgeRow,
   type MessageRow,
   type Store,
 } from '../src/store.js';
+import type { KnowledgeDocRow } from '../src/store-docs.js';
 
 /** Base de datos falsa en memoria con el mismo comportamiento que la de Postgres. */
 export function createMemoryStore(): Store & {
@@ -37,6 +39,17 @@ export function createMemoryStore(): Store & {
   const knowledge: KnowledgeRow[] = [];
   /** Versiones del marco técnico (Fase 6.1), aparte del documento. */
   const frames: KnowledgeRow[] = [];
+  /** Documentos por tema (Fase 7.2): metadatos y versiones de cada `doc:<slug>`. */
+  const docs = new Map<string, KnowledgeDocRow>();
+  const docVersions = new Map<string, KnowledgeRow[]>();
+  let knowledgeIds = 0;
+  const versionsOf = (kind: KnowledgeKind): KnowledgeRow[] => {
+    if (kind === 'document') return knowledge;
+    if (kind === 'frame') return frames;
+    const list = docVersions.get(kind) ?? [];
+    docVersions.set(kind, list);
+    return list;
+  };
   /** Contacto nuevo con los mismos valores por defecto que la tabla contacts. */
   const blankContact = (igId: string): ContactRow => {
     const now = new Date();
@@ -234,15 +247,26 @@ export function createMemoryStore(): Store & {
       return action ? { dedupKey: action.dedupKey, request: action.request } : null;
     },
     async saveKnowledge(text, kind = 'document') {
-      const id = knowledge.length + frames.length + 1;
-      (kind === 'frame' ? frames : knowledge).push({ id, text, createdAt: new Date() });
+      const id = ++knowledgeIds;
+      versionsOf(kind).push({ id, text, createdAt: new Date() });
       return id;
     },
     async getKnowledge(kind = 'document') {
-      return (kind === 'frame' ? frames : knowledge).at(-1) ?? null;
+      return versionsOf(kind).at(-1) ?? null;
     },
     async listKnowledgeVersions(limit, kind = 'document') {
-      return [...(kind === 'frame' ? frames : knowledge)].reverse().slice(0, limit);
+      return [...versionsOf(kind)].reverse().slice(0, limit);
+    },
+    async listKnowledgeDocs() {
+      return [...docs.values()].sort((a, b) => a.position - b.position);
+    },
+    async saveKnowledgeDoc(doc) {
+      const current = docs.get(doc.slug);
+      docs.set(doc.slug, current ? { ...doc, builtin: current.builtin } : doc);
+    },
+    async deleteKnowledgeDoc(slug) {
+      docs.delete(slug);
+      docVersions.delete(`doc:${slug}`);
     },
     async touchContact(igId, username, mediaId = null) {
       const now = new Date();

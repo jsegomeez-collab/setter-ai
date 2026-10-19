@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import type { AnalysisMessageRow } from './intelligence/input.js';
 import { ANALYSIS_SCHEMA, analysisMethods, scrubAnalyses, type AnalysisRun, type AnalysisRunSummary, type NewAnalysisRun } from './store-analysis.js';
 import { contactMethods } from './store-contacts.js';
+import { DOCS_SCHEMA, docsMethods, type KnowledgeDocRow } from './store-docs.js';
 import { toJson } from './store-sql.js';
 import { flowSchema, type Flow } from './flows/types.js';
 import type { FunnelPersonRow } from './funnel.js';
@@ -78,6 +79,10 @@ export interface Store {
   saveAnalysisRun(run: NewAnalysisRun): Promise<number>;
   listAnalysisRuns(limit: number): Promise<AnalysisRunSummary[]>;
   getAnalysisRun(id: number): Promise<AnalysisRun | null>;
+  /** Documentos del setter por tema (Fase 7.2, store-docs.ts): título, orden, activo. */
+  listKnowledgeDocs(): Promise<KnowledgeDocRow[]>;
+  saveKnowledgeDoc(doc: KnowledgeDocRow): Promise<void>;
+  deleteKnowledgeDoc(slug: string): Promise<void>;
   /** Pausas programadas. Devuelve null si ya existía (misma clave). */
   scheduleJob(dedupKey: string, runAt: Date, payload: unknown): Promise<number | null>;
   pendingJobs(): Promise<JobRow[]>;
@@ -172,7 +177,8 @@ export interface SetterStageStats {
   readonly transitions: readonly { readonly from: string; readonly to: string; readonly n: number }[];
 }
 
-export type KnowledgeKind = 'document' | 'frame';
+/** 'document' = documento único de siempre · 'frame' = marco técnico · 'doc:<slug>' = documento por tema (Fase 7.2). */
+export type KnowledgeKind = 'document' | 'frame' | `doc:${string}`;
 
 export interface KnowledgeRow {
   readonly id: number;
@@ -229,6 +235,8 @@ export const SETTINGS = {
   setterDraft: 'setter_draft',
   /** Usernames de Instagram autorizados en modo prueba, separados por comas. */
   setterTestUsernames: 'setter_test_usernames',
+  /** Fase 7.2: 'docs' = la IA usa los documentos por tema; si no, el documento único de siempre (por defecto). */
+  knowledgeMode: 'knowledge_mode',
 } as const;
 
 /** Tipos de acción que cuentan como envío a Instagram (para el límite por hora). */
@@ -366,11 +374,13 @@ export async function createPostgresStore(
   });
   await sql.unsafe(SCHEMA);
   await sql.unsafe(ANALYSIS_SCHEMA);
+  await sql.unsafe(DOCS_SCHEMA);
 
   return {
     // Contactos y comentarios (store-contacts.ts) e inteligencia (store-analysis.ts).
     ...contactMethods(sql),
     ...analysisMethods(sql),
+    ...docsMethods(sql),
     async listFlows() {
       const rows = await sql<{ data: Flow }[]>`SELECT data FROM flows ORDER BY updated_at DESC`;
       // Se pasan por el esquema para rellenar los campos nuevos con su valor por defecto (flujos guardados antes).

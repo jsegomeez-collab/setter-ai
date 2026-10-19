@@ -265,6 +265,29 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(JSON.stringify(after)).not.toContain('an-1');
   });
 
+  it('Fase 7.2 · documentos del setter: por orden, se actualizan, cada uno con sus versiones y borrar quita también sus versiones', async () => {
+    await store.saveKnowledgeDoc({ slug: 'oferta', title: 'Oferta y precios', position: 2, active: true, builtin: true });
+    await store.saveKnowledgeDoc({ slug: 'cliente-ideal', title: 'Cliente ideal', position: 1, active: true, builtin: true });
+    await store.saveKnowledgeDoc({ slug: 'guion', title: 'Guion', position: 8, active: true, builtin: false });
+    await store.saveKnowledgeDoc({ slug: 'guion', title: 'Guion de llamada', position: 8, active: false, builtin: false });
+    expect((await store.listKnowledgeDocs()).map((d) => [d.slug, d.title, d.active])).toEqual([
+      ['cliente-ideal', 'Cliente ideal', true],
+      ['oferta', 'Oferta y precios', true],
+      ['guion', 'Guion de llamada', false],
+    ]);
+    await store.saveKnowledge('v1 oferta', 'doc:oferta');
+    await store.saveKnowledge('v2 oferta', 'doc:oferta');
+    await store.saveKnowledge('guion v1', 'doc:guion');
+    expect((await store.getKnowledge('doc:oferta'))?.text).toBe('v2 oferta');
+    expect(await store.listKnowledgeVersions(10, 'doc:oferta')).toHaveLength(2);
+    // El documento único de siempre no se mezcla con los nuevos.
+    expect((await store.getKnowledge())?.text).not.toBe('v2 oferta');
+
+    await store.deleteKnowledgeDoc('guion');
+    expect((await store.listKnowledgeDocs()).map((d) => d.slug)).toEqual(['cliente-ideal', 'oferta']);
+    expect(await store.getKnowledge('doc:guion')).toBeNull();
+  });
+
   it('BORRAR · segundo barrido: solo el rastro de la confirmación (por su clave y su message_id); lo demás sigue', async () => {
     await store.claimAction('borrar:mb', 'send_message', { type: 'send_message', recipientId: 'tr-1', message: { text: 'Listo' } });
     await store.finishAction('borrar:mb', true, { messageId: 'mid-conf' });

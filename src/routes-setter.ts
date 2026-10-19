@@ -3,6 +3,7 @@ import type { AppDeps } from './app.js';
 import { conversationPage, conversationsPage, setterPage, simulationResultPage, simulatorPage } from './pages-setter.js';
 import { findDmRescueCandidates } from './flows/dm-rescue.js';
 import { SCENARIOS, findScenario } from './setter/scenarios.js';
+import { loadKnowledge } from './setter/knowledge-source.js';
 import { runSimulation } from './setter/simulator.js';
 import { parseUsernames, readSetterMode, type SetterMode } from './setter/service.js';
 import { SETTINGS } from './store.js';
@@ -137,7 +138,7 @@ function registerSimulator(app: Hono, deps: AppDeps): void {
   const { store, config } = deps;
   const unavailable = async (): Promise<string | null> => {
     if (!deps.simulator) return 'Falta ANTHROPIC_API_KEY en Render: el simulador no puede llamar a Claude.';
-    return (await store.getKnowledge()) ? null : 'No hay documento del setter cargado: cárgalo en /setter antes de simular.';
+    return (await loadKnowledge(store)) ? null : 'No hay documento del setter cargado (ni documentos por tema activos).';
   };
 
   app.get('/setter/simulador', async (c) => c.html(simulatorPage(SCENARIOS, await unavailable())));
@@ -147,7 +148,7 @@ function registerSimulator(app: Hono, deps: AppDeps): void {
     const persona = field(await c.req.parseBody(), 'persona').trim().slice(0, MAX_PERSONA_CHARS);
     const scenario = id === 'personalizado' ? (persona ? { title: 'Perfil personalizado', persona, check: 'Lo que tú decidas al leerlo.' } : undefined) : findScenario(id);
     if (!scenario) return c.redirect('/setter/simulador', 303);
-    const [knowledge, frame] = await Promise.all([store.getKnowledge(), store.getKnowledge('frame')]);
+    const [knowledge, frame] = await Promise.all([loadKnowledge(store), store.getKnowledge('frame')]);
     if (!deps.simulator || !knowledge) return c.html(simulatorPage(SCENARIOS, await unavailable()), 400);
     try {
       const simulated = await runSimulation({ ...deps.simulator, knowledge: knowledge.text, links: config.setter.links, frame: frame?.text ?? null }, scenario);

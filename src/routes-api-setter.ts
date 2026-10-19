@@ -19,6 +19,7 @@ import { SCENARIOS, findScenario, type Scenario } from './setter/scenarios.js';
 import { parseUsernames, readSetterMode } from './setter/service.js';
 import { estimateCostUsd, runSimulation, verdict, type LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type KnowledgeKind, type Store } from './store.js';
+import { loadKnowledge } from './setter/knowledge-source.js';
 import type { UserStore } from './users.js';
 
 /** API del módulo Setter IA del frontend (Fase 6.1). Solo admin (decisión de Jose). */
@@ -65,7 +66,7 @@ export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
 
   const simulatorProblem = async (): Promise<string | null> => {
     if (!deps.simulator) return 'Falta ANTHROPIC_API_KEY en Render: el simulador no puede llamar a Claude.';
-    return (await store.getKnowledge()) ? null : 'No hay documento del setter cargado: guárdalo antes de simular.';
+    return (await loadKnowledge(store)) ? null : 'No hay documento del setter cargado (ni documentos por tema activos): guárdalo antes de simular.';
   };
 
   api.get('/', async (c) => {
@@ -129,7 +130,7 @@ export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
     const scenario = scenarioId ? findScenario(scenarioId) : custom;
     if (!scenario) return c.json({ error: scenarioId ? 'Ese escenario no existe.' : 'Elige un escenario o escribe un perfil.' }, scenarioId ? 404 : 400);
     const problem = await simulatorProblem();
-    const [knowledge, frame] = await Promise.all([store.getKnowledge(), store.getKnowledge('frame')]);
+    const [knowledge, frame] = await Promise.all([loadKnowledge(store), store.getKnowledge('frame')]);
     if (problem || !deps.simulator || !knowledge) return c.json({ error: problem ?? 'El simulador no está disponible.' }, 409);
     try {
       const result = await runSimulation({ ...deps.simulator, knowledge: knowledge.text, links: config.setter.links, frame: frame?.text ?? null }, scenario);
