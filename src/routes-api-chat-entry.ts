@@ -50,15 +50,17 @@ export function createChatEntryApi(deps: ChatEntryApiDeps): Hono<ApiEnv> {
   api.get('/', async (c) => {
     const [draft, published] = await Promise.all([readDraft(), store.getSetting(SETTINGS.chatEntryPublished)]);
     let live: ReturnType<typeof readLiveProfile> | null = null;
+    let liveRaw: unknown = null;
     let liveError: string | null = client ? null : 'Falta el token de Instagram';
     if (client) {
       try {
-        live = readLiveProfile(await client.getMessengerProfile(['ice_breakers', 'persistent_menu']));
+        liveRaw = await client.getMessengerProfile(['ice_breakers', 'persistent_menu']);
+        live = readLiveProfile(liveRaw);
       } catch (error) {
         liveError = errorText(error);
       }
     }
-    return c.json({ draft, published: published ? (JSON.parse(published) as unknown) : null, live, liveError });
+    return c.json({ draft, published: published ? (JSON.parse(published) as unknown) : null, live, liveRaw, liveError });
   });
 
   api.post('/', async (c) => {

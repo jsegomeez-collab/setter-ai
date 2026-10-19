@@ -68,6 +68,8 @@ describe('API rompehielos y menú (Fase 7.3c)', () => {
     expect(data.published).toBeNull();
     // Lo que hay ahora en Instagram (lo devuelve Meta; aquí, el simulado del cliente).
     expect(data.live).toEqual({ iceBreakers: [{ question: '¿Precio?', payload: 'S:precios' }], menu: [] });
+    // Y la respuesta tal cual (la doc no da su formato exacto: así se puede revisar qué devuelve Meta de verdad).
+    expect(data.liveRaw).toEqual({ data: [{ ice_breakers: [{ call_to_actions: [{ question: '¿Precio?', payload: 'S:precios' }], locale: 'default' }] }] });
   });
 
   it('rechaza más de 4 rompehielos, flujos que no existen y enlaces que no son web', async () => {
