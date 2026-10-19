@@ -41,6 +41,10 @@
   #root {
     height: 100%;
   }
+  /* Barras de desplazamiento, casillas y desplegables del navegador también en oscuro. */
+  html {
+    color-scheme: dark;
+  }
   body {
     background: var(--color-base);
     color: var(--color-fog);

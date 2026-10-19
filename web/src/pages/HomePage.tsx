@@ -15,6 +15,8 @@ export function HomePage() {
   if (!user) return null;
   const modules = navFor(user.role).filter((item) => item.path !== '/');
   const firstName = user.name.trim().split(/\s+/)[0] ?? user.name;
+  /** La siguiente sección por construir va destacada en dorado. */
+  const nextPath = modules.find((item) => item.step !== null)?.path;
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-5 py-8 lg:px-10 lg:py-10">
@@ -25,28 +27,22 @@ export function HomePage() {
 
       <p className="label mt-9">Secciones</p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {modules.map(({ path, label, icon: Icon, step, description }, index) => (
-          <Link
-            key={path}
-            to={path}
-            className={[
-              'card group relative flex flex-col gap-3 p-5 transition-colors hover:border-white/12',
-              index === 0 ? 'border-ember-500/40 sm:col-span-2 lg:col-span-1' : '',
-            ].join(' ')}
-          >
-            <div className="flex items-center justify-between">
-              <span className="label">{label}</span>
-              <ArrowUpRight size={16} className="text-smoke transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ember-400" />
-            </div>
-            <Icon size={22} strokeWidth={1.6} className={index === 0 ? 'text-ember-400' : 'text-ash'} />
-            <p className="text-sm text-mist">{description}</p>
-            {step && (
-              <span className={['w-fit rounded-md px-2 py-0.5 text-[11px] font-semibold', index === 0 ? 'bg-ember-500/12 text-ember-400' : 'bg-white/[0.04] text-smoke'].join(' ')}>
-                {index === 0 ? `Siguiente · paso ${step}` : `Paso ${step}`}
-              </span>
-            )}
-          </Link>
-        ))}
+        {modules.map(({ path, label, icon: Icon, step, description }) => {
+          const isNext = path === nextPath;
+          const chip = step === null ? 'Lista' : isNext ? `Siguiente · paso ${step}` : `Paso ${step}`;
+          const chipStyle = step === null ? 'bg-ok/10 text-ok' : isNext ? 'bg-ember-500/12 text-ember-400' : 'bg-white/[0.04] text-smoke';
+          return (
+            <Link key={path} to={path} className={['card group relative flex flex-col gap-3 p-5 transition-colors hover:border-white/12', isNext ? 'border-ember-500/40' : ''].join(' ')}>
+              <div className="flex items-center justify-between">
+                <span className="label">{label}</span>
+                <ArrowUpRight size={16} className="text-smoke transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ember-400" />
+              </div>
+              <Icon size={22} strokeWidth={1.6} className={isNext || step === null ? 'text-ember-400' : 'text-ash'} />
+              <p className="text-sm text-mist">{description}</p>
+              <span className={`w-fit rounded-md px-2 py-0.5 text-[11px] font-semibold ${chipStyle}`}>{chip}</span>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
