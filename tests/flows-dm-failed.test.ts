@@ -57,11 +57,11 @@ const privateReply = (failReply?: string): Action => ({
 });
 
 describe('Sender: plan B público', () => {
-  it('si el DM falla (con botón y como texto) → publica el plan B', async () => {
+  it('si el DM falla (2534025, sin reintento con texto desde el bloqueo 368) → publica el plan B', async () => {
     const { client, sender } = setup();
     await sender.enqueue([privateReply(PLAN_B[0])]);
     await sender.idle();
-    expect(client.sendPrivateReply).toHaveBeenCalledTimes(2);
+    expect(client.sendPrivateReply).toHaveBeenCalledTimes(1);
     expect(client.replyToComment).toHaveBeenCalledWith('c-1', PLAN_B[0]);
   });
 
