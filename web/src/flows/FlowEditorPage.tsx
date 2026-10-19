@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError, api } from '../lib/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 import { Notice, SecondaryButton, formatDate } from '../ui/kit';
 import { FlowCanvas } from './FlowCanvas';
 import { missingConnections } from './graph';
@@ -39,7 +40,7 @@ export function FlowEditorPage() {
   const [meta, setMeta] = useState<FlowsResponse | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
+  const toast = useToast();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'enable' | 'delete' | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,7 +69,6 @@ export function FlowEditorPage() {
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
-    setNotice(null);
     try {
       await action();
     } finally {
@@ -88,7 +88,7 @@ export function FlowEditorPage() {
         setSaved(flow);
         setDraft(flow);
         setErrors([]);
-        setNotice('Guardado.');
+        toast('Guardado.');
       } catch (err) {
         setErrors(errorsOf(err));
       }
@@ -101,7 +101,7 @@ export function FlowEditorPage() {
         setSaved(flow);
         setDraft(flow);
         setDialog(null);
-        setNotice(enabled ? 'Flujo activado.' : 'Flujo desactivado.');
+        toast(enabled ? 'Flujo activado.' : 'Flujo desactivado.');
       } catch (err) {
         setDialog(null);
         setErrors(errorsOf(err));
@@ -130,7 +130,7 @@ export function FlowEditorPage() {
           <ArrowLeft size={14} /> Flujos
         </Link>
         <h1 className="font-display text-[22px] font-extrabold tracking-[-0.02em] text-snow">{draft.name || 'Sin nombre'}</h1>
-        <span className={['rounded-md px-2 py-0.5 text-[11px] font-bold', saved.enabled ? 'bg-ok/15 text-ok' : 'bg-white/[0.06] text-ash'].join(' ')}>{saved.enabled ? 'ACTIVO' : 'INACTIVO'}</span>
+        <span className={['rounded-md px-2 py-0.5 text-xs font-bold', saved.enabled ? 'bg-ok/15 text-ok' : 'bg-white/[0.06] text-ash'].join(' ')}>{saved.enabled ? 'ACTIVO' : 'INACTIVO'}</span>
         {dirty && <span className="text-xs text-warn">Cambios sin guardar</span>}
         <div className="ml-auto flex flex-wrap gap-2">
           <SecondaryButton onClick={() => setTesting(!testing)}>
@@ -150,11 +150,10 @@ export function FlowEditorPage() {
           </SecondaryButton>
         </div>
       </div>
-      {dirty && <p className="mt-1 text-right text-[11px] text-smoke">Guarda antes de activar o duplicar.</p>}
+      {dirty && <p className="mt-1 text-right text-xs text-smoke">Guarda antes de activar o duplicar.</p>}
 
       <div className="mt-4 space-y-3">
         {meta.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados hasta el {formatDate(meta.sendsBlockedUntil)} (bloqueo de Meta): aunque actives un flujo, no saldrá ningún mensaje hasta entonces.</Notice>}
-        {notice && <Notice tone="ok">{notice}</Notice>}
         {errors.length > 0 && (
           <div role="alert" className="rounded-lg border border-bad/30 bg-bad/[0.08] px-3 py-2 text-sm text-bad">
             <p className="font-semibold">No se ha guardado. Hay que arreglar:</p>

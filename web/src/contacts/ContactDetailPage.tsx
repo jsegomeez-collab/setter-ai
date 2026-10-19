@@ -116,7 +116,7 @@ export function ContactDetailPage() {
                 {comments.map((c) => (
                   <li key={c.commentId} className="rounded-lg bg-white/[0.03] px-3 py-2">
                     <p className="text-sm text-fog">{c.text}</p>
-                    <p className="mt-0.5 text-[11px] text-smoke">
+                    <p className="mt-0.5 text-xs text-smoke">
                       {formatDate(c.createdAt)}
                       {c.reelLabel ? ` · ${c.reelLabel}` : ''}
                     </p>

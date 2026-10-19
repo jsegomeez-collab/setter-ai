@@ -67,21 +67,7 @@ export const SECTIONS: readonly { readonly key: SectionKey; readonly label: stri
   { key: 'mercado', label: 'Datos de mercado', hint: 'A qué se dedican, tamaño, de dónde son, qué usan, qué quieren.' },
 ];
 
-/** Nombres legibles de los valores de la ficha (src/setter/schema.ts). */
-export const VALUE_LABEL: Readonly<Record<string, string>> = {
-  formacion: 'Formación',
-  empresa_dfy: 'Empresa (DFY)',
-  nivel_1: 'Nivel 1',
-  nivel_2: 'Nivel 2',
-  no_encaja: 'No encaja',
-  si: 'Sí',
-  no: 'No',
-  duda: 'Duda',
-  seguir_calificando: 'Calificando',
-  agendar_llamada: 'Agendar',
-  ofrecer_membresia: 'Membresía',
-  descartar: 'Descartado',
-  derivar_a_jose: 'Pasar a Jose',
-};
+/** Nombres legibles de los valores de la ficha: comunes a toda la web (lib/labels.ts). */
+export { VALUE_LABEL } from '../lib/labels';
 
 export const money = (usd: number): string => `${(usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)).replace('.', ',')} $`;

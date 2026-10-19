@@ -169,7 +169,7 @@ function Field({ label, hint, warn = false, children }: { label: string; hint?: 
     <label className="block">
       <span className={['mb-1.5 block text-xs font-semibold', warn ? 'text-warn' : 'text-mist'].join(' ')}>{label}</span>
       {children}
-      {hint && <span className={['mt-1 block text-[11px]', warn ? 'text-warn' : 'text-smoke'].join(' ')}>{hint}</span>}
+      {hint && <span className={['mt-1 block text-xs', warn ? 'text-warn' : 'text-smoke'].join(' ')}>{hint}</span>}
     </label>
   );
 }

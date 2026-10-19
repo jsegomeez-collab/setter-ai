@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { ForcedPasswordPage } from './auth/ForcedPasswordPage';
 import { LoginPage } from './auth/LoginPage';
 import { SessionProvider, useSession } from './auth/SessionContext';
+import { ToastProvider } from './ui/Toast';
 import { SetupPage } from './auth/SetupPage';
 import { HomePage } from './pages/HomePage';
 import { PendingModule } from './pages/PendingModule';
@@ -84,9 +85,11 @@ function Screens() {
 export function App() {
   return (
     <SessionProvider>
+      <ToastProvider>
       <BrowserRouter basename="/app">
         <Screens />
       </BrowserRouter>
+      </ToastProvider>
     </SessionProvider>
   );
 }

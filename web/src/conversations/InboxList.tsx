@@ -34,7 +34,7 @@ export function InboxList({ items, filter, query, onFilter, onQuery }: Props) {
               type="button"
               onClick={() => onFilter(f.value)}
               aria-pressed={filter === f.value}
-              className={['rounded-md px-2 py-1 text-[11px] font-semibold transition-colors', filter === f.value ? 'bg-ember-500/12 text-ember-400' : 'text-ash hover:bg-white/[0.04] hover:text-fog'].join(' ')}
+              className={['rounded-md px-2 py-1 text-xs font-semibold transition-colors', filter === f.value ? 'bg-ember-500/12 text-ember-400' : 'text-ash hover:bg-white/[0.04] hover:text-fog'].join(' ')}
             >
               {f.label}
             </button>
@@ -54,7 +54,7 @@ export function InboxList({ items, filter, query, onFilter, onQuery }: Props) {
             >
               <div className="flex items-center gap-2">
                 <span className={['min-w-0 flex-1 truncate text-sm', item.unanswered ? 'font-semibold text-snow' : 'text-mist'].join(' ')}>{handle(item.username, item.igId)}</span>
-                <span className="shrink-0 text-[11px] text-smoke">{timeAgo(item.lastAt)}</span>
+                <span className="shrink-0 text-xs text-smoke">{timeAgo(item.lastAt)}</span>
               </div>
               <p className="mt-0.5 truncate text-xs text-ash">
                 {item.lastDirection === 'out' ? 'Tú: ' : ''}
@@ -77,5 +77,5 @@ export function InboxList({ items, filter, query, onFilter, onQuery }: Props) {
 const CHIP_TONES = { ember: 'bg-ember-500/12 text-ember-400', info: 'bg-info/10 text-info', warn: 'bg-warn/10 text-warn', plain: 'bg-white/[0.05] text-ash' } as const;
 
 function Chip({ tone, children }: { tone: keyof typeof CHIP_TONES; children: string }) {
-  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${CHIP_TONES[tone]}`}>{children}</span>;
+  return <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${CHIP_TONES[tone]}`}>{children}</span>;
 }

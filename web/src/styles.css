@@ -14,7 +14,8 @@
   --color-g3: #1c1c1f;
   --color-g4: #232327;
   --color-g5: #2d2d32;
-  --color-smoke: #6c6c72;
+  /* Fase 7.1: antes #6c6c72 (3,3-3,8:1, no llegaba al 4,5:1). Medido: ≥4,63:1 sobre todas las capas. */
+  --color-smoke: #8b8b92;
   --color-ash: #97979e;
   --color-mist: #c6c6cc;
   --color-fog: #e9e9ec;
@@ -49,16 +50,40 @@
     background: var(--color-base);
     color: var(--color-fog);
     font-family: var(--font-sans);
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+  }
+  /* Foco visible siempre con teclado (sistema de diseño §2): anillo dorado de 2 px separado 2 px. */
+  :focus-visible {
+    outline: 2px solid var(--color-ember-400);
+    outline-offset: 2px;
+  }
+  button:not(:disabled),
+  a,
+  [role='button'],
+  summary,
+  select {
+    cursor: pointer;
+  }
+  /* "Reducir movimiento" del sistema: sin animaciones ni transiciones. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer components {
   /* Etiqueta de sección: MAYÚSCULAS pequeñas y espaciadas ("SALUD DEL NEGOCIO"). */
   .label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 1.1px;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-smoke);
   }
@@ -90,7 +115,22 @@
     border-radius: 10px;
     padding: 10px 12px;
     color: var(--color-fog);
+    font-size: 14px;
     outline: none;
+    transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+  }
+  .field::placeholder {
+    color: var(--color-smoke);
+  }
+  .field:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  /* En el móvil, 16 px: así el iPhone no hace zoom al tocar el campo. */
+  @media (max-width: 640px) {
+    .field {
+      font-size: 16px;
+    }
   }
   .field:focus {
     border-color: rgba(212, 165, 58, 0.5);

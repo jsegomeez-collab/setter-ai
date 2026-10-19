@@ -7,7 +7,7 @@ export function Brand() {
       </div>
       <div className="leading-tight">
         <p className="font-display text-[15px] font-bold tracking-[-0.01em] text-snow">Jose News AI</p>
-        <p className="label !text-[10px] !tracking-[1.6px]">Setter IA</p>
+        <p className="label !text-xs !tracking-[1.6px]">Setter IA</p>
       </div>
     </div>
   );

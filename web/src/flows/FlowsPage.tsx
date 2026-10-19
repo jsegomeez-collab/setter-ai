@@ -70,7 +70,7 @@ export function FlowsPage() {
                 <span className="flex items-center gap-2">
                   <Workflow size={16} className="text-ember-400" />
                   <span className="truncate font-semibold text-fog">{flow.name}</span>
-                  <span className={['ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold', flow.enabled ? 'bg-ok/15 text-ok' : 'bg-white/[0.06] text-ash'].join(' ')}>{flow.enabled ? 'ACTIVO' : 'INACTIVO'}</span>
+                  <span className={['ml-auto rounded-md px-2 py-0.5 text-xs font-bold', flow.enabled ? 'bg-ok/15 text-ok' : 'bg-white/[0.06] text-ash'].join(' ')}>{flow.enabled ? 'ACTIVO' : 'INACTIVO'}</span>
                 </span>
                 <span className="text-[13px] text-ash">{triggerText(flow)}</span>
                 <span className="text-xs text-smoke">

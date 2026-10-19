@@ -52,18 +52,18 @@ export function StepNode({ data, selected }: NodeProps<StepNodeType>) {
       <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2">
         <Icon size={14} className={ACCENT[step.type]} />
         <span className="text-[12px] font-bold text-fog">{STEP_LABEL[step.type]}</span>
-        {isStart && <span className="ml-auto rounded bg-ember-500/15 px-1.5 py-0.5 text-[10px] font-bold text-ember-400">INICIO · DM</span>}
+        {isStart && <span className="ml-auto rounded bg-ember-500/15 px-1.5 py-0.5 text-xs font-bold text-ember-400">INICIO · DM</span>}
       </div>
       <p className="line-clamp-3 whitespace-pre-wrap px-3 py-2 text-[12px] leading-snug text-mist">{stepSummary(step)}</p>
       {urlButtons.map((button, i) => (
-        <p key={`url-${i}`} className="mx-3 mb-1.5 truncate rounded-md bg-white/[0.04] px-2 py-1 text-[11px] text-ash">
+        <p key={`url-${i}`} className="mx-3 mb-1.5 truncate rounded-md bg-white/[0.04] px-2 py-1 text-xs text-ash">
           🔗 {button.title}
         </p>
       ))}
       {outputs.length > 0 && (
         <div className="space-y-1 border-t border-white/[0.06] py-2">
           {outputs.map((output) => (
-            <div key={output.handle} className="relative pl-3 pr-5 text-right text-[11px] text-ash">
+            <div key={output.handle} className="relative pl-3 pr-5 text-right text-xs text-ash">
               <span className={output.target || (step.type === 'message' && output.handle === 'next') ? 'text-mist' : 'text-warn'}>{output.label}</span>
               {/* El "después" de un mensaje es opcional; el resto de salidas tienen que ir a algún paso. */}
               {!output.target && !(step.type === 'message' && output.handle === 'next') && <span className="ml-1 text-warn">· sin conectar</span>}

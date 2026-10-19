@@ -123,13 +123,13 @@ export function DayLines({ days, series, label }: { days: readonly string[]; ser
             {ticks.map((t) => (
               <g key={t}>
                 <line x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.06)" />
-                <text x={PAD.left - 8} y={y(t)} dy="0.32em" textAnchor="end" className="fill-smoke text-[10px] tabular-nums">
+                <text x={PAD.left - 8} y={y(t)} dy="0.32em" textAnchor="end" className="fill-smoke text-xs tabular-nums">
                   {Math.round(t)}
                 </text>
               </g>
             ))}
             {labeled.map((i) => (
-              <text key={days[i]} x={x(i)} y={HEIGHT - 8} textAnchor={i === 0 && days.length > 1 ? 'start' : i === days.length - 1 && days.length > 1 ? 'end' : 'middle'} className="fill-smoke text-[10px]">
+              <text key={days[i]} x={x(i)} y={HEIGHT - 8} textAnchor={i === 0 && days.length > 1 ? 'start' : i === days.length - 1 && days.length > 1 ? 'end' : 'middle'} className="fill-smoke text-xs">
                 {shortDay(days[i] ?? '')}
               </text>
             ))}

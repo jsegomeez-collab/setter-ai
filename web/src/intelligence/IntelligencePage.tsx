@@ -130,7 +130,7 @@ function Counts({ values }: { values: Readonly<Record<string, number>> }) {
   return (
     <span className="flex flex-wrap justify-end gap-1">
       {entries.map(([key, n]) => (
-        <span key={key} className="whitespace-nowrap rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-mist">
+        <span key={key} className="whitespace-nowrap rounded bg-white/[0.05] px-1.5 py-0.5 text-xs text-mist">
           {VALUE_LABEL[key] ?? key}: {n}
         </span>
       ))}

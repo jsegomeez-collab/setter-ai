@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
+import { modelLabel } from '../lib/labels';
 import { Notice, Section, Segmented, type SegmentOption } from '../ui/kit';
 import type { SetterData, SetterMode } from './types';
 
@@ -34,7 +35,7 @@ export function ModeTab({ data, onSaved }: Props) {
 
   return (
     <div className="space-y-4">
-      <Section label="Modo del setter" description={`Modelo: ${data.model}. Pasar a Público lo decide Jose.`}>
+      <Section label="Modo del setter" description={`Modelo: ${modelLabel(data.model)}. Pasar a Público lo decide Jose.`}>
         <Segmented name="Modo del setter" options={MODES} value={mode} onChange={setMode} />
         {mode === 'live' && data.mode !== 'live' && (
           <div className="mt-3">

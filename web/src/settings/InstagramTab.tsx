@@ -2,6 +2,7 @@ import { Ban, CheckCircle2, PlayCircle, RefreshCw, Radio, XCircle } from 'lucide
 import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 import { Notice, Section, SecondaryButton, formatDate } from '../ui/kit';
 
 /**
@@ -29,7 +30,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function InstagramTab() {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const toast = useToast();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [blockDays, setBlockDays] = useState(7);
   const [blockReason, setBlockReason] = useState('');
@@ -44,9 +45,8 @@ export function InstagramTab() {
 
   const run = async (action: () => Promise<string>) => {
     setError(null);
-    setNotice(null);
     try {
-      setNotice(await action());
+      toast(await action());
       setDialog(null);
       await load();
     } catch (err) {
@@ -63,7 +63,6 @@ export function InstagramTab() {
   return (
     <div className="space-y-5">
       {error && <Notice tone="bad">{error}</Notice>}
-      {notice && <Notice tone="ok">{notice}</Notice>}
 
       <Section label="Cuenta de Instagram">
         <ul className="space-y-2 text-sm">

@@ -28,14 +28,15 @@ export function AppShell() {
       )}
       <div className="relative flex min-w-0 flex-1 p-0 lg:py-3 lg:pr-3">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-white/7 bg-g1/70 lg:rounded-[20px] lg:border">
-          <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4">
+          {/* Solo en el móvil (abre el menú). En escritorio no hay barra: el título lo pone la cabecera de cada página. */}
+          <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/[0.06] px-4 lg:hidden">
             <button
               type="button"
               aria-label="Abrir menú"
               onClick={() => setMenuOpen(true)}
-              className="rounded-lg border border-white/8 p-1.5 text-ash transition-colors hover:text-fog lg:hidden"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-white/8 text-ash transition-colors hover:text-fog"
             >
-              <PanelLeft size={16} />
+              <PanelLeft size={18} />
             </button>
             <p className="font-display text-sm font-semibold text-snow">{section}</p>
           </header>

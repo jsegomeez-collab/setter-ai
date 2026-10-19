@@ -9,7 +9,7 @@ export function DmPreview({ text, buttons = [] }: { text: string; buttons?: read
   return (
     <div className="rounded-2xl border border-white/8 bg-black p-3" aria-label="Vista previa en Instagram">
       <div className="mb-3 flex items-center gap-2 border-b border-white/8 pb-2">
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-ember-400 to-ember-700 text-[11px] font-bold text-black">J</span>
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-ember-400 to-ember-700 text-xs font-bold text-black">J</span>
         <span className="text-[13px] font-semibold text-snow">josenews.ai</span>
       </div>
       <div className="flex items-end gap-2">

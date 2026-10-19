@@ -316,7 +316,8 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
 
 **Plan (en orden; cada paso probado, desplegado y enseñado a Jose antes del siguiente):**
 
-- [ ] **7.1 Sistema de diseño** (la base de todo lo demás). Con la skill `ui-ux-pro-max`:
+- [x] **7.1 Sistema de diseño — hecho 2026-10-19** (Jose: "me vale"). `design-system/setter-ia/MASTER.md` (tokens medidos, componentes, estructura, contenido y los 10 fallos vistos en 28 capturas). Capturas fiables con Playwright 1.63.0 propio (`.playwright-mcp/shots.ts`, no usa el Chrome de Jose). Hecho: gris apagado #6c6c72 → #8b8b92 (contraste 3,3 → ≥4,6:1); ninguna letra < 12 px (28 sitios); foco visible, "reducir movimiento", campos 16 px en móvil; componentes `Button`, `PageHeader`/`Page`, `Toast` (notificaciones), `EmptyState`, `Skeleton`, `lib/labels.ts` (nombres legibles); sin título repetido (barra solo en móvil); ficha y modelo con nombres legibles; el bloqueo ya no se repite ni sale la fecha en formato máquina en Conversaciones; **Inicio nuevo** (para hoy: sin responder / borradores / IA parada; embudo 7 días con línea por día; estado del setter y de los flujos para admin; accesos). Pendiente para la 7.4: aplicar los componentes a fondo en cada pantalla (filtros de Conversaciones, tabla de Contactos, etc.).
+- Detalle original de la 7.1 (con la skill `ui-ux-pro-max`):
   - Una sola fuente de verdad: colores, tipografía, espacios, bordes, sombras, movimiento (respetando "reducir movimiento").
   - Componentes únicos y reutilizados: botones (principal, secundario, peligro), campos con etiqueta y ayuda, errores junto al campo, desplegables, pestañas, tablas, tarjetas, ventanas, avisos, notificaciones (toasts), estados vacíos con qué hacer, carga con esqueletos.
   - Menú lateral y cabeceras rehechos; accesibilidad (contraste 4.5:1, foco visible, zonas táctiles de 44 px, teclado); probado a 375 / 768 / 1024 / 1440 px.

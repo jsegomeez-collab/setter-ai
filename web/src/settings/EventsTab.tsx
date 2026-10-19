@@ -53,7 +53,7 @@ export function EventsTab() {
               <span className="text-mist">{event.note}</span>
             </button>
             {open === i && event.data !== null && (
-              <pre className="mb-2 max-h-64 overflow-auto rounded-lg bg-black/40 p-3 text-[11px] text-ash">{JSON.stringify(event.data, null, 2).slice(0, MAX_DATA_CHARS)}</pre>
+              <pre className="mb-2 max-h-64 overflow-auto rounded-lg bg-black/40 p-3 text-xs text-ash">{JSON.stringify(event.data, null, 2).slice(0, MAX_DATA_CHARS)}</pre>
             )}
           </li>
         ))}

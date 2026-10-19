@@ -45,7 +45,7 @@ export function FlowSettings({ flow, reels, onChange }: { flow: Flow; reels: Flo
               </li>
             ))}
             {hidden.map((id) => (
-              <li key={id} className="text-[11px] text-smoke">
+              <li key={id} className="text-xs text-smoke">
                 + reel antiguo {id} (elegido)
               </li>
             ))}
@@ -97,7 +97,7 @@ function Field({ label, hint, warn = false, children }: { label: string; hint?: 
     <div>
       <p className={['mb-1.5 text-xs font-semibold', warn ? 'text-warn' : 'text-mist'].join(' ')}>{label}</p>
       {children}
-      {hint && <p className={['mt-1 text-[11px]', warn ? 'text-warn' : 'text-smoke'].join(' ')}>{hint}</p>}
+      {hint && <p className={['mt-1 text-xs', warn ? 'text-warn' : 'text-smoke'].join(' ')}>{hint}</p>}
     </div>
   );
 }

@@ -84,9 +84,9 @@ function People() {
               <span className="truncate text-sm font-semibold text-fog">{handle(c.username, c.igId)}</span>
               <span className="truncate text-xs text-ash">{c.sourceLabel ?? 'Sin reel de origen'}</span>
               <span className="flex flex-wrap gap-1">
-                {c.stage && <span className="rounded bg-ember-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-ember-400">{STAGE_LABEL[c.stage] ?? c.stage}</span>}
+                {c.stage && <span className="rounded bg-ember-500/12 px-1.5 py-0.5 text-xs font-semibold text-ember-400">{STAGE_LABEL[c.stage] ?? c.stage}</span>}
                 {c.tags.map((tag) => (
-                  <span key={tag} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-ash">
+                  <span key={tag} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-xs text-ash">
                     {tag}
                   </span>
                 ))}
@@ -139,7 +139,7 @@ function Reels() {
           <span className="text-xs text-ash">{r.people} personas</span>
           <span className="flex flex-wrap gap-1">
             {Object.entries(r.tagged).map(([tag, n]) => (
-              <Link key={tag} to={`/contactos?tag=${encodeURIComponent(tag)}&media=${encodeURIComponent(r.mediaId)}`} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-ash hover:text-fog">
+              <Link key={tag} to={`/contactos?tag=${encodeURIComponent(tag)}&media=${encodeURIComponent(r.mediaId)}`} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-xs text-ash hover:text-fog">
                 {tag}: {n}
               </Link>
             ))}

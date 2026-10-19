@@ -62,6 +62,8 @@ export function ConversationView({ igId, onChanged }: Props) {
 
   if (!detail) return <div className="p-6 text-sm text-smoke">{error ?? 'Cargando…'}</div>;
   const { contact, messages, canReply } = detail;
+  // El servidor lo explica como "Envíos bloqueados hasta…": ese aviso ya está arriba en la página, no se repite.
+  const blocked = !canReply.ok && (canReply.reason ?? '').startsWith('Envíos bloqueados');
   const hasDraft = messages.at(-1)?.status === 'held' && messages.at(-1)?.note === DRAFT_NOTE;
 
   return (
@@ -117,14 +119,15 @@ export function ConversationView({ igId, onChanged }: Props) {
               value={text}
               onChange={(e) => setText(e.target.value)}
               disabled={!canReply.ok || busy}
-              placeholder={canReply.ok ? 'Escribe una respuesta…' : (canReply.reason ?? 'No se puede responder')}
+              placeholder={canReply.ok ? 'Escribe una respuesta…' : blocked ? 'Envíos bloqueados: mira el aviso de arriba' : 'No se puede responder ahora'}
               aria-label="Respuesta a mano"
             />
             <button type="submit" disabled={!canReply.ok || busy || !text.trim()} aria-label="Enviar" className="btn-gold grid h-[44px] w-[44px] place-items-center">
               <Send size={16} />
             </button>
           </form>
-          {!canReply.ok && canReply.reason && <p className="text-xs text-warn">{canReply.reason}</p>}
+          {/* El bloqueo ya lo dice el aviso de arriba de la página: aquí solo otros motivos (p. ej. pasaron las 24 h). */}
+          {!canReply.ok && !blocked && canReply.reason && <p className="text-xs text-warn">{canReply.reason}</p>}
         </div>
       </div>
       <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-white/[0.06] p-5 xl:block">
@@ -150,7 +153,7 @@ function Bubble({ message: m }: { message: ThreadMessage }) {
       >
         {m.text}
       </p>
-      <span className="text-[10px] text-smoke">
+      <span className="text-xs text-smoke">
         {[SOURCE_LABEL[m.source], formatDate(m.createdAt), status].filter(Boolean).join(' · ')}
       </span>
     </li>

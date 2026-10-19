@@ -1,3 +1,4 @@
+import { fieldLabel, valueLabel } from '../lib/labels';
 import { formatDate } from '../ui/kit';
 import { STAGE_LABEL } from './types';
 
@@ -10,7 +11,6 @@ type Props = {
 /** Campos de la ficha en el orden en que más importan (los demás van detrás). */
 const FIRST_FIELDS = ['siguiente_paso', 'nivel', 'tipo_lead', 'puede_invertir', 'resumen', 'objeciones'];
 
-const show = (value: unknown): string => (Array.isArray(value) ? value.join(' · ') : String(value));
 
 /** Ficha del lead (lo que la IA ha ido apuntando) y cómo ha cambiado su etapa. Lo usan Conversaciones y Contactos. */
 export function LeadPanel({ lead: rawLead, tags = [], leadHistory }: Props) {
@@ -29,8 +29,8 @@ export function LeadPanel({ lead: rawLead, tags = [], leadHistory }: Props) {
           <dl className="mt-2 space-y-2">
             {fields.map(([key, value]) => (
               <div key={key}>
-                <dt className="text-[11px] text-smoke">{key.replace(/_/g, ' ')}</dt>
-                <dd className="text-sm text-fog">{key === 'siguiente_paso' ? (STAGE_LABEL[String(value)] ?? show(value)) : show(value)}</dd>
+                <dt className="text-xs text-smoke">{fieldLabel(key)}</dt>
+                <dd className="text-sm text-fog">{key === 'siguiente_paso' ? (STAGE_LABEL[String(value)] ?? valueLabel(value)) : valueLabel(value)}</dd>
               </div>
             ))}
           </dl>
@@ -41,7 +41,7 @@ export function LeadPanel({ lead: rawLead, tags = [], leadHistory }: Props) {
           <p className="label">Etiquetas</p>
           <p className="mt-2 flex flex-wrap gap-1">
             {tags.map((tag) => (
-              <span key={tag} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-ash">
+              <span key={tag} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-xs text-ash">
                 {tag}
               </span>
             ))}

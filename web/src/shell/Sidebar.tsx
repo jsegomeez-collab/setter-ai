@@ -38,7 +38,7 @@ export function Sidebar({ onNavigate }: Props) {
                 {isActive && <span aria-hidden className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-ember-500" />}
                 <Icon size={18} strokeWidth={1.8} className={isActive ? 'text-ember-400' : 'text-smoke group-hover:text-ash'} />
                 <span className="flex-1">{label}</span>
-                {step && <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] font-semibold text-smoke">{step}</span>}
+                {step && <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 font-sans text-xs font-semibold text-smoke">{step}</span>}
               </>
             )}
           </NavLink>

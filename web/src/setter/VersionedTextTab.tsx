@@ -90,7 +90,7 @@ export function VersionedTextTab({ endpoint, label, description, text, maxChars,
                 <History size={15} className="shrink-0 text-smoke" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-fog">
-                    #{v.id} · {formatDate(v.createdAt)} {index === 0 && <span className="ml-1 rounded bg-ember-500/12 px-1.5 py-0.5 text-[11px] font-semibold text-ember-400">Actual</span>}
+                    #{v.id} · {formatDate(v.createdAt)} {index === 0 && <span className="ml-1 rounded bg-ember-500/12 px-1.5 py-0.5 text-xs font-semibold text-ember-400">Actual</span>}
                   </p>
                   <p className="truncate text-xs text-smoke">{v.isDefault ? 'Original (el del código)' : `${v.chars.toLocaleString('es')} car. · ${v.preview}`}</p>
                 </div>
