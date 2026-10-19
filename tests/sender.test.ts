@@ -77,6 +77,17 @@ describe('Sender', () => {
     expect(store.actions.get('reply:c1')).toMatchObject({ ok: false, response: { skipped: expect.stringContaining('DM no salió') } });
   });
 
+  it('"envíos bloqueados hasta" (bloqueo de 30 días de Meta) frena todos los envíos igual que la pausa del 368', async () => {
+    const { client, sender, store, sleep } = setup();
+    store.settings.set(SETTINGS.sendsBlockedUntil, '2026-11-18T00:00:00.000Z');
+    sleep.mockImplementation(async () => {
+      store.settings.delete(SETTINGS.sendsBlockedUntil); // se levanta el bloqueo
+    });
+    await sender.enqueue([followUp]);
+    expect(store.events.some((e) => e.kind === 'pausado' && e.note.includes('2026-11-18'))).toBe(true);
+    expect(client.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('una acción cancelada en la base de datos mientras esperaba (pausa) ya no se envía', async () => {
     const { client, sender, store, sleep } = setup();
     store.settings.set(SETTINGS.pausedUntil, '2026-10-17T00:00:00.000Z');

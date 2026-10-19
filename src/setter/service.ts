@@ -1,7 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import type { Action } from '../flows/engine.js';
 import type { Button } from '../flows/types.js';
 import type { InstagramEvent } from '../meta/parse.js';
-import { SETTINGS, type MessageRow, type Store } from '../store.js';
+import { SETTINGS, type MessageRow, type MessageSource, type Store } from '../store.js';
 import type { SetterBrain } from './brain.js';
 import { decideChecked, type CheckedReply } from './reply.js';
 import { AGENDA_BUTTON_TITLE } from './rules.js';
@@ -29,6 +30,10 @@ const META_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 export type DraftResult = { readonly ok: true; readonly sent: number } | { readonly ok: false; readonly reason: string };
 export type OpenResult = { readonly sent: boolean } | { readonly skipped: string };
 export type DiscardResult = { readonly ok: true; readonly discarded: number } | { readonly ok: false; readonly reason: string };
+export type ManualResult = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+/** Mensaje a mano: el máximo de texto de Instagram para un mensaje normal. */
+const MAX_MANUAL_CHARS = 1000;
 
 /** El borrador pendiente: los mensajitos retenidos en modo borrador después del último mensaje de la persona. */
 export function trailingDrafts(messages: readonly MessageRow[]): MessageRow[] {
@@ -205,6 +210,30 @@ export class SetterService {
     return { sent };
   }
 
+  /**
+   * Responder a mano desde el panel (Fase 6.2): mismo camino que la IA (cola, botones de enlaces) pero guardado como
+   * mensaje "a mano". No sale con los envíos bloqueados ni pasadas 24 h desde el último mensaje de la persona.
+   */
+  sendManual(igId: string, text: string, author: string): Promise<ManualResult> {
+    const run = (this.chains.get(igId) ?? Promise.resolve()).then(() => this.manual(igId, text.trim(), author));
+    this.chains.set(igId, run.then(() => undefined, () => undefined));
+    return run;
+  }
+
+  private async manual(igId: string, text: string, author: string): Promise<ManualResult> {
+    if (!text || text.length > MAX_MANUAL_CHARS) return { ok: false, reason: `Escribe un mensaje (máximo ${MAX_MANUAL_CHARS} caracteres).` };
+    const { store } = this.options;
+    const blockedUntil = await store.getSetting(SETTINGS.sendsBlockedUntil);
+    if (blockedUntil && new Date(blockedUntil).getTime() > Date.now()) return { ok: false, reason: `Envíos bloqueados hasta ${blockedUntil}.` };
+    const lastIn = [...(await store.listMessages(igId, HISTORY_LIMIT))].reverse().find((m) => m.direction === 'in');
+    if (!lastIn || Date.now() - lastIn.createdAt.getTime() > META_REPLY_WINDOW_MS) {
+      return { ok: false, reason: 'Han pasado más de 24 h desde su último mensaje: Instagram no deja escribirle.' };
+    }
+    const sent = await this.send(igId, `manual:${randomUUID()}`, text, false, 'human');
+    await this.log(sent ? `Mensaje a mano enviado por ${author}.` : `Mensaje a mano de ${author}: Instagram no lo aceptó.`, { igId });
+    return sent ? { ok: true } : { ok: false, reason: 'Instagram no aceptó el mensaje.' };
+  }
+
   /** Jose descarta el borrador: no se envía. */
   async discardDraft(igId: string): Promise<DiscardResult> {
     const drafts = trailingDrafts(await this.options.store.listMessages(igId, HISTORY_LIMIT));
@@ -352,11 +381,11 @@ export class SetterService {
    * Envía un mensajito por la cola y apunta cómo terminó. Devuelve true si Instagram lo aceptó.
    * `saved`: el mensajito ya está guardado (borrador aprobado) y solo cambia su estado, sin duplicar la fila.
    */
-  private async send(igId: string, dedupKey: string, original: string, saved = false): Promise<boolean> {
+  private async send(igId: string, dedupKey: string, original: string, saved = false, source: MessageSource = 'ai'): Promise<boolean> {
     const { store } = this.options;
     const out = withLinkButtons(original, this.options.links);
     if (saved) await store.setMessageStatus(dedupKey, 'queued');
-    else await store.addMessage({ igId, direction: 'out', source: 'ai', text: out.stored, mid: null, status: 'queued', dedupKey });
+    else await store.addMessage({ igId, direction: 'out', source, text: out.stored, mid: null, status: 'queued', dedupKey });
     const action: Action = {
       type: 'send_message',
       dedupKey,

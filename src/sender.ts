@@ -153,10 +153,13 @@ export class Sender {
     }
   }
 
+  /** La pausa del 368 (24 h) o el bloqueo largo puesto por el admin (p. ej. 30 días de Meta): la que acabe más tarde. */
   private async pausedUntil(): Promise<Date | null> {
-    const value = await this.options.store.getSetting(SETTINGS.pausedUntil);
-    const date = value ? new Date(value) : null;
-    return date && date.getTime() > this.now().getTime() ? date : null;
+    const { store } = this.options;
+    const values = await Promise.all([store.getSetting(SETTINGS.pausedUntil), store.getSetting(SETTINGS.sendsBlockedUntil)]);
+    const now = this.now().getTime();
+    const future = values.map((value) => (value ? new Date(value).getTime() : Number.NaN)).filter((time) => time > now);
+    return future.length > 0 ? new Date(Math.max(...future)) : null;
   }
 
   /** Si hay pausa (error 368), espera a que termine. No descarta nada. */

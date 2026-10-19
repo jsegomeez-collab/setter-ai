@@ -110,6 +110,7 @@ async function main(): Promise<void> {
     drafts: { approve: (igId) => setter.approveDraft(igId), discard: (igId) => setter.discardDraft(igId) },
     simulator,
     users,
+    conversations: { sendManual: (igId, text, author) => setter.sendManual(igId, text, author) },
   });
 
   const checkToken = () => {

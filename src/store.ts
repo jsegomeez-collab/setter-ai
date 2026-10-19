@@ -142,6 +142,9 @@ export interface ConversationRow {
   readonly lastText: string;
   readonly lastAt: Date;
   readonly lastDirection: MessageDirection;
+  /** Estado y nota del último mensaje (para saber si es un borrador pendiente). */
+  readonly lastStatus: MessageStatus;
+  readonly lastNote: string | null;
   readonly aiPaused: boolean;
   readonly lead: unknown;
 }
@@ -192,6 +195,9 @@ export const SETTINGS = {
   /** Fecha ISO hasta la que los envíos están pausados (p. ej. tras un error 368 de Meta). */
   pausedUntil: 'paused_until',
   pauseReason: 'pause_reason',
+  /** Bloqueo largo puesto a mano por el admin (p. ej. 30 días de Meta, 2026-10-19): frena TODOS los envíos hasta esa fecha ISO. */
+  sendsBlockedUntil: 'sends_blocked_until',
+  sendsBlockedReason: 'sends_blocked_reason',
   /** Token de Instagram cifrado y su información de renovación. */
   igToken: 'ig_token_encrypted',
   igTokenRefreshedAt: 'ig_token_refreshed_at',
@@ -417,14 +423,24 @@ export async function createPostgresStore(
     },
     async listConversations(limit) {
       const rows = await sql<
-        { ig_id: string; username: string | null; text: string; created_at: Date; direction: MessageDirection; ai_paused: boolean | null; lead: unknown }[]
-      >`SELECT last.ig_id, c.username, last.text, last.created_at, last.direction, c.ai_paused, c.lead
+        { ig_id: string; username: string | null; text: string; created_at: Date; direction: MessageDirection; status: MessageStatus; note: string | null; ai_paused: boolean | null; lead: unknown }[]
+      >`SELECT last.ig_id, c.username, last.text, last.created_at, last.direction, last.status, last.note, c.ai_paused, c.lead
         FROM (
-          SELECT DISTINCT ON (ig_id) ig_id, id, text, created_at, direction FROM messages ORDER BY ig_id, id DESC
+          SELECT DISTINCT ON (ig_id) ig_id, id, text, created_at, direction, status, note FROM messages ORDER BY ig_id, id DESC
         ) last
         LEFT JOIN contacts c ON c.ig_id = last.ig_id
         ORDER BY last.id DESC LIMIT ${limit}`;
-      return rows.map((r) => ({ igId: r.ig_id, username: r.username, lastText: r.text, lastAt: r.created_at, lastDirection: r.direction, aiPaused: r.ai_paused ?? false, lead: r.lead }));
+      return rows.map((r) => ({
+        igId: r.ig_id,
+        username: r.username,
+        lastText: r.text,
+        lastAt: r.created_at,
+        lastDirection: r.direction,
+        lastStatus: r.status,
+        lastNote: r.note,
+        aiPaused: r.ai_paused ?? false,
+        lead: r.lead,
+      }));
     },
     async getContact(igId) {
       const rows = await sql<

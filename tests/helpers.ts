@@ -157,6 +157,8 @@ export function createMemoryStore(): Store & {
             lastText: m.text,
             lastAt: m.createdAt,
             lastDirection: m.direction,
+            lastStatus: m.status,
+            lastNote: m.note ?? null,
             aiPaused: contact?.aiPaused ?? false,
             lead: contact?.lead ?? null,
           };

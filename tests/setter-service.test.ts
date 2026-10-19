@@ -61,6 +61,29 @@ async function setup(options: SetupOptions = {}) {
   return { store, decide, enqueue, getUsername, showTyping, sleep, service, flush };
 }
 
+describe('SetterService · responder a mano (Fase 6.2)', () => {
+  const inbound = (store: ReturnType<typeof createMemoryStore>) =>
+    store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'hola', mid: 'm-in', status: 'sent', dedupKey: null });
+
+  it('envía por la cola y lo guarda como mensaje "a mano" (no de la IA)', async () => {
+    const { store, enqueue, service } = await setup();
+    await inbound(store);
+    expect(await service.sendManual(STRANGER_ID, '  hola, soy Jose  ', 'Jose')).toEqual({ ok: true });
+    expect(enqueue.mock.calls[0]?.[0][0]).toMatchObject({ type: 'send_message', dedupKey: expect.stringMatching(/^manual:/), message: { text: 'hola, soy Jose' } });
+    expect((await store.listMessages(STRANGER_ID, 10)).at(-1)).toMatchObject({ direction: 'out', source: 'human', text: 'hola, soy Jose', status: 'sent' });
+  });
+
+  it('no envía con los envíos bloqueados, fuera de las 24 h o sin texto', async () => {
+    const { store, enqueue, service } = await setup();
+    expect(await service.sendManual(STRANGER_ID, 'hola', 'Jose')).toMatchObject({ ok: false, reason: expect.stringContaining('24 h') });
+    await inbound(store);
+    expect(await service.sendManual(STRANGER_ID, '   ', 'Jose')).toMatchObject({ ok: false });
+    store.settings.set(SETTINGS.sendsBlockedUntil, new Date(Date.now() + 86_400_000).toISOString());
+    expect(await service.sendManual(STRANGER_ID, 'hola', 'Jose')).toMatchObject({ ok: false, reason: expect.stringContaining('bloqueados') });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
 describe('SetterService', () => {
   it('usa el marco técnico guardado desde el panel (Fase 6.1) en vez del original', async () => {
     const { store, decide, service, flush } = await setup();

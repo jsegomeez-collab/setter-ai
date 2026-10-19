@@ -14,11 +14,12 @@ import { metricsPage, parsePeriod, periodStart } from './pages-metrics.js';
 import { contactsPage, dashboardPage, legalPage } from './pages.js';
 import { registerSetter } from './routes-setter.js';
 import type { SetterBrain } from './setter/brain.js';
-import type { DiscardResult, DraftResult } from './setter/service.js';
+import type { DiscardResult, DraftResult, ManualResult } from './setter/service.js';
 import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
 import { createSetterApi } from './routes-api-setter.js';
+import { createConversationsApi } from './routes-api-conversations.js';
 import type { UserStore } from './users.js';
 import { registerWebApp } from './web.js';
 
@@ -74,6 +75,8 @@ export interface AppDeps {
   readonly simulator?: { readonly brain: SetterBrain; readonly lead: LeadPlayer } | null;
   /** Usuarios del frontend (Fase 6). Sin ellos no hay /api. */
   readonly users?: UserStore;
+  /** Responder a mano desde la bandeja (Fase 6.2). */
+  readonly conversations?: { sendManual(igId: string, text: string, author: string): Promise<ManualResult> };
 }
 
 function errorMessage(error: unknown): string {
@@ -309,6 +312,10 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.users) {
     const api = createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword });
     api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null }));
+    api.route(
+      '/conversations',
+      createConversationsApi({ store: deps.store, users: deps.users, drafts: deps.drafts, replyPending: deps.replyPending, sendManual: deps.conversations?.sendManual }),
+    );
     app.route('/api', api);
   }
   registerWebApp(app);
