@@ -44,3 +44,14 @@ describe('enlaces con seguimiento', () => {
     expect(readLinkToken(SECRET, notHttp)).toBeNull();
   });
 });
+
+describe('enlaces de otro espacio (Fase 7.5a)', () => {
+  const message = { text: 'x', buttons: [{ type: 'url' as const, title: 'Abrir', url: 'https://e.com', tags: ['t'] }], flowId: 'f', nodeId: 'n', recipientId: '9' };
+  it('el enlace lleva el espacio; los del principal no llevan nada (como siempre)', () => {
+    const token = (url: string) => url.split('/l/')[1] ?? '';
+    const ws = buttonUrl({ baseUrl: 'https://app.test', secret: 's', workspace: 'ws_socio_a1b2' }, message, 0);
+    expect(readLinkToken('s', token(ws))).toMatchObject({ w: 'ws_socio_a1b2', u: 'https://e.com' });
+    const principal = buttonUrl({ baseUrl: 'https://app.test', secret: 's' }, message, 0);
+    expect(readLinkToken('s', token(principal))).not.toHaveProperty('w');
+  });
+});

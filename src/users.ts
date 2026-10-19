@@ -17,6 +17,8 @@ export interface User {
   readonly createdAt: Date;
   /** Entró con una clave temporal (Fase 6.7): hasta que la cambie no puede usar nada más. */
   readonly mustChangePassword: boolean;
+  /** Espacio al que pertenece (Fase 7.5). null = el principal (el de Jose). */
+  readonly workspaceId: string | null;
 }
 
 export interface StoredUser extends User {
@@ -29,6 +31,7 @@ export interface NewUser {
   readonly role: Role;
   readonly passwordHash: string;
   readonly mustChangePassword?: boolean;
+  readonly workspaceId?: string | null;
 }
 
 export interface UserStore {
@@ -71,6 +74,7 @@ CREATE TABLE IF NOT EXISTS app_sessions (
 );
 CREATE INDEX IF NOT EXISTS app_sessions_expires_idx ON app_sessions (expires_at);
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS workspace_id text;
 `;
 
 interface UserRow {
@@ -81,6 +85,7 @@ interface UserRow {
   password_hash: string;
   created_at: Date;
   must_change_password: boolean;
+  workspace_id: string | null;
 }
 
 const toUser = (row: UserRow): User => ({
@@ -90,6 +95,7 @@ const toUser = (row: UserRow): User => ({
   role: row.role,
   createdAt: row.created_at,
   mustChangePassword: row.must_change_password,
+  workspaceId: row.workspace_id ?? null,
 });
 
 export async function createPostgresUserStore(databaseUrl: string, options: StoreOptions = {}): Promise<UserStore & { close(): Promise<void> }> {
@@ -115,8 +121,8 @@ export async function createPostgresUserStore(databaseUrl: string, options: Stor
     },
     async createUser(input) {
       const [row] = await sql<UserRow[]>`
-        INSERT INTO app_users (id, email, name, role, password_hash, must_change_password)
-        VALUES (${randomUUID()}, ${input.email.toLowerCase()}, ${input.name}, ${input.role}, ${input.passwordHash}, ${input.mustChangePassword ?? false})
+        INSERT INTO app_users (id, email, name, role, password_hash, must_change_password, workspace_id)
+        VALUES (${randomUUID()}, ${input.email.toLowerCase()}, ${input.name}, ${input.role}, ${input.passwordHash}, ${input.mustChangePassword ?? false}, ${input.workspaceId ?? null})
         RETURNING *`;
       if (!row) throw new Error('No se pudo crear el usuario');
       return toUser(row);

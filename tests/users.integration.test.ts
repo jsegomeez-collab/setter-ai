@@ -88,4 +88,12 @@ describe('createPostgresUserStore (Postgres real)', () => {
     expect(await users.findSession('nuevo-c')).toBeNull();
     expect(await users.deleteUser(nuevo.id)).toBe(false);
   });
+  it('Fase 7.5a · cada usuario guarda su espacio (vacío = principal) y la sesión lo devuelve', async () => {
+    const socio = await users.createUser({ email: 'socio75@x.com', name: 'Socio', role: 'admin', passwordHash: 'h', workspaceId: 'ws_socio' });
+    expect(socio.workspaceId).toBe('ws_socio');
+    await users.createSession('socio75-s', socio.id, new Date(Date.now() + 60_000));
+    expect((await users.findSession('socio75-s'))?.workspaceId).toBe('ws_socio');
+    const otro = await users.createUser({ email: 'principal75@x.com', name: 'P', role: 'team', passwordHash: 'h' });
+    expect((await users.findUserById(otro.id))?.workspaceId).toBeNull();
+  });
 });

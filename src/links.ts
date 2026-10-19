@@ -17,11 +17,15 @@ export interface LinkData {
   readonly r: string;
   readonly u: string;
   readonly t: readonly string[];
+  /** Espacio (Fase 7.5). Sin él, el principal: así siguen valiendo los enlaces ya enviados. */
+  readonly w?: string;
 }
 
 export interface LinkSigner {
   readonly baseUrl: string;
   readonly secret: string;
+  /** Espacio que envía (Fase 7.5); en el principal no se pone. */
+  readonly workspace?: string;
 }
 
 /** Clave propia para firmar enlaces, derivada de la clave de cifrado (no se reutiliza tal cual). */
@@ -66,6 +70,7 @@ export function trackedUrl(signer: LinkSigner | null, message: OutMessage, index
     r: message.recipientId,
     u: target.url,
     t: target.tags,
+    ...(signer.workspace ? { w: signer.workspace } : {}),
   });
   return `${signer.baseUrl.replace(/\/$/, '')}/l/${token}`;
 }

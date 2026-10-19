@@ -84,7 +84,8 @@ export function sessionTokenHash(c: Context): string | null {
   return token ? hashToken(token) : null;
 }
 
-async function currentUser(c: Context, users: UserStore): Promise<User | null> {
+/** Usuario de la sesión de esta petición (también lo usa el reparto entre espacios, Fase 7.5a). */
+export async function currentUser(c: Context, users: UserStore): Promise<User | null> {
   const tokenHash = sessionTokenHash(c);
   return tokenHash ? users.findSession(tokenHash) : null;
 }

@@ -26,6 +26,7 @@ export function createMemoryUserStore(): UserStore {
         passwordHash: input.passwordHash,
         createdAt: new Date(),
         mustChangePassword: input.mustChangePassword ?? false,
+        workspaceId: input.workspaceId ?? null,
       };
       users.push(user);
       return publicUser(user);
