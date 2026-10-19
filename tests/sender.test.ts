@@ -66,26 +66,28 @@ describe('Sender', () => {
     expect([...store.actions.values()].map((a) => a.ok)).toEqual([true, true]);
   });
 
-  it('si el DM falla (también como solo texto), NO se publica "mira tus DMs"', async () => {
+  it('2534025 (comentario no válido): UNA sola llamada, sin reintento con texto, y NO se publica "mira tus DMs"', async () => {
+    // Bloqueo 368 del 2026-10-18: cientos de reintentos sobre comentarios que Meta ya había rechazado (decisión de Jose: quitarlo).
     const invalid = new MetaApiError('Comentario no válido', 400, { error: { code: 100, error_subcode: 2534025 } });
     const { client, sender, store } = setup(fakeClient({ sendPrivateReply: vi.fn().mockRejectedValue(invalid) }));
     await sender.enqueue([privateReply, reply]);
-    expect(client.sendPrivateReply).toHaveBeenCalledTimes(2); // con botones y, de respaldo, solo texto
-    // Queda constancia de que se intentó el texto (para medir cuántos se salvan con él).
-    expect(store.events.some((e) => e.kind === 'respaldo' && e.note.includes('también'))).toBe(true);
+    expect(client.sendPrivateReply).toHaveBeenCalledTimes(1);
+    expect(store.events.some((e) => e.kind === 'respaldo')).toBe(false);
     expect(client.replyToComment).not.toHaveBeenCalled();
     expect(store.actions.get('reply:c1')).toMatchObject({ ok: false, response: { skipped: expect.stringContaining('DM no salió') } });
   });
 
-  it('2534025 con botones → se reintenta una vez con solo texto; si sale, se publica "mira tus DMs"', async () => {
-    // Datos reales 2026-10-16: el mismo comentario ("Bolsa") y el mismo mensaje salen para unas personas y no para otras.
-    const invalid = new MetaApiError('Comentario no válido', 400, { error: { code: 100, error_subcode: 2534025 } });
-    const sendPrivateReply = vi.fn().mockRejectedValueOnce(invalid).mockResolvedValueOnce({ recipientId: STRANGER_ID, messageId: 'm-txt' });
-    const { client, sender, store } = setup(fakeClient({ sendPrivateReply }));
-    await sender.enqueue([privateReply, reply]);
-    expect(sendPrivateReply).toHaveBeenLastCalledWith('c1', 'Hola\n\nAbrir: https://e.com');
-    expect(store.actions.get('private:c1')).toMatchObject({ ok: true, response: { fallback: expect.any(String) } });
-    expect(client.replyToComment).toHaveBeenCalledWith('c1', 'Te escribí');
+  it('una acción cancelada en la base de datos mientras esperaba (pausa) ya no se envía', async () => {
+    const { client, sender, store, sleep } = setup();
+    store.settings.set(SETTINGS.pausedUntil, '2026-10-17T00:00:00.000Z');
+    sleep.mockImplementation(async () => {
+      // Mientras espera la pausa, se cancela a mano (p. ej. tras un bloqueo 368) y la pausa termina.
+      await store.finishAction('private:c1', false, { skipped: 'Cancelado por Jose' });
+      store.settings.delete(SETTINGS.pausedUntil);
+    });
+    await sender.enqueue([privateReply]);
+    expect(client.sendPrivateReply).not.toHaveBeenCalled();
+    expect(store.actions.get('private:c1')).toMatchObject({ ok: false, response: { skipped: 'Cancelado por Jose' } });
   });
 
   it('los seguimientos usan esperas cortas (0,3-0,8 s)', async () => {

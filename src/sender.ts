@@ -19,6 +19,8 @@ import { SETTINGS, type Store } from './store.js';
  */
 
 const POLICY_BLOCK_CODE = 368;
+/** "El comentario no es válido para una respuesta privada" (depende de la persona; no se puede saltar). */
+const INVALID_COMMENT_SUBCODE = 2534025;
 const PAUSE_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const DEFAULT_THROTTLE_CHECK_MS = 30_000;
@@ -207,6 +209,8 @@ export class Sender {
       return;
     }
     await this.waitWhilePaused(action);
+    // Cancelada a mano mientras esperaba (p. ej. tras un bloqueo 368): la cola vive en memoria, así que se mira la base.
+    if ((await store.getAction(action.dedupKey))?.ok != null) return;
     if (action.type === 'reply_comment' && action.requires) {
       const required = await store.getAction(action.requires);
       if (required?.ok !== true) {
@@ -273,9 +277,10 @@ export class Sender {
         error instanceof MetaApiError &&
         error.status >= 400 &&
         error.status < 500 &&
-        // 2534025 también se reintenta: con datos reales (2026-10-16) el mismo comentario y el mismo mensaje
-        // salen para unas personas y no para otras, así que no está demostrado que el texto también falle.
-        error.code !== POLICY_BLOCK_CODE;
+        error.code !== POLICY_BLOCK_CODE &&
+        // 2534025 ("comentario no válido") ya NO se reintenta: tras cientos de reintentos sobre comentarios rechazados
+        // llegó el bloqueo 368 del 2026-10-18 (decisión de Jose: quitarlo). Insistir no lo arregla.
+        error.subcode !== INVALID_COMMENT_SUBCODE;
       if (!canFallBack) throw error;
       // Meta no aceptó los botones en la respuesta privada: se manda solo texto (con los enlaces) y se deja constancia.
       try {
