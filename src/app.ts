@@ -20,6 +20,7 @@ import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
 import { createSetterApi } from './routes-api-setter.js';
 import { createConversationsApi } from './routes-api-conversations.js';
+import { createContactsApi } from './routes-api-contacts.js';
 import type { UserStore } from './users.js';
 import { registerWebApp } from './web.js';
 
@@ -312,6 +313,7 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.users) {
     const api = createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword });
     api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null }));
+    api.route('/contacts', createContactsApi({ store: deps.store, users: deps.users, media: () => loadMedia(deps.client, MEDIA_FOR_STATS) }));
     api.route(
       '/conversations',
       createConversationsApi({ store: deps.store, users: deps.users, drafts: deps.drafts, replyPending: deps.replyPending, sendManual: deps.conversations?.sendManual }),
