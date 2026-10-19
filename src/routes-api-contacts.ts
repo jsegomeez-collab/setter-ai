@@ -22,6 +22,7 @@ const COMMENTS_SHOWN = 100;
 const LEAD_HISTORY = 50;
 
 const tagName = z.string().trim().min(1).max(40).regex(/^[^,]+$/);
+const fieldSchema = z.object({ field: z.string().trim().min(1).max(40), value: z.string().trim().max(200) });
 const tagsSchema = z.object({ add: tagName.optional(), remove: z.string().max(40).optional() }).refine((v) => v.add !== undefined || v.remove !== undefined);
 const deleteSchema = z.object({ confirm: z.literal('BORRAR') });
 
@@ -110,6 +111,18 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
     if (parsed.data.add) await store.addContactTags(igId, [parsed.data.add]);
     if (parsed.data.remove) await store.removeContactTag(igId, parsed.data.remove);
     await store.logEvent('contactos', `Etiquetas cambiadas a mano por ${c.get('user').name}.`, { igId, ...parsed.data });
+    return c.json({ ok: true });
+  });
+
+  /** Campo propio a mano (Fase 7.4): mismo dato que guarda el paso "Guardar un dato". Valor vacío = borrarlo. */
+  api.post('/:igId/fields', async (c) => {
+    const parsed = fieldSchema.safeParse(await readJson(c));
+    if (!parsed.success) return c.json({ error: 'Dato no válido: nombre de 1-40 caracteres y valor de hasta 200.' }, 400);
+    const igId = c.req.param('igId');
+    if (!(await store.getContact(igId))) return c.json({ error: 'Ese contacto no existe' }, 404);
+    const field = parsed.data.field.toLowerCase();
+    await store.setContactField(igId, field, parsed.data.value);
+    await store.logEvent('contactos', `Dato "${field}" cambiado a mano por ${c.get('user').name}.`, { igId, field, value: parsed.data.value });
     return c.json({ ok: true });
   });
 

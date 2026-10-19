@@ -47,13 +47,14 @@ describe('contactos (Fase 6.3)', () => {
   });
 
   it('CSV: cabecera, comillas escapadas y sin fórmulas que Excel ejecute (=, +, -, @)', () => {
-    const items = [toContactItem(row({ username: '=HYPERLINK("http://malo")', tags: ['a "b"', '@c'] }))];
+    const items = [toContactItem(row({ username: '=HYPERLINK("http://malo")', tags: ['a "b"', '@c'], fields: { ciudad: 'Miami', interes: '=1+1' } }))];
     const csv = contactsCsv(items, () => 'Reel "uno"');
     const [header, line] = csv.replace(/^﻿/, '').trim().split('\r\n');
-    expect(header).toBe('usuario,id,etiquetas,reel_origen,etapa,primera_vez,ultima_vez');
+    expect(header).toBe('usuario,id,etiquetas,reel_origen,etapa,primera_vez,ultima_vez,datos');
     expect(line).toContain(`"'=HYPERLINK(""http://malo"")"`);
     expect(line).toContain(`"a ""b"" | '@c"`);
     expect(line).toContain('"Reel ""uno"""');
+    expect(line).toContain('"ciudad: Miami | interes: =1+1"');
     expect(csv.startsWith('﻿')).toBe(true);
   });
 });

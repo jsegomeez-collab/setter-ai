@@ -2,7 +2,7 @@ import { Plus, Workflow, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api';
-import { EmptyState } from '../ui/EmptyState';
+import { EmptyState, Loading } from '../ui/EmptyState';
 import { Notice, Tabs, formatDate } from '../ui/kit';
 import { Page, PageHeader } from '../ui/PageHeader';
 import { ChatEntryPanel } from './ChatEntryPanel';
@@ -69,13 +69,13 @@ export function FlowsPage() {
       </div>
 
       {tab === 'chat' ? (
-        <div className="mt-5">{data ? <ChatEntryPanel flows={data.flows} /> : <p className="text-sm text-smoke">Cargando…</p>}</div>
+        <div className="mt-5">{data ? <ChatEntryPanel flows={data.flows} /> : <Loading />}</div>
       ) : (
         <div className="mt-5 space-y-4">
           {creatorOpen && <Creator onCreate={create} />}
           {data?.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados hasta el {formatDate(data.sendsBlockedUntil)} (bloqueo de Meta): ningún flujo manda mensajes hasta entonces.</Notice>}
           {error && <Notice tone="bad">{error}</Notice>}
-          {!data && !error && <p className="text-sm text-smoke">Cargando…</p>}
+          {!data && !error && <Loading />}
           {data && <FlowList flows={data.flows} />}
         </div>
       )}

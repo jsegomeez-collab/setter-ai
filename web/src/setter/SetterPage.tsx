@@ -3,12 +3,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { Notice, SecondaryButton, Tabs } from '../ui/kit';
+import { Page, PageHeader } from '../ui/PageHeader';
 import { DocsTab } from './DocsTab';
 import { ModeTab } from './ModeTab';
 import { OpenerTab } from './OpenerTab';
 import { SimulatorTab } from './SimulatorTab';
 import type { SaveResponse, SetterData } from './types';
 import { VersionedTextTab } from './VersionedTextTab';
+import { Loading } from '../ui/EmptyState';
 
 const MAX_FRAME_CHARS = 20_000;
 
@@ -67,19 +69,17 @@ export function SetterPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-5 py-8 lg:px-10 lg:py-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-snow">Setter IA</h1>
-          <p className="mt-1 text-sm text-ash">Cómo habla la IA por DM y cuándo empieza a escribir.</p>
-        </div>
-        <Tabs tabs={TABS} value={tab} onChange={(value) => setParams({ tab: value })} />
-      </div>
+    <Page>
+      <PageHeader
+        title="Setter IA"
+        description="Cómo habla la IA por DM y cuándo empieza a escribir."
+        actions={<Tabs tabs={TABS} value={tab} onChange={(value) => setParams({ tab: value })} />}
+      />
 
       <div className="mt-6 space-y-4">
         {flash && <Notice tone="ok">{flash}</Notice>}
         {error && <Notice tone="bad">{error}</Notice>}
-        {!data && !error && <p className="text-sm text-smoke">Cargando…</p>}
+        {!data && !error && <Loading />}
         {data && tab === 'modo' && <ModeTab key={version} data={data} onSaved={saved} />}
         {data && tab === 'documento' && <DocsTab key={version} setter={data} onSingleSaved={saved} />}
         {data && tab === 'marco' && (
@@ -104,6 +104,6 @@ export function SetterPage() {
         {data && tab === 'inicio' && <OpenerTab key={version} openers={data.openers} onSaved={saved} />}
         {data && tab === 'simulador' && <SimulatorTab key={version} data={data} />}
       </div>
-    </div>
+    </Page>
   );
 }

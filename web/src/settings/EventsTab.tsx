@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Notice, Section, formatDate } from '../ui/kit';
+import { Loading } from '../ui/EmptyState';
 
 /** Registro de eventos (Fase 6.7b): lo que va pasando (comentarios, envíos, errores de Meta, quién cambió qué). Solo lectura. */
 
@@ -42,7 +43,7 @@ export function EventsTab() {
       }
     >
       {error && <Notice tone="bad">{error}</Notice>}
-      {!data && !error && <p className="text-sm text-smoke">Cargando…</p>}
+      {!data && !error && <Loading />}
       {data?.events.length === 0 && <p className="text-sm text-smoke">Nada todavía.</p>}
       <ul className="divide-y divide-white/[0.05]">
         {data?.events.map((event, i) => (

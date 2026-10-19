@@ -45,7 +45,7 @@ export function ModeTab({ data, onSaved }: Props) {
       </Section>
 
       <Section label="Usuarios de prueba" description="En modo Prueba solo les responde a ellos. Separa los nombres con comas.">
-        <input className="field" value={usernames} onChange={(e) => setUsernames(e.target.value)} placeholder="josegomezlife, otra_cuenta" />
+        <input aria-label="Usuarios de prueba" className="field" value={usernames} onChange={(e) => setUsernames(e.target.value)} placeholder="josegomezlife, otra_cuenta" />
       </Section>
 
       <Section label="Modo borrador" description="La IA escribe la respuesta pero no la envía: la apruebas o la descartas desde la conversación.">

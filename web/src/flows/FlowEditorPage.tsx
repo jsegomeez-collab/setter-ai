@@ -11,6 +11,7 @@ import { FlowSettings } from './FlowSettings';
 import { StepEditor } from './StepEditor';
 import { TestPanel } from './TestPanel';
 import { triggerSummary, type Flow, type FlowsResponse } from './types';
+import { Loading } from '../ui/EmptyState';
 
 /** Constructor visual de un flujo (Fase 6.5b): lienzo + panel lateral. Solo admin. */
 
@@ -65,7 +66,7 @@ export function FlowEditorPage() {
   }, [dirty]);
 
   if (loadError) return <Page><Notice tone="bad">{loadError}</Notice></Page>;
-  if (!draft || !saved || !meta) return <Page><p className="text-sm text-smoke">Cargando…</p></Page>;
+  if (!draft || !saved || !meta) return <Page><Loading /></Page>;
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);

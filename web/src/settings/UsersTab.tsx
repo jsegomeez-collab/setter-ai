@@ -4,6 +4,7 @@ import { useSession } from '../auth/SessionContext';
 import { api, ROLE_LABEL, type Role } from '../lib/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Notice, Section, SecondaryButton, formatDate } from '../ui/kit';
+import { Loading } from '../ui/EmptyState';
 
 /** Usuarios (Fase 6.7). Decisión de Jose: el admin crea a la persona y le pasa una clave temporal (se ve una sola vez). */
 
@@ -64,7 +65,7 @@ export function UsersTab() {
         }}
       />
       <Section label="Quién tiene acceso" description="Admin: todo. Equipo: conversaciones, contactos y métricas (no toca el setter, los flujos ni la configuración).">
-        {!users && <p className="text-sm text-smoke">Cargando…</p>}
+        {!users && <Loading />}
         <ul className="divide-y divide-white/[0.05]">
           {users?.map((u) => {
             const isMe = u.id === me?.id;
@@ -140,8 +141,8 @@ function NewUserForm({ onCreated }: { onCreated: (name: string, password: string
   return (
     <Section label="Dar acceso a alguien" description="Se crea con una clave temporal que le pasas tú. Al entrar la primera vez tendrá que poner una suya.">
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
-        <input className="field !w-[220px] !py-2 text-[13px]" type="email" required placeholder="correo@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="field !w-[180px] !py-2 text-[13px]" required maxLength={60} placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
+        <input aria-label="Correo de la persona" className="field !w-[220px] !py-2 text-[13px]" type="email" required placeholder="correo@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input aria-label="Nombre de la persona" className="field !w-[180px] !py-2 text-[13px]" required maxLength={60} placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
         <select aria-label="Rol" value={role} onChange={(e) => setRole(e.target.value as Role)} className="rounded-lg border border-white/8 bg-g2 px-2.5 py-2 text-[13px] text-mist">
           <option value="team">{ROLE_LABEL.team}</option>
           <option value="admin">{ROLE_LABEL.admin}</option>

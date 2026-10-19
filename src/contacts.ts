@@ -13,6 +13,8 @@ export interface ContactItem {
   readonly lastSeen: Date;
   readonly stage: string | null;
   readonly aiPaused: boolean;
+  /** Campos propios (Fase 7.3a/7.4): los guarda el paso "Guardar un dato" o se ponen a mano. */
+  readonly fields: Readonly<Record<string, string>>;
 }
 
 export interface ContactFilters {
@@ -36,6 +38,7 @@ export function toContactItem(row: ContactRow): ContactItem {
     lastSeen: row.lastSeen,
     stage: typeof step === 'string' ? step : null,
     aiPaused: row.aiPaused ?? false,
+    fields: row.fields ?? {},
   };
 }
 
@@ -64,7 +67,7 @@ function cell(value: string): string {
 
 /** CSV para Excel / Google Sheets (con BOM para que respete las tildes). */
 export function contactsCsv(items: readonly ContactItem[], reelTitle: (mediaId: string) => string): string {
-  const header = 'usuario,id,etiquetas,reel_origen,etapa,primera_vez,ultima_vez';
+  const header = 'usuario,id,etiquetas,reel_origen,etapa,primera_vez,ultima_vez,datos';
   const lines = items.map((item) =>
     [
       cell(item.username ?? ''),
@@ -74,6 +77,7 @@ export function contactsCsv(items: readonly ContactItem[], reelTitle: (mediaId: 
       cell(item.stage ?? ''),
       cell(item.firstSeen.toISOString()),
       cell(item.lastSeen.toISOString()),
+      cell(Object.entries(item.fields).map(([field, value]) => `${field}: ${value}`).join(' | ')),
     ].join(','),
   );
   return `﻿${[header, ...lines].join('\r\n')}\r\n`;

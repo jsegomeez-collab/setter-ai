@@ -4,8 +4,10 @@ import { useSearchParams } from 'react-router';
 import { STAGE_LABEL } from '../conversations/types';
 import { api } from '../lib/api';
 import { Notice, SecondaryButton, Section, Tabs } from '../ui/kit';
+import { Page, PageHeader } from '../ui/PageHeader';
 import { DayLines, HBars, type BarRow } from './charts';
 import { DM_FAILURES, MAIN_PATH, SERIES, STEP, percent, type FunnelCounts, type MetricsResponse, type StepKey } from './types';
+import { Loading } from '../ui/EmptyState';
 
 type PeriodTab = 'all' | '7' | '30';
 const PERIODS: readonly { value: PeriodTab; label: string }[] = [
@@ -42,20 +44,18 @@ export function MetricsPage() {
   }, [period]);
 
   return (
-    <div className="mx-auto w-full max-w-[1150px] px-5 py-8 lg:px-10 lg:py-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-snow">Métricas</h1>
-          <p className="mt-1 text-sm text-ash">Del comentario en el reel hasta la llamada: cuántas personas pasan cada paso.</p>
-        </div>
-        <Tabs tabs={PERIODS} value={period} onChange={(value) => setParams(value === 'all' ? {} : { days: value })} />
-      </div>
+    <Page>
+      <PageHeader
+        title="Métricas"
+        description="Del comentario en el reel hasta la llamada: cuántas personas pasan cada paso."
+        actions={<Tabs tabs={PERIODS} value={period} onChange={(value) => setParams(value === 'all' ? {} : { days: value })} />}
+      />
       <div className="mt-6 space-y-5">
         {error && <Notice tone="bad">{error}</Notice>}
-        {!data && !error && <p className="text-sm text-smoke">Cargando…</p>}
+        {!data && !error && <Loading />}
         {data && <Dashboard data={data} />}
       </div>
-    </div>
+    </Page>
   );
 }
 

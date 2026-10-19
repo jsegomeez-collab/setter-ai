@@ -41,6 +41,8 @@ export interface ConversationDetail {
     readonly aiPaused: boolean;
     readonly aiPausedReason: string | null;
     readonly lead: Record<string, unknown> | null;
+    /** Datos propios (Fase 7.4): los guarda el paso "Guardar un dato" o se ponen a mano en Contactos. */
+    readonly fields: Readonly<Record<string, string>>;
     readonly firstSeen: string | null;
   };
   readonly messages: readonly ThreadMessage[];

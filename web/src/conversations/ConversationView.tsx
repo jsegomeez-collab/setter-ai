@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { Notice, SecondaryButton, formatDate } from '../ui/kit';
 import { LeadPanel } from './LeadPanel';
 import { DRAFT_NOTE, handle, type ConversationDetail, type ThreadMessage } from './types';
+import { Loading } from '../ui/EmptyState';
 
 const REFRESH_MS = 20_000;
 const SOURCE_LABEL: Record<ThreadMessage['source'], string> = { user: '', flow: 'Flujo', ai: 'IA', human: 'A mano' };
@@ -60,7 +61,7 @@ export function ConversationView({ igId, onChanged }: Props) {
     if (await act('reply', { text })) setText('');
   }
 
-  if (!detail) return <div className="p-6 text-sm text-smoke">{error ?? 'Cargando…'}</div>;
+  if (!detail) return <div className="p-6">{error ? <p className="text-sm text-bad">{error}</p> : <Loading />}</div>;
   const { contact, messages, canReply } = detail;
   // El servidor lo explica como "Envíos bloqueados hasta…": ese aviso ya está arriba en la página, no se repite.
   const blocked = !canReply.ok && (canReply.reason ?? '').startsWith('Envíos bloqueados');
@@ -88,7 +89,7 @@ export function ConversationView({ igId, onChanged }: Props) {
         </header>
         {showLead && (
           <div className="max-h-[45%] overflow-y-auto border-b border-white/[0.06] bg-white/[0.02] p-4 xl:hidden">
-            <LeadPanel lead={detail.contact.lead} tags={detail.contact.tags} leadHistory={detail.leadHistory} />
+            <LeadPanel lead={detail.contact.lead} tags={detail.contact.tags} fields={detail.contact.fields} leadHistory={detail.leadHistory} />
           </div>
         )}
 
@@ -131,7 +132,7 @@ export function ConversationView({ igId, onChanged }: Props) {
         </div>
       </div>
       <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-white/[0.06] p-5 xl:block">
-        <LeadPanel lead={detail.contact.lead} tags={detail.contact.tags} leadHistory={detail.leadHistory} />
+        <LeadPanel lead={detail.contact.lead} tags={detail.contact.tags} fields={detail.contact.fields} leadHistory={detail.leadHistory} />
       </aside>
     </div>
   );

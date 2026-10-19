@@ -94,6 +94,7 @@ export function createConversationsApi(deps: ConversationsApiDeps): Hono<ApiEnv>
         aiPaused: contact?.aiPaused ?? false,
         aiPausedReason: contact?.aiPausedReason ?? null,
         lead: contact?.lead ?? null,
+        fields: contact?.fields ?? {},
         firstSeen: contact?.firstSeen ?? null,
       },
       messages: messages.map((m) => ({ id: m.id, direction: m.direction, source: m.source, text: m.text, status: m.status, note: m.note ?? null, createdAt: m.createdAt })),

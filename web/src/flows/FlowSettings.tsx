@@ -53,7 +53,7 @@ export function FlowSettings({ flow, reels, account, onChange }: Props) {
     <div className="space-y-5">
       <p className="label">Ajustes del flujo</p>
       <Field label="Nombre">
-        <input className="field" maxLength={80} value={flow.name} onChange={(e) => set({ name: e.target.value })} />
+        <input aria-label="Nombre del flujo" className="field" maxLength={80} value={flow.name} onChange={(e) => set({ name: e.target.value })} />
       </Field>
 
       <Field label="¿Cómo empieza?">
@@ -83,7 +83,7 @@ export function FlowSettings({ flow, reels, account, onChange }: Props) {
       {trigger.type === 'dm_keyword' && (
         <>
           <Field label="Palabras clave (separadas por comas)" warn={trigger.keywords.length === 0} hint={trigger.keywords.length === 0 ? 'Pon al menos una palabra.' : 'Sin distinguir mayúsculas ni tildes.'}>
-            <CommaInput className="field" value={trigger.keywords} onChange={(keywords) => setTrigger({ ...trigger, keywords })} />
+            <CommaInput aria-label="Palabras clave" className="field" value={trigger.keywords} onChange={(keywords) => setTrigger({ ...trigger, keywords })} />
           </Field>
           <label className="flex items-start gap-2 text-[13px] text-mist">
             <input type="checkbox" className="mt-0.5 accent-ember-500" checked={trigger.exact} onChange={(e) => setTrigger({ ...trigger, exact: e.target.checked })} />
@@ -96,7 +96,7 @@ export function FlowSettings({ flow, reels, account, onChange }: Props) {
       )}
       {trigger.type === 'story_reply' && (
         <Field label="Palabras clave (separadas por comas)" hint="Vacío = cualquier respuesta a tus historias.">
-          <CommaInput className="field" value={trigger.keywords} onChange={(keywords) => setTrigger({ ...trigger, keywords })} />
+          <CommaInput aria-label="Palabras clave" className="field" value={trigger.keywords} onChange={(keywords) => setTrigger({ ...trigger, keywords })} />
         </Field>
       )}
       {trigger.type === 'story_mention' && <Explain>Salta cuando alguien te menciona en su historia. Es un DM suyo, así que puedes contestar con cualquier paso.</Explain>}
@@ -106,11 +106,12 @@ export function FlowSettings({ flow, reels, account, onChange }: Props) {
       )}
 
       <Field label="Modo prueba: solo responde a estos usuarios (separados por comas)" hint="Vacío = responde a todo el mundo.">
-        <CommaInput className="field" value={flow.testUsernames} onChange={(testUsernames) => set({ testUsernames })} />
+        <CommaInput aria-label="Usuarios de prueba" className="field" value={flow.testUsernames} onChange={(testUsernames) => set({ testUsernames })} />
       </Field>
 
       <Field label="¿Cuántas veces a la misma persona?">
         <select
+          aria-label="Cuántas veces a la misma persona"
           className="field"
           value={!flow.oncePerUser ? 'always' : trigger.type === 'comment' ? flow.onceScope : 'flow'}
           onChange={(e) => set(e.target.value === 'always' ? { oncePerUser: false } : { oncePerUser: true, onceScope: e.target.value as Flow['onceScope'] })}
@@ -166,15 +167,15 @@ function CommentFields({ flow, trigger, reels, set }: { flow: Flow; trigger: Ext
       </Field>
 
       <Field label="Palabras clave (separadas por comas)" hint="Vacío = cualquier comentario del reel.">
-        <CommaInput className="field" value={trigger.keywords} onChange={(keywords) => setTrigger({ keywords })} />
+        <CommaInput aria-label="Palabras clave del comentario" className="field" value={trigger.keywords} onChange={(keywords) => setTrigger({ keywords })} />
       </Field>
 
       <Field label="Respuestas públicas al comentario (una por línea, se elige una al azar)">
-        <textarea className="field min-h-[90px]" value={flow.publicReplies.join('\n')} onChange={(e) => set({ publicReplies: lines(e.target.value) })} />
+        <textarea aria-label="Respuestas públicas al comentario" className="field min-h-[90px]" value={flow.publicReplies.join('\n')} onChange={(e) => set({ publicReplies: lines(e.target.value) })} />
       </Field>
 
       <Field label="Plan B (si Meta rechaza el DM): respuestas públicas" hint="Desactivado temporalmente por el bloqueo de Meta: déjalo vacío hasta que decidamos reactivarlo." warn={flow.dmFailedReplies.some(Boolean)}>
-        <textarea className="field min-h-[70px]" value={flow.dmFailedReplies.join('\n')} onChange={(e) => set({ dmFailedReplies: lines(e.target.value) })} />
+        <textarea aria-label="Plan B: respuestas públicas si Meta rechaza el DM" className="field min-h-[70px]" value={flow.dmFailedReplies.join('\n')} onChange={(e) => set({ dmFailedReplies: lines(e.target.value) })} />
       </Field>
     </>
   );
@@ -187,7 +188,7 @@ function RefFields({ trigger, account, onChange }: { trigger: Extract<Trigger, {
   return (
     <>
       <Field label="Nombre del enlace (ref)" warn={!valid} hint={valid ? 'Solo letras, números, - y _.' : 'Solo letras, números, - y _ (máx. 40), sin espacios.'}>
-        <input className="field" maxLength={40} value={trigger.ref} onChange={(e) => onChange({ ...trigger, ref: e.target.value.trim() })} />
+        <input aria-label="Nombre del enlace (ref)" className="field" maxLength={40} value={trigger.ref} onChange={(e) => onChange({ ...trigger, ref: e.target.value.trim() })} />
       </Field>
       <div className="rounded-lg border border-white/8 bg-white/[0.02] p-3">
         <p className="text-xs font-semibold text-mist">Tu enlace</p>

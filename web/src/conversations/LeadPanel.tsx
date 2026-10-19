@@ -5,6 +5,8 @@ import { STAGE_LABEL } from './types';
 type Props = {
   readonly lead: Record<string, unknown> | null;
   readonly tags?: readonly string[];
+  /** Datos propios (Fase 7.4), solo para leer aquí; se cambian en la ficha de Contactos. */
+  readonly fields?: Readonly<Record<string, string>>;
   readonly leadHistory: readonly { readonly lead: Record<string, unknown> | null; readonly createdAt: string }[];
 };
 
@@ -13,7 +15,7 @@ const FIRST_FIELDS = ['siguiente_paso', 'nivel', 'tipo_lead', 'puede_invertir', 
 
 
 /** Ficha del lead (lo que la IA ha ido apuntando) y cómo ha cambiado su etapa. Lo usan Conversaciones y Contactos. */
-export function LeadPanel({ lead: rawLead, tags = [], leadHistory }: Props) {
+export function LeadPanel({ lead: rawLead, tags = [], fields: customFields = {}, leadHistory }: Props) {
   const lead = rawLead ?? {};
   const fields = Object.entries(lead)
     .filter(([, value]) => value !== null && value !== '' && value !== 'desconocido' && !(Array.isArray(value) && value.length === 0))
@@ -36,6 +38,19 @@ export function LeadPanel({ lead: rawLead, tags = [], leadHistory }: Props) {
           </dl>
         )}
       </div>
+      {Object.keys(customFields).length > 0 && (
+        <div>
+          <p className="label">Datos propios</p>
+          <dl className="mt-2 space-y-1.5">
+            {Object.entries(customFields).map(([field, value]) => (
+              <div key={field} className="flex gap-2 text-sm">
+                <dt className="shrink-0 text-xs leading-5 text-smoke">{field}</dt>
+                <dd className="min-w-0 break-words text-fog">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
       {tags.length > 0 && (
         <div>
           <p className="label">Etiquetas</p>

@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { Notice, Section, SecondaryButton, formatDate } from '../ui/kit';
+import { Loading } from '../ui/EmptyState';
 
 /**
  * Configuración · Instagram y envíos (Fase 6.7b). Decisión de Jose: los límites por hora solo se ven (se cambian en
@@ -56,7 +57,7 @@ export function InstagramTab() {
   };
 
   if (error && !status) return <Notice tone="bad">{error}</Notice>;
-  if (!status) return <p className="text-sm text-smoke">Cargando…</p>;
+  if (!status) return <Loading />;
   const { token } = status;
   const daysLeft = token.expiresAt ? Math.floor((Date.parse(token.expiresAt) - Date.now()) / DAY_MS) : null;
 

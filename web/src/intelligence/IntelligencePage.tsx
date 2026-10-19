@@ -3,8 +3,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Notice, Section, Tabs, formatDate } from '../ui/kit';
+import { Page, PageHeader } from '../ui/PageHeader';
 import { RunView } from './RunView';
 import { VALUE_LABEL, money, type AnalysisRun, type AnalysisRunSummary, type Preview, type ReelTraffic } from './types';
+import { Loading } from '../ui/EmptyState';
 
 /** Inteligencia (Fase 6.6): análisis de conversaciones con IA (botón manual, cuesta dinero) y tráfico por reel (gratis). */
 
@@ -62,9 +64,8 @@ export function IntelligencePage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1150px] px-5 py-8 lg:px-10 lg:py-10">
-      <h1 className="font-display text-[28px] font-extrabold tracking-[-0.03em] text-snow">Inteligencia</h1>
-      <p className="mt-1 text-sm text-ash">Lo que dice la gente en las conversaciones: objeciones, dolores, su lenguaje e ideas de reels. Todo con sus citas reales.</p>
+    <Page>
+      <PageHeader title="Inteligencia" description="Lo que dice la gente en las conversaciones: objeciones, dolores, su lenguaje e ideas de reels. Todo con sus citas reales." />
 
       <div className="mt-6 space-y-5">
         {error && <Notice tone="bad">{error}</Notice>}
@@ -88,7 +89,7 @@ export function IntelligencePage() {
 
         <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
           <Section label="Análisis guardados">
-            {!runs && <p className="text-sm text-smoke">Cargando…</p>}
+            {!runs && <Loading />}
             {runs?.length === 0 && <p className="text-sm text-smoke">Todavía no hay ninguno.</p>}
             <ul className="space-y-1.5">
               {runs?.map((r) => (
@@ -120,7 +121,7 @@ export function IntelligencePage() {
           </p>
         </ConfirmDialog>
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -151,7 +152,7 @@ function Traffic() {
   return (
     <Section label="Tráfico por reel" description="Qué tipo de persona atrae cada reel, sumando las fichas del setter (sin IA, gratis). Solo salen los reels con alguna ficha.">
       {error && <Notice tone="bad">{error}</Notice>}
-      {!reels && !error && <p className="text-sm text-smoke">Cargando…</p>}
+      {!reels && !error && <Loading />}
       {reels && withLeads.length === 0 && <p className="text-sm text-smoke">Todavía no hay fichas: se rellenan cuando el setter habla con la gente.</p>}
       {withLeads.length > 0 && (
         <div className="overflow-x-auto">

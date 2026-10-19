@@ -119,3 +119,17 @@ describe('API Contactos (Fase 6.3)', () => {
     expect(client.getMedia).toHaveBeenCalledWith('reel-viejo');
   });
 });
+
+describe('API Contactos · campos propios (Fase 7.4)', () => {
+  it('la ficha trae los campos propios y se pueden poner, cambiar y borrar a mano (admin y equipo)', async () => {
+    const { send, team, store } = await setup();
+    await store.setContactField(STRANGER_ID, 'interes', 'guia');
+    expect((await (await send('GET', `/api/contacts/${STRANGER_ID}`, team)).json()).contact.fields).toEqual({ interes: 'guia' });
+    expect((await send('POST', `/api/contacts/${STRANGER_ID}/fields`, team, { field: ' Ciudad ', value: 'Miami' })).status).toBe(200);
+    expect((await store.getContact(STRANGER_ID))?.fields).toEqual({ interes: 'guia', ciudad: 'Miami' });
+    await send('POST', `/api/contacts/${STRANGER_ID}/fields`, team, { field: 'interes', value: '' });
+    expect((await store.getContact(STRANGER_ID))?.fields).toEqual({ ciudad: 'Miami' });
+    expect((await send('POST', `/api/contacts/${STRANGER_ID}/fields`, team, { field: '', value: 'x' })).status).toBe(400);
+    expect((await send('POST', '/api/contacts/no-existe/fields', team, { field: 'a', value: 'b' })).status).toBe(404);
+  });
+});

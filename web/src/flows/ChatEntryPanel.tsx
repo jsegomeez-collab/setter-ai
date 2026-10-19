@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { Notice, formatDate } from '../ui/kit';
 import type { FlowSummary } from './types';
+import { Loading } from '../ui/EmptyState';
 
 /**
  * Rompehielos y menú fijo del chat (Fase 7.3c). Borrador en la web; "Publicar en Instagram" lo pone en el chat de
@@ -45,7 +46,7 @@ export function ChatEntryPanel({ flows }: { flows: readonly FlowSummary[] }) {
     void load();
   }, []);
 
-  if (!data || !draft) return error ? <Notice tone="bad">{error}</Notice> : <p className="text-sm text-smoke">Cargando…</p>;
+  if (!data || !draft) return error ? <Notice tone="bad">{error}</Notice> : <Loading />;
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(data.draft);
   const set = (patch: Partial<ChatEntry>) => setDraft({ ...draft, ...patch });

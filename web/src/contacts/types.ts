@@ -10,6 +10,8 @@ export interface ContactItem {
   readonly lastSeen: string;
   readonly stage: string | null;
   readonly aiPaused: boolean;
+  /** Campos propios (Fase 7.4): los guarda el paso "Guardar un dato" de un flujo o se ponen a mano. */
+  readonly fields: Readonly<Record<string, string>>;
 }
 
 export interface ContactsResponse {
