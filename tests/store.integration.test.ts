@@ -342,6 +342,21 @@ describe('createPostgresStore (Postgres real)', () => {
     expect((await store.listKnowledgeVersions(10)).map((v) => v.id)).toEqual([second, first]);
   });
 
+  it('Fase 6.3 · contactos: quitar una etiqueta, ver los comentarios de una persona y la ficha en la lista', async () => {
+    await store.touchContact('c63', 'contacto63', '6300001');
+    await store.addContactTags('c63', ['cliente', 'EMPRESA DFY']);
+    await store.removeContactTag('c63', 'cliente');
+    await store.removeContactTag('c63', 'no-existe');
+    expect((await store.getContact('c63'))?.tags).toEqual(['EMPRESA DFY']);
+    await store.recordComment({ commentId: 'c63-a', igId: 'c63', username: 'contacto63', mediaId: '6300001', text: 'primero' });
+    await store.recordComment({ commentId: 'c63-b', igId: 'c63', username: 'contacto63', mediaId: '6300002', text: 'segundo' });
+    const comments = await store.listPersonComments('c63', 10);
+    expect(comments.map((c) => c.text).sort()).toEqual(['primero', 'segundo']);
+    expect(comments[0]).toMatchObject({ commentId: expect.any(String), mediaId: expect.any(String), createdAt: expect.any(Date) });
+    await store.saveLead('c63', { siguiente_paso: 'agendar_llamada' });
+    expect((await store.listContacts(500)).find((c) => c.igId === 'c63')).toMatchObject({ lead: { siguiente_paso: 'agendar_llamada' } });
+  });
+
   it('Fase 6.1 · el marco técnico tiene sus propias versiones y no se mezcla con el documento', async () => {
     const doc = await store.getKnowledge();
     expect(await store.getKnowledge('frame')).toBeNull();

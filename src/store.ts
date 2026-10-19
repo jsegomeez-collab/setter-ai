@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import postgres from 'postgres';
+import { contactMethods } from './store-contacts.js';
+import { toJson } from './store-sql.js';
 import { flowSchema, type Flow } from './flows/types.js';
 import type { FunnelPersonRow } from './funnel.js';
 
@@ -64,7 +66,11 @@ export interface Store {
   /** Embudo (Fase 4): por persona y reel en que comentó desde `since`, qué pasos cumplió. */
   funnelRows(since: Date): Promise<FunnelPersonRow[]>;
   addContactTags(igId: string, tags: readonly string[]): Promise<void>;
+  /** Quita una etiqueta puesta a mano o por un flujo (Fase 6.3). Si no la tenía, no pasa nada. */
+  removeContactTag(igId: string, tag: string): Promise<void>;
   listContacts(limit: number): Promise<ContactRow[]>;
+  /** Comentarios de una persona, lo más reciente primero (Fase 6.3). */
+  listPersonComments(igId: string, limit: number): Promise<CommentRow[]>;
   /** Pausas programadas. Devuelve null si ya existía (misma clave). */
   scheduleJob(dedupKey: string, runAt: Date, payload: unknown): Promise<number | null>;
   pendingJobs(): Promise<JobRow[]>;
@@ -163,6 +169,13 @@ export type KnowledgeKind = 'document' | 'frame';
 
 export interface KnowledgeRow {
   readonly id: number;
+  readonly text: string;
+  readonly createdAt: Date;
+}
+
+export interface CommentRow {
+  readonly commentId: string;
+  readonly mediaId: string | null;
   readonly text: string;
   readonly createdAt: Date;
 }
@@ -324,16 +337,9 @@ SELECT c.ig_id, c.lead, coalesce(c.lead_updated_at, now()) FROM contacts c
 WHERE c.lead IS NOT NULL AND NOT EXISTS (SELECT 1 FROM lead_history h WHERE h.ig_id = c.ig_id);
 `;
 
-type Sql = ReturnType<typeof postgres>;
-
 /** Huella de un borrado: hash del id (no se guarda el id). */
 export function deletionHash(igId: string): string {
   return createHash('sha256').update(`borrado:${igId}`).digest('hex');
-}
-
-/** Pasa el valor por JSON para guardarlo siempre como JSON válido (sin undefined ni tipos raros). */
-function toJson(sql: Sql, value: unknown) {
-  return sql.json(JSON.parse(JSON.stringify(value ?? null)));
 }
 
 export interface StoreOptions {
@@ -354,6 +360,8 @@ export async function createPostgresStore(
   await sql.unsafe(SCHEMA);
 
   return {
+    // Contactos y comentarios (store-contacts.ts).
+    ...contactMethods(sql),
     async listFlows() {
       const rows = await sql<{ data: Flow }[]>`SELECT data FROM flows ORDER BY updated_at DESC`;
       // Se pasan por el esquema para rellenar los campos nuevos con su valor por defecto (flujos guardados antes).
@@ -385,15 +393,6 @@ export async function createPostgresStore(
       const rows = await sql<{ request: unknown }[]>`
         SELECT request FROM actions WHERE ok IS NULL AND type <> 'once' ORDER BY id`;
       return rows.map((row) => row.request);
-    },
-    async touchContact(igId, username, mediaId = null) {
-      await sql`
-        INSERT INTO contacts (ig_id, username, source_media_id, last_media_id) VALUES (${igId}, ${username}, ${mediaId}, ${mediaId})
-        ON CONFLICT (ig_id) DO UPDATE SET
-          username = COALESCE(EXCLUDED.username, contacts.username),
-          source_media_id = COALESCE(contacts.source_media_id, EXCLUDED.source_media_id),
-          last_media_id = COALESCE(EXCLUDED.last_media_id, contacts.last_media_id),
-          last_seen = now()`;
     },
     async addMessage(m) {
       await sql`
@@ -441,42 +440,6 @@ export async function createPostgresStore(
         aiPaused: r.ai_paused ?? false,
         lead: r.lead,
       }));
-    },
-    async getContact(igId) {
-      const rows = await sql<
-        { ig_id: string; username: string | null; tags: string[]; first_seen: Date; last_seen: Date; source_media_id: string | null; last_media_id: string | null; ai_paused: boolean; ai_paused_reason: string | null; lead: unknown }[]
-      >`SELECT * FROM contacts WHERE ig_id = ${igId}`;
-      const r = rows[0];
-      return r
-        ? {
-            igId: r.ig_id,
-            username: r.username,
-            tags: r.tags,
-            firstSeen: r.first_seen,
-            lastSeen: r.last_seen,
-            sourceMediaId: r.source_media_id,
-            lastMediaId: r.last_media_id,
-            aiPaused: r.ai_paused,
-            aiPausedReason: r.ai_paused_reason,
-            lead: r.lead,
-          }
-        : null;
-    },
-    async setAiPaused(igId, paused, reason) {
-      await sql`
-        INSERT INTO contacts (ig_id, ai_paused, ai_paused_reason) VALUES (${igId}, ${paused}, ${reason})
-        ON CONFLICT (ig_id) DO UPDATE SET ai_paused = EXCLUDED.ai_paused, ai_paused_reason = EXCLUDED.ai_paused_reason`;
-    },
-    async saveLead(igId, lead) {
-      const json = toJson(sql, lead);
-      await sql`
-        INSERT INTO contacts (ig_id, lead, lead_updated_at) VALUES (${igId}, ${json}, now())
-        ON CONFLICT (ig_id) DO UPDATE SET lead = EXCLUDED.lead, lead_updated_at = now()`;
-      // Solo si cambió (las respuestas de una misma persona van en fila, así que no se cruzan).
-      await sql`
-        INSERT INTO lead_history (ig_id, lead)
-        SELECT ${igId}, ${json}
-        WHERE (SELECT h.lead FROM lead_history h WHERE h.ig_id = ${igId} ORDER BY h.id DESC LIMIT 1) IS DISTINCT FROM ${json}::jsonb`;
     },
     async listLeadHistory(igId, limit) {
       const rows = await sql<{ lead: unknown; created_at: Date }[]>`
@@ -600,26 +563,6 @@ export async function createPostgresStore(
         ORDER BY e.id`;
       return rows.map((row) => row.data);
     },
-    async recordComment(comment) {
-      await sql`
-        INSERT INTO comments (comment_id, ig_id, username, media_id, text)
-        VALUES (${comment.commentId}, ${comment.igId}, ${comment.username}, ${comment.mediaId}, ${comment.text})
-        ON CONFLICT (comment_id) DO NOTHING`;
-    },
-    async reelStats() {
-      const counts = await sql<{ media_id: string; comments: number; people: number }[]>`
-        SELECT media_id, count(*)::int AS comments, count(DISTINCT ig_id)::int AS people
-        FROM comments WHERE media_id IS NOT NULL GROUP BY media_id ORDER BY comments DESC`;
-      const tags = await sql<{ media_id: string; tag: string; n: number }[]>`
-        SELECT source_media_id AS media_id, tag, count(*)::int AS n
-        FROM contacts, unnest(tags) AS tag WHERE source_media_id IS NOT NULL GROUP BY source_media_id, tag`;
-      return counts.map((row) => ({
-        mediaId: row.media_id,
-        comments: row.comments,
-        people: row.people,
-        tagged: Object.fromEntries(tags.filter((t) => t.media_id === row.media_id).map((t) => [t.tag, t.n])),
-      }));
-    },
     async funnelRows(since) {
       // Cada paso se resume primero por comentario o por persona (una pasada por tabla) y luego se une.
       const rows = await sql<
@@ -689,28 +632,6 @@ export async function createPostgresStore(
         clicked: row.clicked,
         wrote: row.wrote,
         qualified: row.qualified,
-      }));
-    },
-    async addContactTags(igId, tags) {
-      if (tags.length === 0) return;
-      await sql`
-        INSERT INTO contacts (ig_id, tags) VALUES (${igId}, ${sql.array([...tags])})
-        ON CONFLICT (ig_id) DO UPDATE SET
-          tags = ARRAY(SELECT DISTINCT unnest(contacts.tags || EXCLUDED.tags) ORDER BY 1),
-          last_seen = now()`;
-    },
-    async listContacts(limit) {
-      const rows = await sql<
-        { ig_id: string; username: string | null; tags: string[]; first_seen: Date; last_seen: Date; source_media_id: string | null; last_media_id: string | null }[]
-      >`SELECT ig_id, username, tags, first_seen, last_seen, source_media_id, last_media_id FROM contacts ORDER BY last_seen DESC LIMIT ${limit}`;
-      return rows.map((row) => ({
-        igId: row.ig_id,
-        username: row.username,
-        tags: row.tags,
-        firstSeen: row.first_seen,
-        lastSeen: row.last_seen,
-        sourceMediaId: row.source_media_id,
-        lastMediaId: row.last_media_id,
       }));
     },
     async scheduleJob(dedupKey, runAt, payload) {

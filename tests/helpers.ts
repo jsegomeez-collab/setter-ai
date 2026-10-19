@@ -294,8 +294,19 @@ export function createMemoryStore(): Store & {
       const current = contacts.get(igId) ?? { igId, username: null, tags: [], firstSeen: now, lastSeen: now, sourceMediaId: null, lastMediaId: null };
       contacts.set(igId, { ...current, tags: [...new Set([...current.tags, ...tags])].sort(), lastSeen: now });
     },
+    async removeContactTag(igId, tag) {
+      const current = contacts.get(igId);
+      if (current) contacts.set(igId, { ...current, tags: current.tags.filter((t) => t !== tag) });
+    },
     async listContacts(limit) {
       return [...contacts.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime()).slice(0, limit);
+    },
+    async listPersonComments(igId, limit) {
+      return comments
+        .filter((c) => c.igId === igId)
+        .map((c) => ({ commentId: c.commentId, mediaId: c.mediaId, text: c.text, createdAt: commentDates.get(c.commentId) ?? new Date() }))
+        .reverse()
+        .slice(0, limit);
     },
     async scheduleJob(dedupKey, runAt, payload) {
       if ([...jobs.values()].some((job) => job.dedupKey === dedupKey)) return null;
