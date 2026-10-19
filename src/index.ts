@@ -12,6 +12,10 @@ import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { ClaudeBrain } from './setter/brain.js';
 import { ClaudeAnalyzer } from './intelligence/analyzer.js';
+import { InstagramConnect } from './instagram-connect.js';
+
+/** ID de la app de Instagram "AI Setter-IG" (panel de Meta, 2026-10-19). Público: aparece en el enlace de inicio de sesión. */
+const INSTAGRAM_APP_ID = '1117985297673013';
 import { ClaudeLeadPlayer, LEAD_MODEL } from './setter/simulator.js';
 import { EchoWatcher } from './setter/echoes.js';
 import { SetterService } from './setter/service.js';
@@ -114,6 +118,15 @@ async function main(): Promise<void> {
     conversations: { sendManual: (igId, text, author) => setter.sendManual(igId, text, author) },
     // Inteligencia (Fase 6.6): Sonnet 5.5, solo cuando Jose pulsa "Analizar".
     analyzer: anthropic ? new ClaudeAnalyzer(anthropic) : null,
+    // Prueba de "Conectar Instagram" (antes de la 7.5). El ID de la app de Instagram es público (va en el enlace).
+    instagramConnect: config.publicBaseUrl
+      ? new InstagramConnect({
+          appId: process.env.INSTAGRAM_APP_ID?.trim() || INSTAGRAM_APP_ID,
+          appSecrets: config.appSecrets,
+          redirectUri: `${config.publicBaseUrl.replace(/\/$/, '')}/oauth/instagram/callback`,
+          apiVersion: config.igApiVersion,
+        })
+      : null,
   });
 
   const checkToken = () => {

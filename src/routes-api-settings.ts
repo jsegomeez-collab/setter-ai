@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { Config } from './config.js';
+import type { InstagramConnect } from './instagram-connect.js';
 import { MetaApiError, type Account, type InstagramClient } from './meta/client.js';
 import type { TokenManager } from './meta/token.js';
 import { requireAdmin, requireUser, type ApiEnv } from './routes-api.js';
@@ -19,6 +20,8 @@ export interface SettingsApiDeps {
   readonly client: InstagramClient | null;
   readonly tokens: TokenManager;
   readonly linkTracking: boolean;
+  /** Prueba de "Conectar Instagram" (antes de la 7.5). null si no hay dirección pública del servidor. */
+  readonly connect?: InstagramConnect | null;
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -111,6 +114,8 @@ export function createSettingsApi(deps: SettingsApiDeps): Hono<ApiEnv> {
       return c.json({ error: `Error al suscribir: ${errorMessage(error)}` }, 502);
     }
   });
+
+  api.get('/instagram/connect-url', (c) => (deps.connect ? c.json({ url: deps.connect.authorizeUrl() }) : c.json({ error: 'Falta la dirección pública del servidor.' }, 503)));
 
   api.get('/events', async (c) => {
     const kind = c.req.query('kind') || null;

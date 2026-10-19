@@ -11,7 +11,8 @@ import { readLinkToken } from './links.js';
 import { buildFunnel } from './funnel.js';
 import { flowFormPage, flowJsonPage, flowsListPage } from './pages-flows.js';
 import { metricsPage, parsePeriod, periodStart } from './pages-metrics.js';
-import { contactsPage, dashboardPage, legalPage } from './pages.js';
+import { contactsPage, dashboardPage, escapeHtml, legalPage } from './pages.js';
+import type { InstagramConnect } from './instagram-connect.js';
 import { registerSetter } from './routes-setter.js';
 import type { SetterBrain } from './setter/brain.js';
 import type { DiscardResult, DraftResult, ManualResult } from './setter/service.js';
@@ -87,6 +88,8 @@ export interface AppDeps {
   readonly conversations?: { sendManual(igId: string, text: string, author: string): Promise<ManualResult> };
   /** Análisis de conversaciones (Fase 6.6). null/ausente si no hay clave de Anthropic. */
   readonly analyzer?: Analyzer | null;
+  /** "Conectar Instagram" (prueba antes de la 7.5). */
+  readonly instagramConnect?: InstagramConnect | null;
 }
 
 function errorMessage(error: unknown): string {
@@ -308,6 +311,41 @@ function registerFlows(app: Hono, deps: AppDeps): void {
   });
 }
 
+/**
+ * Vuelta del inicio de sesión de Instagram (prueba antes de la 7.5). Comprueba el state, cambia el código por el token
+ * y SOLO informa (usuario y permisos). El token no se guarda ni se muestra: era una prueba.
+ */
+function registerInstagramCallback(app: Hono, deps: AppDeps): void {
+  const page = (title: string, body: string) =>
+    `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>` +
+    `<body style="font-family:system-ui;background:#0a0a0a;color:#e9e9ec;padding:40px;max-width:560px;margin:auto"><h1>${escapeHtml(title)}</h1>${body}<p><a style="color:#d9ae3e" href="/app/configuracion?tab=instagram">Volver a la web</a></p></body></html>`;
+  app.get('/oauth/instagram/callback', async (c) => {
+    const connect = deps.instagramConnect;
+    if (!connect) return c.html(page('No disponible', '<p>Falta la dirección pública del servidor.</p>'), 503);
+    if (c.req.query('error')) return c.html(page('Conexión cancelada', `<p>Instagram dice: ${escapeHtml(c.req.query('error_description') ?? c.req.query('error') ?? '')}</p>`), 400);
+    if (!connect.consumeState(c.req.query('state') ?? '')) return c.html(page('Enlace caducado', '<p>Vuelve a pulsar "Conectar Instagram" (el enlace dura 10 minutos y vale una vez).</p>'), 400);
+    const result = await connect.exchange(c.req.query('code') ?? '');
+    if (!result.ok) {
+      await deps.store.logEvent('instagram-conectar', `Prueba de conexión FALLIDA: ${result.error}`, null);
+      return c.html(page('No se pudo conectar', `<p>Instagram respondió: <strong>${escapeHtml(result.error)}</strong></p>`), 400);
+    }
+    const { username, userId, permissions, expiresInDays, secretIndex } = result;
+    await deps.store.logEvent('instagram-conectar', `Prueba de conexión OK: @${username}, permisos: ${permissions.join(', ')} (token de ${expiresInDays ?? '?'} días, no guardado).`, {
+      username,
+      userId,
+      permissions,
+      expiresInDays,
+      secretIndex,
+    });
+    return c.html(
+      page(
+        `Conectado: @${username}`,
+        `<p>Permisos concedidos: <strong>${escapeHtml(permissions.join(', ') || '(ninguno)')}</strong></p><p>Token de ${expiresInDays ?? '?'} días obtenido. <strong>No se ha guardado</strong> (era una prueba).</p>`,
+      ),
+    );
+  });
+}
+
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
@@ -331,7 +369,15 @@ export function createApp(deps: AppDeps): Hono {
     api.route('/me', createMeApi({ users: deps.users, store: deps.store }));
     api.route(
       '/settings',
-      createSettingsApi({ store: deps.store, users: deps.users, config: deps.config, client: deps.client, tokens: deps.tokens, linkTracking: deps.linkSecret !== null }),
+      createSettingsApi({
+        store: deps.store,
+        users: deps.users,
+        config: deps.config,
+        client: deps.client,
+        tokens: deps.tokens,
+        linkTracking: deps.linkSecret !== null,
+        connect: deps.instagramConnect ?? null,
+      }),
     );
     api.route('/intelligence', createIntelligenceApi({ store: deps.store, users: deps.users, media, analyzer: deps.analyzer ?? null }));
     api.route(
@@ -341,6 +387,7 @@ export function createApp(deps: AppDeps): Hono {
     app.route('/api', api);
   }
   registerWebApp(app);
+  registerInstagramCallback(app, deps);
 
   // Panel privado: contraseña + protección contra formularios enviados desde otras webs.
   const auth = basicAuth({ username: ADMIN_USER, password: deps.config.adminPassword });

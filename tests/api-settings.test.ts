@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/auth.js';
 import type { Config } from '../src/config.js';
+import { InstagramConnect } from '../src/instagram-connect.js';
 import type { InstagramClient } from '../src/meta/client.js';
 import { TokenManager } from '../src/meta/token.js';
 import { SETTINGS } from '../src/store.js';
@@ -95,6 +96,37 @@ describe('API Configuración · Instagram y envíos (Fase 6.7b)', () => {
     const sub = await (await send('POST', '/api/settings/subscribe', admin)).json();
     expect(sub).toEqual({ result: { success: true } });
     expect(client?.subscribe).toHaveBeenCalled();
+  });
+
+  it('prueba "Conectar Instagram": enlace solo para admin; la vuelta comprueba el state, apunta usuario y permisos y NUNCA el token', async () => {
+    const store = createMemoryStore();
+    const users = createMemoryUserStore();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'corto', user_id: 1, permissions: ['instagram_business_basic'] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'TOKEN-SECRETO-60D', expires_in: 5_184_000 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user_id: '1784', username: 'josegomezlife' })));
+    const instagramConnect = new InstagramConnect({ appId: '1117985297673013', appSecrets: ['s'], redirectUri: `${HOST}/oauth/instagram/callback`, apiVersion: 'v25.0', fetchFn });
+    const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
+    const app = createApp({ config, store, client: null, tokens, processPayload: vi.fn(), linkSecret: null, users, instagramConnect });
+    const send = (path: string, cookie = '', method: 'GET' | 'POST' = 'GET', body?: unknown) =>
+      app.request(`${HOST}${path}`, { method, headers: { cookie, origin: HOST, 'content-type': 'application/json', 'x-forwarded-for': '1.2.3.4' }, body: body ? JSON.stringify(body) : undefined });
+    const admin = (await send('/api/setup', '', 'POST', { setupKey: SETUP_KEY, email: 'jose@x.com', name: 'Jose', password: 'una-clave-muy-larga' })).headers.get('set-cookie')?.split(';')[0] ?? '';
+
+    expect((await send('/api/settings/instagram/connect-url')).status).toBe(401);
+    const { url } = await (await send('/api/settings/instagram/connect-url', admin)).json();
+    const state = new URL(url).searchParams.get('state') ?? '';
+    expect((await send(`/oauth/instagram/callback?code=abc&state=otro`)).status).toBe(400);
+    expect(await (await send('/oauth/instagram/callback?error=access_denied&state=x')).text()).toContain('cancel');
+
+    const ok = await send(`/oauth/instagram/callback?code=abc%23_&state=${state}`);
+    expect(ok.status).toBe(200);
+    const html = await ok.text();
+    expect(html).toContain('@josegomezlife');
+    expect(html).not.toContain('TOKEN-SECRETO-60D');
+    const events = await store.recentEvents(10);
+    expect(events[0]).toMatchObject({ kind: 'instagram-conectar' });
+    expect(JSON.stringify(events)).not.toContain('TOKEN-SECRETO-60D');
   });
 
   it('registro de eventos: lo más reciente primero, con la lista de tipos y filtro por tipo', async () => {
