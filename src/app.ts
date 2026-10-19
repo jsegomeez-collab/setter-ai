@@ -24,6 +24,8 @@ import { createContactsApi } from './routes-api-contacts.js';
 import { createMetricsApi } from './routes-api-metrics.js';
 import { createMediaLoader } from './media-catalog.js';
 import { createFlowsApi } from './routes-api-flows.js';
+import { createIntelligenceApi } from './routes-api-intelligence.js';
+import type { Analyzer } from './intelligence/analyzer.js';
 import type { UserStore } from './users.js';
 import { registerWebApp } from './web.js';
 
@@ -81,6 +83,8 @@ export interface AppDeps {
   readonly users?: UserStore;
   /** Responder a mano desde la bandeja (Fase 6.2). */
   readonly conversations?: { sendManual(igId: string, text: string, author: string): Promise<ManualResult> };
+  /** Análisis de conversaciones (Fase 6.6). null/ausente si no hay clave de Anthropic. */
+  readonly analyzer?: Analyzer | null;
 }
 
 function errorMessage(error: unknown): string {
@@ -321,6 +325,7 @@ export function createApp(deps: AppDeps): Hono {
     api.route('/contacts', createContactsApi({ store: deps.store, users: deps.users, media }));
     api.route('/metrics', createMetricsApi({ store: deps.store, users: deps.users, media }));
     api.route('/flows', createFlowsApi({ store: deps.store, users: deps.users, media }));
+    api.route('/intelligence', createIntelligenceApi({ store: deps.store, users: deps.users, media, analyzer: deps.analyzer ?? null }));
     api.route(
       '/conversations',
       createConversationsApi({ store: deps.store, users: deps.users, drafts: deps.drafts, replyPending: deps.replyPending, sendManual: deps.conversations?.sendManual }),

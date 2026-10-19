@@ -11,6 +11,7 @@ import { ContactDetailPage } from './contacts/ContactDetailPage';
 import { ContactsPage } from './contacts/ContactsPage';
 import { MetricsPage } from './metrics/MetricsPage';
 import { FlowsPage } from './flows/FlowsPage';
+import { IntelligencePage } from './intelligence/IntelligencePage';
 
 // El constructor visual (React Flow) pesa: se descarga solo cuando se abre un flujo.
 const FlowEditorPage = lazy(() => import('./flows/FlowEditorPage').then((m) => ({ default: m.FlowEditorPage })));
@@ -54,6 +55,7 @@ function Screens() {
         <Route path="contactos/:igId" element={<ContactDetailPage />} />
         <Route path="metricas" element={<MetricsPage />} />
         {user.role === 'admin' && <Route path="flujos" element={<FlowsPage />} />}
+        {user.role === 'admin' && <Route path="inteligencia" element={<IntelligencePage />} />}
         {user.role === 'admin' && (
           <Route
             path="flujos/:id"

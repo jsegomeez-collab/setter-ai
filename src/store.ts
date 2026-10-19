@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import postgres from 'postgres';
+import type { AnalysisMessageRow } from './intelligence/input.js';
+import { ANALYSIS_SCHEMA, analysisMethods, scrubAnalyses, type AnalysisRun, type AnalysisRunSummary, type NewAnalysisRun } from './store-analysis.js';
 import { contactMethods } from './store-contacts.js';
 import { toJson } from './store-sql.js';
 import { flowSchema, type Flow } from './flows/types.js';
@@ -71,6 +73,11 @@ export interface Store {
   listContacts(limit: number): Promise<ContactRow[]>;
   /** Comentarios de una persona, lo más reciente primero (Fase 6.3). */
   listPersonComments(igId: string, limit: number): Promise<CommentRow[]>;
+  /** Inteligencia (Fase 6.6, store-analysis.ts): mensajes enviados desde una fecha, para el análisis. */
+  analysisMessages(since: Date): Promise<AnalysisMessageRow[]>;
+  saveAnalysisRun(run: NewAnalysisRun): Promise<number>;
+  listAnalysisRuns(limit: number): Promise<AnalysisRunSummary[]>;
+  getAnalysisRun(id: number): Promise<AnalysisRun | null>;
   /** Pausas programadas. Devuelve null si ya existía (misma clave). */
   scheduleJob(dedupKey: string, runAt: Date, payload: unknown): Promise<number | null>;
   pendingJobs(): Promise<JobRow[]>;
@@ -358,10 +365,12 @@ export async function createPostgresStore(
     onnotice: () => undefined,
   });
   await sql.unsafe(SCHEMA);
+  await sql.unsafe(ANALYSIS_SCHEMA);
 
   return {
-    // Contactos y comentarios (store-contacts.ts).
+    // Contactos y comentarios (store-contacts.ts) e inteligencia (store-analysis.ts).
     ...contactMethods(sql),
+    ...analysisMethods(sql),
     async listFlows() {
       const rows = await sql<{ data: Flow }[]>`SELECT data FROM flows ORDER BY updated_at DESC`;
       // Se pasan por el esquema para rellenar los campos nuevos con su valor por defecto (flujos guardados antes).
@@ -497,6 +506,8 @@ export async function createPostgresStore(
         counts.lead_history = (await tx`DELETE FROM lead_history WHERE ig_id = ${igId}`).count;
         counts.allowed_senders = (await tx`DELETE FROM allowed_senders WHERE ig_id = ${igId}`).count;
         counts.contacts = (await tx`DELETE FROM contacts WHERE ig_id = ${igId}`).count;
+        // Sus citas en los análisis guardados (Fase 6.6) también se quitan.
+        counts.analysis_runs = await scrubAnalyses(tx, igId);
         return counts;
       });
     },

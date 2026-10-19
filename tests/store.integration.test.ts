@@ -233,6 +233,38 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(await store.listLeadHistory('keep-1', 50)).toHaveLength(1);
   });
 
+  it('Fase 6.6 · análisis: mensajes enviados para analizar, guardar/listar/ver, y BORRAR quita a la persona de los análisis', async () => {
+    const since = new Date(Date.now() - 60_000);
+    await store.touchContact('an-1', 'ana_an');
+    await store.addMessage({ igId: 'an-1', direction: 'in', source: 'user', text: 'tengo una tienda online', mid: 'an-m1', status: 'sent', dedupKey: null });
+    await store.addMessage({ igId: 'an-1', direction: 'out', source: 'ai', text: 'borrador sin enviar', mid: null, status: 'held', dedupKey: 'an-held' });
+    await store.addMessage({ igId: 'an-2', direction: 'in', source: 'user', text: 'me da miedo el precio', mid: 'an-m2', status: 'sent', dedupKey: null });
+    const rows = (await store.analysisMessages(since)).filter((r) => r.igId.startsWith('an-'));
+    expect(rows.map((r) => [r.igId, r.username, r.text])).toEqual([
+      ['an-1', 'ana_an', 'tengo una tienda online'],
+      ['an-2', null, 'me da miedo el precio'],
+    ]);
+
+    const finding = (igId: string, quote: string) => ({ title: quote, detail: null, count: 1, evidence: [{ igId, username: null, quote }] });
+    const result = {
+      summary: 'Resumen',
+      sections: { objeciones: [finding('an-2', 'me da miedo el precio')], dolores: [finding('an-1', 'tengo una tienda online')], lenguaje: [], ideas: [], mercado: [] },
+      dropped: { findings: 0, quotes: 0 },
+    };
+    const id = await store.saveAnalysisRun({ createdBy: 'Jose', period: '30', conversations: 2, skipped: 0, chars: 80, model: 'claude-sonnet-5-5', inputTokens: 900, outputTokens: 300, costUsd: 0.0048, result });
+    const [summary] = await store.listAnalysisRuns(10);
+    expect(summary).toMatchObject({ id, createdBy: 'Jose', period: '30', conversations: 2, costUsd: 0.0048, findings: 2 });
+    expect((await store.getAnalysisRun(id))?.result.sections.dolores[0]?.evidence[0]?.igId).toBe('an-1');
+    expect(await store.getAnalysisRun(999_999)).toBeNull();
+
+    const counts = await store.deletePersonData('an-1');
+    expect(counts.analysis_runs).toBe(1);
+    const after = await store.getAnalysisRun(id);
+    expect(after?.result.sections.dolores).toEqual([]);
+    expect(after?.result.sections.objeciones).toHaveLength(1);
+    expect(JSON.stringify(after)).not.toContain('an-1');
+  });
+
   it('BORRAR · segundo barrido: solo el rastro de la confirmación (por su clave y su message_id); lo demás sigue', async () => {
     await store.claimAction('borrar:mb', 'send_message', { type: 'send_message', recipientId: 'tr-1', message: { text: 'Listo' } });
     await store.finishAction('borrar:mb', true, { messageId: 'mid-conf' });

@@ -11,6 +11,7 @@ import { processEvent, processInBackground, rescueComments } from './process.js'
 import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { ClaudeBrain } from './setter/brain.js';
+import { ClaudeAnalyzer } from './intelligence/analyzer.js';
 import { ClaudeLeadPlayer, LEAD_MODEL } from './setter/simulator.js';
 import { EchoWatcher } from './setter/echoes.js';
 import { SetterService } from './setter/service.js';
@@ -111,6 +112,8 @@ async function main(): Promise<void> {
     simulator,
     users,
     conversations: { sendManual: (igId, text, author) => setter.sendManual(igId, text, author) },
+    // Inteligencia (Fase 6.6): Sonnet 5.5, solo cuando Jose pulsa "Analizar".
+    analyzer: anthropic ? new ClaudeAnalyzer(anthropic) : null,
   });
 
   const checkToken = () => {

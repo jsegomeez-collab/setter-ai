@@ -1,6 +1,8 @@
 import type { SetterConfig } from '../src/config.js';
 import type { Flow } from '../src/flows/types.js';
 import type { SetterOutput } from '../src/setter/schema.js';
+import { scrubPerson } from '../src/intelligence/verify.js';
+import type { NewAnalysisRun } from '../src/store-analysis.js';
 import {
   deletionHash,
   SEND_ACTION_TYPES,
@@ -30,6 +32,8 @@ export function createMemoryStore(): Store & {
 } {
   const contacts = new Map<string, ContactRow>();
   const messages: MessageRow[] = [];
+  /** Análisis guardados (Fase 6.6). */
+  const analysisRuns: (NewAnalysisRun & { id: number; createdAt: Date; findings: number })[] = [];
   const knowledge: KnowledgeRow[] = [];
   /** Versiones del marco técnico (Fase 6.1), aparte del documento. */
   const frames: KnowledgeRow[] = [];
@@ -119,7 +123,31 @@ export function createMemoryStore(): Store & {
       counts.lead_history = drop(leadHistory, (h) => h.igId === igId);
       counts.allowed_senders = drop(allowed, (id) => id === igId);
       counts.contacts = contacts.delete(igId) ? 1 : 0;
+      const touched = analysisRuns.filter((run) => JSON.stringify(run.result).includes(quoted));
+      touched.forEach((run) => Object.assign(run, { result: scrubPerson(run.result, igId) }));
+      counts.analysis_runs = touched.length;
       return counts;
+    },
+    async analysisMessages(since) {
+      const usernames = new Map([...contacts.values()].map((c) => [c.igId, c.username]));
+      return messages
+        .filter((m) => m.status === 'sent' && m.createdAt >= since)
+        .sort((a, b) => a.igId.localeCompare(b.igId) || a.id - b.id)
+        .map((m) => ({ igId: m.igId, username: usernames.get(m.igId) ?? null, direction: m.direction, source: m.source, text: m.text, createdAt: m.createdAt }));
+    },
+    async saveAnalysisRun(run) {
+      const id = analysisRuns.length + 1;
+      analysisRuns.push({ ...run, id, createdAt: new Date(), findings: Object.values(run.result.sections).reduce((n, items) => n + items.length, 0) });
+      return id;
+    },
+    async listAnalysisRuns(limit) {
+      return [...analysisRuns].reverse().slice(0, limit).map(({ id, createdAt, createdBy, period, conversations, costUsd, findings }) => ({ id, createdAt, createdBy, period, conversations, costUsd, findings }));
+    },
+    async getAnalysisRun(id) {
+      const run = analysisRuns.find((r) => r.id === id);
+      if (!run) return null;
+      const { createdBy: _by, ...rest } = run;
+      return { ...rest, createdBy: run.createdBy };
     },
     async deleteDeletionTraces(igId, dedupKey, messageId) {
       actions.delete(dedupKey);
