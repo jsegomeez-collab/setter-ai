@@ -298,6 +298,13 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
 - API de Anthropic: según uso (desde la Fase 3).
 - ManyChat Pro: hasta que se apague.
 
+## ⚠️ Incidente: bloqueo de mensajes de Meta (2026-10-18)
+
+- **Qué pasó:** error 368 el 18-10 a las 17:16 UTC ("bloqueado temporalmente por infringir las políticas"). Instagram lo atribuye a **Prácticas comerciales prohibidas** (fraude/estafas: enriquecimiento rápido, inversiones). Jose pidió revisión el 19-10: **denegada, 30 días** sin enviar mensajes.
+- **Datos:** volumen bajo (~300 DMs/día, límite 750/h). Lo que añadíamos: ~720 llamadas rechazadas (2534025 + reintento con texto) y 303 comentarios del plan B "mándame un DM". Disparador del flujo = todos los reels y cualquier comentario; el DM invita al grupo de WhatsApp. Reels con ganchos "Claude puede hacerte $453 al día", "$15K a la semana" (encajan en la norma). Causa exacta **no verificada** (Meta no la da).
+- **Hecho (con OK de Jose):** flujo `manychat` **desactivado**; 450 envíos pendientes cancelados; quitado el reintento con texto ante 2534025; el emisor ya no envía acciones canceladas; **plan B público desactivado** (temporal). Textos del plan B para recuperarlos: "No pude enviarte el DM 😕 escríbeme por mensaje y te lo paso" · "Intenté mandártelo por DM pero no me deja 😅 escríbeme y te lo envío" · "Instagram no me deja escribirte 🙈 mándame un DM y te lo paso".
+- **Antes de reactivar el flujo (decide Jose):** responder solo en reels elegidos, sacar el grupo de WhatsApp del DM automático, evitar ganchos "$X al día/semana", ritmo más bajo.
+
 ## Para retomar en otro ordenador
 
 - Clonar el repo, `npm install`, y comprobar: `npm test`, `npm run typecheck`, `npm run build`. Trabajar en la rama `fase6` (Fase 6); desplegar = fusionar en `main` y hacer push. Ver la web en local: `npm run build` y abrir `/app` del servidor, o `npm run dev:web` con el servidor en marcha.
