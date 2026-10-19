@@ -78,10 +78,11 @@ export function createConversationsApi(deps: ConversationsApiDeps): Hono<ApiEnv>
     ]);
     if (!contact && messages.length === 0) return c.json({ error: 'Esa conversación no existe' }, 404);
     const lastIn = [...messages].reverse().find((m) => m.direction === 'in');
-    const canReply = !deps.sendManual
-      ? { ok: false, reason: 'Responder a mano no está disponible.' }
-      : block
-        ? { ok: false, reason: `Envíos bloqueados hasta ${block.until}${block.reason ? ` (${block.reason})` : ''}.` }
+    // Primero el bloqueo (es lo que más le interesa saber a quien mira la conversación).
+    const canReply = block
+      ? { ok: false, reason: `Envíos bloqueados hasta ${block.until}${block.reason ? ` (${block.reason})` : ''}.` }
+      : !deps.sendManual
+        ? { ok: false, reason: 'Responder a mano no está disponible.' }
         : !lastIn || Date.now() - lastIn.createdAt.getTime() > REPLY_WINDOW_MS
           ? { ok: false, reason: 'Han pasado más de 24 h desde su último mensaje: Instagram no deja escribirle.' }
           : { ok: true, reason: null };

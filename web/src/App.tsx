@@ -5,6 +5,7 @@ import { SetupPage } from './auth/SetupPage';
 import { HomePage } from './pages/HomePage';
 import { PendingModule } from './pages/PendingModule';
 import { SetterPage } from './setter/SetterPage';
+import { ConversationsPage } from './conversations/ConversationsPage';
 import { AppShell } from './shell/AppShell';
 import { navFor } from './shell/nav';
 
@@ -39,6 +40,8 @@ function Screens() {
       <Route element={<AppShell />}>
         <Route index element={<HomePage />} />
         {user.role === 'admin' && <Route path="setter" element={<SetterPage />} />}
+        <Route path="conversaciones" element={<ConversationsPage />} />
+        <Route path="conversaciones/:igId" element={<ConversationsPage />} />
         {pending.map((item) => (
           <Route key={item.path} path={item.path.slice(1)} element={<PendingModule item={item} />} />
         ))}
