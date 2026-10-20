@@ -39,7 +39,7 @@ export function ConversationsPage() {
       {blocked && (
         <p className="border-b border-warn/20 bg-warn/[0.07] px-4 py-2 text-[13px] text-warn">
           Envíos bloqueados {blockedUntilText(blocked.until)}
-          {blocked.reason ? ` · ${blocked.reason}` : ''}. Nada sale a Instagram hasta entonces (tampoco la IA ni los flujos).
+          {blocked.reason ? ` · ${blocked.reason.replace(/\.+$/, '')}` : ''}. Nada sale a Instagram hasta entonces (tampoco la IA ni los flujos).
         </p>
       )}
       {error && <p className="px-4 py-2 text-sm text-bad">{error}</p>}

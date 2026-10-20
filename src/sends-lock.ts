@@ -9,7 +9,7 @@ import { SETTINGS, type Store } from './store.js';
 
 /** "Sin fecha de fin": muy lejos en el futuro. */
 export const LOCKED_UNTIL = '2100-01-01T00:00:00.000Z';
-export const LOCK_REASON = 'Espacio nuevo: los envíos los activa Jose.';
+export const LOCK_REASON = 'Cliente nuevo: los envíos los activa Jose';
 
 type SettingsStore = Pick<Store, 'getSetting' | 'setSetting'>;
 

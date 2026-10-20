@@ -60,6 +60,7 @@ async function main(): Promise<void> {
       },
       // Envíos de cada espacio: nacen bloqueados y solo Jose los activa (20-10).
       sendsLocked: async (id) => (manager ? manager.sendsLocked(id) : null),
+      progress: async (id) => (manager ? manager.progress(id) : null),
       setSendsLock: (id, locked, who) => {
         if (!manager) throw new Error('Los espacios aún están arrancando');
         return manager.setSendsLock(id, locked, who);

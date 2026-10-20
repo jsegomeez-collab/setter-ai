@@ -47,6 +47,7 @@ async function setup() {
       return ws;
     }),
     sendsLocked: vi.fn(async (id: string) => locks.get(id) ?? null),
+    progress: vi.fn(async (id: string) => (locks.has(id) ? { done: 0, total: 5 } : null)),
     setSendsLock: vi.fn(async (id: string, locked: boolean) => {
       locks.set(id, locked);
     }),
@@ -92,6 +93,8 @@ describe('API Espacios (Fase 7.5b)', () => {
     await send('POST', '/api/workspaces', admin, { name: 'Socio', adminEmail: 'socio@x.com', adminName: 'Pedro' });
     const before = await (await send('GET', '/api/workspaces', admin)).json();
     expect(before.workspaces[0].sendsLocked).toBe(true);
+    // 7.5f: la lista trae el avance de sus primeros pasos.
+    expect(before.workspaces[0].progress).toEqual({ done: 0, total: 5 });
 
     expect((await send('POST', '/api/workspaces/ws_socio_0001/sends', admin, { locked: false })).status).toBe(200);
     expect(workspaces.setSendsLock).toHaveBeenCalledWith('ws_socio_0001', false, 'Jose');
@@ -163,6 +166,33 @@ describe('la sesión dice en qué espacio estás', () => {
       workspace: { id: 'ws_socio_0001', name: 'Socio' },
     });
     expect((await (await app.request(`${HOST}/api/session`)).json()).workspace).toEqual({ id: 'ws_socio_0001', name: 'Socio' });
+  });
+
+  it('primeros pasos (7.5f): en un cliente, su dueño ve lo que le falta; en el de Jose no existen', async () => {
+    const store = createMemoryStore();
+    const users = createMemoryUserStore();
+    await users.createUser({ email: 'ana@x.com', name: 'Ana', role: 'admin', passwordHash: await hashPassword('clave-de-ana-12345'), workspaceId: 'ws_ana_0001' });
+    const app = createApp({
+      config,
+      store,
+      client: null,
+      tokens: new TokenManager({ store, envToken: null, encryptionKey: null }),
+      processPayload: vi.fn(),
+      linkSecret: null,
+      users,
+      workspace: { id: 'ws_ana_0001', name: 'Ana' },
+    });
+    const headers = { origin: HOST, 'content-type': 'application/json' };
+    expect((await app.request(`${HOST}/api/onboarding`)).status).toBe(401);
+    const login = await app.request(`${HOST}/api/login`, { method: 'POST', headers, body: JSON.stringify({ email: 'ana@x.com', password: 'clave-de-ana-12345' }) });
+    const res = await app.request(`${HOST}/api/onboarding`, { headers: { cookie: cookieOf(login) } });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.steps.map((s: { id: string }) => s.id)).toEqual(['instagram', 'links', 'document', 'setter', 'sends']);
+    expect(data.progress).toEqual({ done: 1, total: 5 });
+
+    const { send, admin } = await setup();
+    expect((await send('GET', '/api/onboarding', admin)).status).toBe(404);
   });
 
   it('la ruta de espacios no existe fuera del principal', async () => {

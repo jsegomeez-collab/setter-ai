@@ -50,4 +50,5 @@ export async function api<T>(path: string, options: { method?: 'GET' | 'POST'; b
   return data as T;
 }
 
-export const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', team: 'Equipo' };
+/** Lo que se ve (7.5f, Jose): "Dueño" lo puede todo en su cuenta; "Equipo" conversa pero no toca setter, flujos ni ajustes. */
+export const ROLE_LABEL: Record<Role, string> = { admin: 'Dueño', team: 'Equipo' };

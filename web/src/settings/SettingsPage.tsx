@@ -19,13 +19,14 @@ const BASE_TABS: readonly { value: TabId; label: string }[] = [
 export function SettingsPage() {
   const { workspace } = useSession();
   const [params, setParams] = useSearchParams();
-  const tabs = workspace ? BASE_TABS : [...BASE_TABS, { value: 'espacios' as const, label: 'Espacios' }];
+  // Por dentro son "espacios"; Jose los ve como "Clientes" (7.5f). La dirección ?tab=espacios se mantiene.
+  const tabs = workspace ? BASE_TABS : [...BASE_TABS, { value: 'espacios' as const, label: 'Clientes' }];
   const tab: TabId = tabs.some((t) => t.value === params.get('tab')) ? (params.get('tab') as TabId) : 'usuarios';
   return (
     <Page>
       <PageHeader
         title="Configuración"
-        description={workspace ? `Quién entra en «${workspace.name}» y cómo está conectada su cuenta de Instagram.` : 'Quién entra, cómo está conectada la cuenta de Instagram y los espacios de otras personas.'}
+        description={workspace ? `Quién entra en «${workspace.name}» y cómo está conectada su cuenta de Instagram.` : 'Quién entra, cómo está conectada la cuenta de Instagram y tus clientes.'}
         actions={<Tabs tabs={tabs} value={tab} onChange={(value) => setParams({ tab: value })} />}
       />
       <div className="mt-6">

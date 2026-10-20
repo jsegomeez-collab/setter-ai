@@ -21,7 +21,7 @@ import type { SetterLinks } from './setter/prompt.js';
 import type { InstagramConnection } from './workspace-manager.js';
 import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
-import { createWorkspacesApi, type WorkspacesAdmin } from './routes-api-workspaces.js';
+import { createOnboardingApi, createWorkspacesApi, type WorkspacesAdmin } from './routes-api-workspaces.js';
 import { createSetterApi } from './routes-api-setter.js';
 import { createSetterDocsApi } from './routes-api-setter-docs.js';
 import { createConversationsApi } from './routes-api-conversations.js';
@@ -393,6 +393,8 @@ export function createApp(deps: AppDeps): Hono {
     const api = createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword, workspace: deps.workspace ?? null });
     // Espacios (Fase 7.5b): solo en el espacio de Jose.
     if (deps.workspaces) api.route('/workspaces', createWorkspacesApi({ store: deps.store, users: deps.users, admin: deps.workspaces }));
+    // Primeros pasos (7.5f): solo en los clientes. Con token hay cliente de Instagram (el espacio se reinicia al conectar).
+    if (deps.workspace) api.route('/onboarding', createOnboardingApi({ store: deps.store, users: deps.users, hasInstagram: () => deps.client !== null }));
     api.route('/setter/docs', createSetterDocsApi({ store: deps.store, users: deps.users }));
     api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null, defaultLinks: deps.setterDefaultLinks }));
     // Títulos de reels: los últimos 50 + los más antiguos pedidos por id (se recuerdan mientras el servidor esté en marcha).

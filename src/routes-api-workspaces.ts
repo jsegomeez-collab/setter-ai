@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { hashPassword } from './auth.js';
+import { onboardingProgress, onboardingSteps } from './onboarding.js';
 import { publicUser, requireAdmin, requireUser, type ApiEnv } from './routes-api.js';
 import { newTempPassword } from './routes-api-users.js';
 import type { Store } from './store.js';
@@ -18,6 +19,8 @@ export interface WorkspacesAdmin {
   create(name: string): Promise<Workspace>;
   /** ¿Envíos con el cerrojo de Jose? null = ese espacio no está en marcha. */
   sendsLocked(id: string): Promise<boolean | null>;
+  /** Avance de sus primeros pasos (7.5f). null = no está en marcha. */
+  progress(id: string): Promise<{ done: number; total: number } | null>;
   /** Jose activa (false) o vuelve a bloquear (true) los envíos de un espacio. */
   setSendsLock(id: string, locked: boolean, who: string): Promise<void>;
   /** Borra el espacio para siempre: lo para, borra su base y lo quita de la lista (workspace-manager.ts). */
@@ -51,6 +54,17 @@ async function readJson(c: Context): Promise<unknown> {
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/** Primeros pasos de un cliente (7.5f): solo existe en los clientes, no en el de Jose. */
+export function createOnboardingApi(deps: { readonly store: Store; readonly users: UserStore; readonly hasInstagram: () => boolean }): Hono<ApiEnv> {
+  const api = new Hono<ApiEnv>();
+  api.use('*', requireUser(deps.users));
+  api.get('/', async (c) => {
+    const steps = await onboardingSteps(deps.store, deps.hasInstagram());
+    return c.json({ steps, progress: onboardingProgress(steps) });
+  });
+  return api;
+}
+
 export function createWorkspacesApi(deps: WorkspacesApiDeps): Hono<ApiEnv> {
   const { store, admin } = deps;
   const api = new Hono<ApiEnv>();
@@ -59,11 +73,15 @@ export function createWorkspacesApi(deps: WorkspacesApiDeps): Hono<ApiEnv> {
 
   api.get('/', async (c) => {
     const [workspaces, everyone] = await Promise.all([admin.list(), admin.users.listUsers()]);
-    const locks = await Promise.all(workspaces.map((ws) => admin.sendsLocked(ws.id)));
+    const [locks, progress] = await Promise.all([
+      Promise.all(workspaces.map((ws) => admin.sendsLocked(ws.id))),
+      Promise.all(workspaces.map((ws) => admin.progress(ws.id))),
+    ]);
     return c.json({
       workspaces: workspaces.map((ws, i) => ({
         ...ws,
         sendsLocked: locks[i] ?? null,
+        progress: progress[i] ?? null,
         people: everyone.filter((user) => user.workspaceId === ws.id).map((user) => ({ name: user.name, email: user.email, role: user.role })),
       })),
     });

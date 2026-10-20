@@ -1,3 +1,4 @@
+import { onboardingProgress, onboardingSteps } from './onboarding.js';
 import { LOCK_REASON, isSendsLocked, lockSends, unlockSends } from './sends-lock.js';
 import type { WorkspaceRuntime } from './workspace-runtime.js';
 import { newWorkspaceId, type Workspace, type WorkspaceRegistry } from './workspaces.js';
@@ -131,6 +132,14 @@ export class WorkspaceManager {
       username: connection.username,
       expiresInDays: connection.expiresInDays,
     });
+  }
+
+  /** Avance de los primeros pasos de un cliente (7.5f), para la lista de Jose. null = no está en marcha. */
+  async progress(workspaceId: string): Promise<{ done: number; total: number } | null> {
+    const runtime = this.runtimes.get(workspaceId);
+    if (!runtime) return null;
+    const hasInstagram = [...this.byIgUser.values()].includes(workspaceId);
+    return onboardingProgress(await onboardingSteps(runtime.store, hasInstagram));
   }
 
   /** ¿Envíos del espacio con el cerrojo de Jose? null = ese espacio no está en marcha. */

@@ -2,6 +2,7 @@ import { ArrowRight, BellRing, Bot, FilePen, MessageCircleWarning, PauseCircle, 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useSession } from '../auth/SessionContext';
+import { FirstSteps } from './FirstSteps';
 import type { InboxResponse } from '../conversations/types';
 import { api } from '../lib/api';
 import type { FlowsResponse } from '../flows/types';
@@ -45,7 +46,7 @@ interface AdminInfo {
 }
 
 export function HomePage() {
-  const { user } = useSession();
+  const { user, workspace } = useSession();
   const [inbox, setInbox] = useState<InboxResponse | null>(null);
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
   const [admin, setAdmin] = useState<AdminInfo | null>(null);
@@ -80,10 +81,12 @@ export function HomePage() {
 
       <div className="mt-6 space-y-8">
         {error && <Notice tone="bad">{error}</Notice>}
+        {/* Cliente nuevo (7.5f): lo que le falta, con un botón a cada sitio. Solo su dueño (el equipo no toca el setter). */}
+        {isAdmin && workspace && <FirstSteps />}
         {inbox?.sendsBlocked && (
           <Notice tone="warn">
             Envíos bloqueados {blockedUntilText(inbox.sendsBlocked.until)}
-            {inbox.sendsBlocked.reason ? ` · ${inbox.sendsBlocked.reason}` : ''}. No sale nada a Instagram hasta entonces.
+            {inbox.sendsBlocked.reason ? ` · ${inbox.sendsBlocked.reason.replace(/\.+$/, '')}` : ''}. No sale nada a Instagram hasta entonces.
           </Notice>
         )}
 

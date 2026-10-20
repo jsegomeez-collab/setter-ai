@@ -75,7 +75,7 @@ export function InstagramTab() {
           <ol className="mb-4 list-decimal space-y-1 rounded-lg border border-white/8 bg-white/[0.02] py-3 pl-8 pr-3 text-[13px] text-ash">
             <li>Pide a Jose que añada tu cuenta de Instagram como «Evaluador de Instagram» en su app.</li>
             <li>Acepta la invitación en Instagram: Perfil → Configuración → Aplicaciones y sitios web → Invitaciones de evaluador.</li>
-            <li>Pulsa «Conectar Instagram» e inicia sesión con tu cuenta. Al volver, tus comentarios y mensajes llegarán a este espacio.</li>
+            <li>Pulsa «Conectar Instagram» e inicia sesión con tu cuenta. Al volver, tus comentarios y mensajes llegarán aquí.</li>
           </ol>
         )}
         <ul className="space-y-2 text-sm">

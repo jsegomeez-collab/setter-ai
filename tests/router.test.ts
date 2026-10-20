@@ -159,6 +159,14 @@ describe('reparto por espacio', () => {
     await expect(manager.setSendsLock('ws_no_existe_0000', false, 'Jose')).rejects.toThrow('no está en marcha');
   });
 
+  it('el avance de un cliente (7.5f) sale de su base y de si tiene Instagram; null si no está en marcha', async () => {
+    const { manager, runtimes } = await setup();
+    await lockSends(runtimes.get(SOCIO.id)?.store as NonNullable<ReturnType<typeof runtimes.get>>['store']);
+    // SOCIO tiene Instagram apuntado: 1 de 5.
+    expect(await manager.progress(SOCIO.id)).toEqual({ done: 1, total: 5 });
+    expect(await manager.progress('ws_no_existe_0000')).toBeNull();
+  });
+
   it('borrar un espacio: lo para, borra su base, lo quita de la lista y sus avisos ya NO van al de Jose', async () => {
     const { manager, runtimes, principal, dropDatabase } = await setup();
     const runtime = runtimes.get(SOCIO.id);

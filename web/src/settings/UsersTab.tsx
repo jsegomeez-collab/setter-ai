@@ -64,7 +64,7 @@ export function UsersTab() {
           void load();
         }}
       />
-      <Section label="Quién tiene acceso" description="Admin: todo. Equipo: conversaciones, contactos y métricas (no toca el setter, los flujos ni la configuración).">
+      <Section label="Quién tiene acceso" description="Dueño: todo. Equipo: conversaciones, contactos y métricas (no toca el setter, los flujos ni la configuración).">
         {!users && <Loading />}
         <ul className="divide-y divide-white/[0.05]">
           {users?.map((u) => {
@@ -157,14 +157,15 @@ function NewUserForm({ onCreated }: { onCreated: (name: string, password: string
 }
 
 /** La clave temporal: se enseña UNA vez (no se guarda en claro en ningún sitio). */
-export function TempPassword({ name, password, onClose }: { name: string; password: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
+/** `message` (7.5f): texto listo para mandarle por WhatsApp con la dirección, su correo, la clave y los pasos. */
+export function TempPassword({ name, password, message, onClose }: { name: string; password: string; message?: string; onClose: () => void }) {
+  const [copied, setCopied] = useState<'password' | 'message' | null>(null);
+  const copy = async (what: 'password' | 'message') => {
     try {
-      await navigator.clipboard.writeText(password);
-      setCopied(true);
+      await navigator.clipboard.writeText(what === 'message' && message ? message : password);
+      setCopied(what);
     } catch {
-      setCopied(false);
+      setCopied(null);
     }
   };
   return (
@@ -174,11 +175,17 @@ export function TempPassword({ name, password, onClose }: { name: string; passwo
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <code className="rounded-lg bg-black/40 px-3 py-2 font-mono text-[15px] tracking-wide text-snow">{password}</code>
-        <SecondaryButton onClick={() => void copy()}>
-          {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiada' : 'Copiar'}
+        <SecondaryButton onClick={() => void copy('password')}>
+          {copied === 'password' ? <Check size={14} /> : <Copy size={14} />} {copied === 'password' ? 'Copiada' : 'Copiar'}
         </SecondaryButton>
+        {message && (
+          <SecondaryButton onClick={() => void copy('message')}>
+            {copied === 'message' ? <Check size={14} /> : <Copy size={14} />} {copied === 'message' ? 'Mensaje copiado' : 'Copiar mensaje para enviarle'}
+          </SecondaryButton>
+        )}
         <SecondaryButton onClick={onClose}>Ya la tengo</SecondaryButton>
       </div>
+      {message && <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-black/30 p-3 font-sans text-xs leading-relaxed text-mist">{message}</pre>}
     </div>
   );
 }

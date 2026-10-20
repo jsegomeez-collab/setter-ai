@@ -19,13 +19,15 @@ interface WorkspaceItem {
   readonly createdAt: string;
   /** Cerrojo de envíos (true = bloqueados hasta que Jose los active). null = el espacio no está en marcha. */
   readonly sendsLocked: boolean | null;
+  /** Avance de sus primeros pasos (7.5f). null = no está en marcha. */
+  readonly progress: { readonly done: number; readonly total: number } | null;
   readonly people: readonly { readonly name: string; readonly email: string; readonly role: 'admin' | 'team' }[];
 }
 
 export function WorkspacesTab() {
   const [items, setItems] = useState<readonly WorkspaceItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [temp, setTemp] = useState<{ name: string; password: string } | null>(null);
+  const [temp, setTemp] = useState<{ name: string; email: string; password: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -41,21 +43,20 @@ export function WorkspacesTab() {
   return (
     <div className="space-y-5">
       <p className="text-[13px] text-ash">
-        Cada espacio es una cuenta aparte: su Instagram, sus flujos, sus documentos, sus contactos y su equipo. Nadie ve lo de otro espacio. Tú lo creas y le pasas la clave temporal a quien lo
-        lleva; antes, añade su Instagram como «Evaluador de Instagram» en tu app de Meta.
+        Cada cliente es una cuenta aparte: su Instagram, sus flujos, sus documentos, sus contactos y su equipo. Nadie ve lo de otro cliente. Tú lo creas y le pasas la clave temporal a su dueño; antes, añade su Instagram como «Evaluador de Instagram» en tu app de Meta.
       </p>
       {error && <Notice tone="bad">{error}</Notice>}
-      {temp && <TempPassword name={temp.name} password={temp.password} onClose={() => setTemp(null)} />}
+      {temp && <TempPassword name={temp.name} password={temp.password} message={welcomeMessage(temp.name, temp.email, temp.password)} onClose={() => setTemp(null)} />}
       <NewWorkspaceForm
-        onCreated={(name, password) => {
-          setTemp({ name, password });
+        onCreated={(name, email, password) => {
+          setTemp({ name, email, password });
           void load();
         }}
       />
-      <Section label="Espacios">
+      <Section label="Clientes">
         {!items && <Loading />}
         {items?.length === 0 && (
-          <EmptyState icon={Building2} title="Todavía no hay otros espacios">
+          <EmptyState icon={Building2} title="Todavía no hay clientes">
             Crea el primero arriba, por ejemplo el de tu socio.
           </EmptyState>
         )}
@@ -71,7 +72,20 @@ export function WorkspacesTab() {
   );
 }
 
-/** Un espacio de la lista: quién lo lleva, su Instagram y sus envíos (nacen bloqueados; solo Jose los activa). */
+/** Mensaje para mandar al dueño de un cliente nuevo por WhatsApp (7.5f): todo lo que necesita para empezar. */
+function welcomeMessage(name: string, email: string, password: string): string {
+  return [
+    `Hola ${name}, ya tienes tu cuenta en Setter IA.`,
+    '',
+    '1. Acepta en Instagram la invitación de evaluador que te he mandado: Perfil → Configuración → Aplicaciones y sitios web → Invitaciones de evaluador.',
+    `2. Entra en ${window.location.origin}/app con tu correo ${email} y esta clave temporal: ${password} (al entrar te pedirá una nueva).`,
+    '3. En Inicio verás tus primeros pasos: conectar tu Instagram, poner tus enlaces, subir tu documento del setter y encenderlo.',
+    '',
+    'Cuando lo tengas, avísame y activo tus envíos.',
+  ].join('\n');
+}
+
+/** Un cliente de la lista: su dueño, su avance, su Instagram y sus envíos (nacen bloqueados; solo Jose los activa). */
 function WorkspaceRow({ ws, onChanged, onError }: { ws: WorkspaceItem; onChanged: () => void; onError: (message: string) => void }) {
   const toast = useToast();
   const [confirmUnlock, setConfirmUnlock] = useState(false);
@@ -82,7 +96,7 @@ function WorkspaceRow({ ws, onChanged, onError }: { ws: WorkspaceItem; onChanged
     setDeleting(true);
     try {
       await api(`/workspaces/${encodeURIComponent(ws.id)}/delete`, { method: 'POST', body: { confirm: ws.name } });
-      toast(`Espacio «${ws.name}» borrado.`);
+      toast(`Cliente «${ws.name}» borrado.`);
       onChanged();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'No se pudo borrar');
@@ -108,6 +122,11 @@ function WorkspaceRow({ ws, onChanged, onError }: { ws: WorkspaceItem; onChanged
       <span>
         <span className="block text-sm font-semibold text-fog">{ws.name}</span>
         <span className="block text-xs text-smoke">Creado el {formatDate(ws.createdAt)}</span>
+        {ws.progress && (
+          <span className={['mt-0.5 block text-xs font-semibold', ws.progress.done === ws.progress.total ? 'text-ok' : 'text-ash'].join(' ')}>
+            {ws.progress.done === ws.progress.total ? 'Primeros pasos completos' : `${ws.progress.done} de ${ws.progress.total} primeros pasos`}
+          </span>
+        )}
       </span>
       <span className="text-xs text-ash">{ws.people.map((p) => `${p.name} (${p.email})`).join(' · ') || 'Sin nadie todavía'}</span>
       <span className={['text-xs font-semibold md:text-right', ws.igUsername ? 'text-ok' : 'text-warn'].join(' ')}>{ws.igUsername ? `@${ws.igUsername}` : 'Instagram sin conectar'}</span>
@@ -129,14 +148,14 @@ function WorkspaceRow({ ws, onChanged, onError }: { ws: WorkspaceItem; onChanged
             <SecondaryButton onClick={() => void setLock(true)}>Bloquear</SecondaryButton>
           </>
         )}
-        <button type="button" onClick={() => setConfirmDelete(true)} aria-label={`Borrar el espacio ${ws.name}`} className="inline-flex min-h-[36px] items-center gap-1 rounded-lg px-2 text-xs text-smoke transition-colors hover:bg-bad/10 hover:text-bad">
+        <button type="button" onClick={() => setConfirmDelete(true)} aria-label={`Borrar el cliente ${ws.name}`} className="inline-flex min-h-[36px] items-center gap-1 rounded-lg px-2 text-xs text-smoke transition-colors hover:bg-bad/10 hover:text-bad">
           <Trash2 size={14} /> Borrar
         </button>
       </span>
       {confirmDelete && (
-        <ConfirmDialog title={`Borrar el espacio «${ws.name}»`} word={ws.name.toUpperCase()} confirmLabel="Borrar para siempre" tone="bad" busy={deleting} onConfirm={() => void remove()} onCancel={() => setConfirmDelete(false)}>
+        <ConfirmDialog title={`Borrar el cliente «${ws.name}»`} word={ws.name.toUpperCase()} confirmLabel="Borrar para siempre" tone="bad" busy={deleting} onConfirm={() => void remove()} onCancel={() => setConfirmDelete(false)}>
           <p>Se borra para siempre su base de datos (contactos, conversaciones, flujos, documentos y ajustes) y se quita el acceso a {ws.people.map((p) => p.name).join(', ') || 'su equipo'}. No se puede deshacer.</p>
-          {ws.igUsername && <p>Los mensajes y comentarios que lleguen a @{ws.igUsername} dejarán de guardarse (y nunca irán a tu espacio).</p>}
+          {ws.igUsername && <p>Los mensajes y comentarios que lleguen a @{ws.igUsername} dejarán de guardarse (y nunca irán a tu cuenta).</p>}
         </ConfirmDialog>
       )}
       {confirmUnlock && (
@@ -148,7 +167,7 @@ function WorkspaceRow({ ws, onChanged, onError }: { ws: WorkspaceItem; onChanged
   );
 }
 
-function NewWorkspaceForm({ onCreated }: { onCreated: (name: string, password: string) => void }) {
+function NewWorkspaceForm({ onCreated }: { onCreated: (name: string, email: string, password: string) => void }) {
   const [name, setName] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
@@ -161,7 +180,7 @@ function NewWorkspaceForm({ onCreated }: { onCreated: (name: string, password: s
     setError(null);
     try {
       const { tempPassword } = await api<{ tempPassword: string }>('/workspaces', { method: 'POST', body: { name, adminName, adminEmail } });
-      onCreated(adminName, tempPassword);
+      onCreated(adminName, adminEmail, tempPassword);
       setName('');
       setAdminName('');
       setAdminEmail('');
@@ -173,23 +192,23 @@ function NewWorkspaceForm({ onCreated }: { onCreated: (name: string, password: s
   }
 
   return (
-    <Section label="Crear un espacio" description="Se crea su base de datos y una clave temporal para quien lo lleva (tendrá que cambiarla al entrar). Tarda unos segundos.">
+    <Section label="Crear un cliente" description="Se crea su cuenta aparte y una clave temporal para su dueño (tendrá que cambiarla al entrar). Tarda unos segundos.">
       {error && <Notice tone="bad">{error}</Notice>}
       <form onSubmit={(e) => void submit(e)} className="mt-2 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
         <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold text-mist">Nombre del espacio</span>
+          <span className="mb-1.5 block text-xs font-semibold text-mist">Nombre del cliente</span>
           <input className="field" required maxLength={60} placeholder="Ej.: Pedro (socio)" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold text-mist">Quién lo lleva</span>
+          <span className="mb-1.5 block text-xs font-semibold text-mist">Nombre del dueño</span>
           <input className="field" required maxLength={60} placeholder="Nombre" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold text-mist">Su correo</span>
+          <span className="mb-1.5 block text-xs font-semibold text-mist">Correo del dueño</span>
           <input className="field" required type="email" placeholder="correo@ejemplo.com" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
         </label>
         <button type="submit" disabled={busy || !name.trim() || !adminName.trim() || !adminEmail.trim()} className="btn-gold inline-flex min-h-[44px] items-center justify-center gap-1.5 px-4 text-[13px]">
-          <Plus size={14} /> {busy ? 'Creando…' : 'Crear espacio'}
+          <Plus size={14} /> {busy ? 'Creando…' : 'Crear cliente'}
         </button>
       </form>
     </Section>
