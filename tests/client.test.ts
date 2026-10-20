@@ -63,11 +63,13 @@ describe('InstagramClient', () => {
         { id: '1', media_type: 'VIDEO', thumbnail_url: 'https://cdn/v.jpg', media_url: 'https://cdn/v.mp4' },
         { id: '2', media_type: 'IMAGE', media_url: 'https://cdn/i.jpg' },
         { id: '3', media_type: 'CAROUSEL_ALBUM' },
+        { id: '4', media_type: 'CAROUSEL_ALBUM', media_url: 'https://cdn/c.jpg' },
       ],
     });
     const media = await new InstagramClient('t', 'v25.0', covers).listMedia(5, { covers: true });
     expect(lastCall(covers)[0]).toContain('fields=id,caption,permalink,timestamp,media_product_type,media_type,media_url,thumbnail_url');
-    expect(media.map((m) => m.cover)).toEqual(['https://cdn/v.jpg', 'https://cdn/i.jpg', null]);
+    // Carrusel: su media_url si Meta lo manda (fase 8.9: 19 de 50 reels reales salían sin portada).
+    expect(media.map((m) => m.cover)).toEqual(['https://cdn/v.jpg', 'https://cdn/i.jpg', null, 'https://cdn/c.jpg']);
     const one = fetchReturning(200, { id: '77', media_type: 'VIDEO', thumbnail_url: 'https://cdn/77.jpg' });
     expect((await new InstagramClient('t', 'v25.0', one).getMedia('77', { covers: true }))?.cover).toBe('https://cdn/77.jpg');
   });

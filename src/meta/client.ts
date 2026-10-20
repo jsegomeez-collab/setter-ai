@@ -127,7 +127,7 @@ function asString(value: unknown): string | null {
 }
 
 const MEDIA_FIELDS = 'id,caption,permalink,timestamp,media_product_type';
-/** Portada (doc IG Media: thumbnail_url solo en vídeos; en fotos, media_url). */
+/** Portada (doc IG Media: thumbnail_url solo en vídeos; en fotos y carruseles, media_url si viene). */
 const COVER_FIELDS = 'media_type,media_url,thumbnail_url';
 
 export interface MediaOptions {
@@ -137,7 +137,8 @@ export interface MediaOptions {
 const mediaFields = (options: MediaOptions): string => (options.covers ? `${MEDIA_FIELDS},${COVER_FIELDS}` : MEDIA_FIELDS);
 
 function coverOf(item: Json): string | null {
-  return asString(item.thumbnail_url) ?? (asString(item.media_type) === 'IMAGE' ? asString(item.media_url) : null);
+  // Vídeo: su portada; foto o carrusel: su media_url (en un vídeo, media_url es el .mp4 y no sirve de imagen).
+  return asString(item.thumbnail_url) ?? (asString(item.media_type) === 'VIDEO' ? null : asString(item.media_url));
 }
 /** Graph API: "Object with ID does not exist, cannot be loaded due to missing permissions…". */
 const OBJECT_NOT_FOUND_CODE = 100;
