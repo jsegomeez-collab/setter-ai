@@ -389,7 +389,7 @@ Jose: "mejora mucho más el visual de la app… mucho más intuitiva y muchísim
 - [x] **8.6 Contactos:** fotos, portada del reel de origen, etapa con color; "Por reel" como cuadrícula de portadas.
 - [x] **8.7 Flujos:** cada flujo con las portadas de sus reels y su cadena de pasos en iconos (qué hace, de un vistazo).
 - [x] **8.8 Setter y Métricas:** estado del setter grande con icono y color; ranking de reels con portada.
-- [ ] **8.9 Comprobar:** pruebas, accesibilidad (`audit.ts`), capturas en ordenador y móvil, desplegar y mirar en producción.
+- [x] **8.9 Comprobado 2026-10-21:** 670 pruebas, `audit.ts` 0 problemas en 18 pantallas, capturas en ordenador y móvil (`.playwright-mcp/shots/v8c-*`), desplegado (36ed420 + 9e2540b). En producción: portadas 50/50 reels recientes y 34/34 en "Por reel" (los carruseles salían sin portada → arreglado con su media_url), Instagram sirve la imagen sin pedir de qué web viene (200, JPEG), sin errores. **Sin comprobar:** fotos de perfil reales (llegan con el próximo DM de cada persona) y verlo pintado en el Chrome de Jose (la pestaña que manejo está oculta). **Mejora apuntada:** cada portada pesa ~336 KB (Meta la da a tamaño completo).
 
 ---
 
