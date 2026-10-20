@@ -229,6 +229,8 @@ export const SETTINGS = {
   /** Bloqueo largo puesto a mano por el admin (p. ej. 30 días de Meta, 2026-10-19): frena TODOS los envíos hasta esa fecha ISO. */
   sendsBlockedUntil: 'sends_blocked_until',
   sendsBlockedReason: 'sends_blocked_reason',
+  /** Cerrojo de un espacio ('true'/'false'): con 'true' el bloqueo de envíos solo lo quita Jose (sends-lock.ts). */
+  sendsLocked: 'sends_locked',
   /** Token de Instagram cifrado y su información de renovación. */
   igToken: 'ig_token_encrypted',
   igTokenRefreshedAt: 'ig_token_refreshed_at',

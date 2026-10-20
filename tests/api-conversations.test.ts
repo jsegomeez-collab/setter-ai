@@ -3,6 +3,7 @@ import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/auth.js';
 import type { Config } from '../src/config.js';
 import { TokenManager } from '../src/meta/token.js';
+import { LOCKED_UNTIL, lockSends } from '../src/sends-lock.js';
 import { SETTINGS } from '../src/store.js';
 import { STRANGER_ID, TEST_SETTER_CONFIG, createMemoryStore } from './helpers.js';
 import { createMemoryUserStore } from './users-memory.js';
@@ -109,5 +110,14 @@ describe('API Conversaciones (Fase 6.2)', () => {
     await send('POST', '/api/conversations/sends-block', admin, { until: null, reason: null });
     expect(store.settings.get(SETTINGS.sendsBlockedUntil) ?? null).toBeNull();
     expect((await send('POST', '/api/conversations/sends-block', admin, { until: 'no-es-fecha', reason: 'x' })).status).toBe(400);
+  });
+
+  it('con el cerrojo de Jose (espacio nuevo), ni el admin del espacio puede quitar el bloqueo', async () => {
+    const { send, admin, store } = await setup();
+    await lockSends(store);
+    const res = await send('POST', '/api/conversations/sends-block', admin, { until: null, reason: null });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toMatch(/Jose/);
+    expect(store.settings.get(SETTINGS.sendsBlockedUntil)).toBe(LOCKED_UNTIL);
   });
 });

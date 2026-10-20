@@ -2,7 +2,7 @@ import { MessagesSquare } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { api } from '../lib/api';
-import { formatDate } from '../ui/kit';
+import { blockedUntilText } from '../ui/kit';
 import { ConversationView } from './ConversationView';
 import { InboxList } from './InboxList';
 import type { InboxResponse } from './types';
@@ -38,7 +38,7 @@ export function ConversationsPage() {
     <div className="flex h-full flex-col">
       {blocked && (
         <p className="border-b border-warn/20 bg-warn/[0.07] px-4 py-2 text-[13px] text-warn">
-          Envíos bloqueados hasta {formatDate(blocked.until)}
+          Envíos bloqueados {blockedUntilText(blocked.until)}
           {blocked.reason ? ` · ${blocked.reason}` : ''}. Nada sale a Instagram hasta entonces (tampoco la IA ni los flujos).
         </p>
       )}

@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createDatabaseSql, createPostgresWorkspaceRegistry, databaseUrlFor, newWorkspaceId, type WorkspaceRegistry } from '../src/workspaces.js';
+import { createDatabaseSql, createPostgresWorkspaceRegistry, databaseUrlFor, dropDatabaseSql, newWorkspaceId, type WorkspaceRegistry } from '../src/workspaces.js';
 
 /** Fase 7.5a: lista de espacios (en la base principal) y la base de datos propia de cada uno. */
 
@@ -58,6 +58,20 @@ describe('createPostgresWorkspaceRegistry (Postgres real)', () => {
     // Una cuenta de Instagram solo puede estar en un espacio.
     await expect(registry.setInstagram('ws_cliente_c3d4', '1784140000000099', 'socio_ig')).rejects.toThrow();
   });
+
+  it('borrar un espacio lo quita de la lista y recuerda su cuenta de Instagram como quitada (sus avisos se descartan)', async () => {
+    await registry.remove('ws_socio_a1b2');
+    expect((await registry.list()).map((w) => w.id)).toEqual(['ws_cliente_c3d4']);
+    expect(await registry.findByIgUser('1784140000000099')).toBeNull();
+    expect(await registry.removedIgUsers()).toEqual(['1784140000000099']);
+    // Si esa cuenta se conecta después a otro espacio, deja de estar quitada.
+    await registry.setInstagram('ws_cliente_c3d4', '1784140000000099', 'socio_ig');
+    expect(await registry.removedIgUsers()).toEqual([]);
+    // Borrar uno sin Instagram no apunta nada.
+    await registry.create({ id: 'ws_vacio_e5f6', name: 'Vacío' });
+    await registry.remove('ws_vacio_e5f6');
+    expect(await registry.removedIgUsers()).toEqual([]);
+  });
 });
 
 describe('crear la base de datos', () => {
@@ -66,5 +80,15 @@ describe('crear la base de datos', () => {
     const { provisionDatabase } = await import('../src/workspaces.js');
     await provisionDatabase({ unsafe }, 'ws_socio_a1b2');
     expect(unsafe).toHaveBeenCalledWith('CREATE DATABASE "ws_socio_a1b2"');
+  });
+
+  it('borrar la base solo acepta ids de espacio (nunca la principal) y cierra antes sus conexiones', async () => {
+    expect(dropDatabaseSql('ws_socio_a1b2')).toBe('DROP DATABASE IF EXISTS "ws_socio_a1b2" WITH (FORCE)');
+    expect(() => dropDatabaseSql('neondb')).toThrow();
+    expect(() => dropDatabaseSql('ws_x"; DROP DATABASE neondb; --')).toThrow();
+    const unsafe = vi.fn().mockResolvedValue([]);
+    const { dropDatabase } = await import('../src/workspaces.js');
+    await dropDatabase({ unsafe }, 'ws_socio_a1b2');
+    expect(unsafe).toHaveBeenCalledWith('DROP DATABASE IF EXISTS "ws_socio_a1b2" WITH (FORCE)');
   });
 });

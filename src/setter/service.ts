@@ -136,6 +136,7 @@ export class SetterService {
   /** DM de una persona (no eco). Se guarda siempre; la respuesta espera por si escribe más. */
   async onIncoming(event: MessageEvent): Promise<void> {
     await this.record(event);
+    await this.rememberUsername(event.senderId);
     this.scheduleReply(event.senderId);
   }
 
@@ -335,6 +336,20 @@ export class SetterService {
     const username = contact?.username ?? (await this.lookupUsername(igId));
     if (username && allowed.includes(username.toLowerCase())) return null;
     return `Modo prueba: @${username ?? 'desconocido'} no está en la lista de usuarios de prueba.`;
+  }
+
+  /**
+   * Nombre de quien escribe, para verlo en Conversaciones: se pide a Meta una vez, esté el setter como esté (antes solo
+   * se pedía en modo prueba y, con el setter apagado, salía sin nombre; visto en la 7.5d). Si Meta falla, el DM ya
+   * está guardado y se vuelve a intentar en el siguiente mensaje.
+   */
+  private async rememberUsername(igId: string): Promise<void> {
+    if ((await this.options.store.getContact(igId))?.username) return;
+    try {
+      await this.lookupUsername(igId);
+    } catch {
+      // Sin nombre esta vez: no frena nada.
+    }
   }
 
   private async lookupUsername(igId: string): Promise<string | null> {

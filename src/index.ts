@@ -58,6 +58,16 @@ async function main(): Promise<void> {
         if (!manager) throw new Error('Los espacios aún están arrancando');
         return manager.create(name);
       },
+      // Envíos de cada espacio: nacen bloqueados y solo Jose los activa (20-10).
+      sendsLocked: async (id) => (manager ? manager.sendsLocked(id) : null),
+      setSendsLock: (id, locked, who) => {
+        if (!manager) throw new Error('Los espacios aún están arrancando');
+        return manager.setSendsLock(id, locked, who);
+      },
+      remove: (id) => {
+        if (!manager) throw new Error('Los espacios aún están arrancando');
+        return manager.remove(id);
+      },
     },
     instagramConnect,
     // Conectar de verdad el Instagram de otro espacio (7.5c): la vuelta de Instagram llega aquí.
@@ -71,6 +81,7 @@ async function main(): Promise<void> {
     registry,
     principal,
     provision: (workspaceId) => registry.provision(workspaceId),
+    dropDatabase: (workspaceId) => registry.dropDatabase(workspaceId),
     start: async (workspace) =>
       startWorkspaceRuntime({
         config,

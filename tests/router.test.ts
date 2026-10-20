@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { SESSION_COOKIE, hashToken } from '../src/auth.js';
 import { createLinkToken } from '../src/links.js';
 import { createRouter } from '../src/router.js';
+import { lockSends } from '../src/sends-lock.js';
+import { SETTINGS } from '../src/store.js';
 import { WorkspaceManager } from '../src/workspace-manager.js';
 import type { WorkspaceRuntime } from '../src/workspace-runtime.js';
 import type { Workspace, WorkspaceRegistry } from '../src/workspaces.js';
@@ -18,9 +20,16 @@ function fakeRuntime(id: string | null): WorkspaceRuntime & { processed: unknown
   return { id, store: createMemoryStore(), app, processed, process: (payload) => processed.push(payload), close: vi.fn().mockResolvedValue(undefined), saveToken: vi.fn().mockResolvedValue(undefined), accountId: async () => null };
 }
 
-function memoryRegistry(initial: Workspace[] = []): WorkspaceRegistry {
+function memoryRegistry(initial: Workspace[] = [], removedAccounts: string[] = []): WorkspaceRegistry {
   let rows = [...initial];
+  let removed = [...removedAccounts];
   return {
+    remove: async (id) => {
+      const account = rows.find((w) => w.id === id)?.igUserId;
+      rows = rows.filter((w) => w.id !== id);
+      if (account) removed = [...removed, account];
+    },
+    removedIgUsers: async () => removed,
     list: async () => rows,
     create: async ({ id, name }) => {
       const ws = { id, name, igUserId: null, igUsername: null, createdAt: new Date() };
@@ -37,7 +46,7 @@ function memoryRegistry(initial: Workspace[] = []): WorkspaceRegistry {
 
 const SOCIO: Workspace = { id: 'ws_socio_a1b2', name: 'Socio', igUserId: '1784140000000099', igUsername: 'socio_ig', createdAt: new Date() };
 
-async function setup() {
+async function setup(removedAccounts: string[] = []) {
   const users = createMemoryUserStore();
   const jose = await users.createUser({ email: 'jose@x.com', name: 'Jose', role: 'admin', passwordHash: 'h' });
   const socio = await users.createUser({ email: 'socio@x.com', name: 'Socio', role: 'admin', passwordHash: 'h', workspaceId: SOCIO.id });
@@ -46,9 +55,11 @@ async function setup() {
   const principal = fakeRuntime(null);
   const subscribe = vi.fn().mockResolvedValue(undefined);
   const runtimes = new Map<string, ReturnType<typeof fakeRuntime>>();
+  const dropDatabase = vi.fn().mockResolvedValue(undefined);
   const manager = new WorkspaceManager({
-    registry: memoryRegistry([SOCIO]),
+    registry: memoryRegistry([SOCIO], removedAccounts),
     principal,
+    dropDatabase,
     start: async (ws) => {
       const runtime = fakeRuntime(ws.id);
       runtimes.set(ws.id, runtime);
@@ -62,7 +73,7 @@ async function setup() {
   await manager.boot();
   const router = createRouter({ users, manager, linkSecret: 'secreto' });
   const get = (path: string, cookie = '') => router.request(`https://app.test${path}`, { headers: cookie ? { cookie: `${SESSION_COOKIE}=${cookie}` } : {} });
-  return { manager, router, get, principal, runtimes, subscribe };
+  return { manager, router, get, principal, runtimes, subscribe, dropDatabase };
 }
 
 describe('reparto por espacio', () => {
@@ -131,5 +142,49 @@ describe('reparto por espacio', () => {
     await expect(manager.connectInstagram(SOCIO.id, { accessToken: 't', expiresInDays: 60, userId: 'cuenta-de-jose', username: 'josenews.ai' })).rejects.toThrow('cuenta principal');
     expect(subscribe).not.toHaveBeenCalled();
     expect(runtimes.get(SOCIO.id)?.saveToken).not.toHaveBeenCalled();
+  });
+
+  it('Jose activa o vuelve a bloquear los envíos de un espacio (en su base) y queda en el registro del espacio', async () => {
+    const { manager, runtimes } = await setup();
+    const store = runtimes.get(SOCIO.id)?.store;
+    await lockSends(store as NonNullable<typeof store>);
+    expect(await manager.sendsLocked(SOCIO.id)).toBe(true);
+    await manager.setSendsLock(SOCIO.id, false, 'Jose');
+    expect(await manager.sendsLocked(SOCIO.id)).toBe(false);
+    expect(await store?.getSetting(SETTINGS.sendsBlockedUntil)).toBeNull();
+    expect((await store?.recentEvents(5))?.some((e) => e.kind === 'pausado' && e.note.includes('Jose'))).toBe(true);
+    await manager.setSendsLock(SOCIO.id, true, 'Jose');
+    expect(await manager.sendsLocked(SOCIO.id)).toBe(true);
+    expect(await manager.sendsLocked('ws_no_existe_0000')).toBeNull();
+    await expect(manager.setSendsLock('ws_no_existe_0000', false, 'Jose')).rejects.toThrow('no está en marcha');
+  });
+
+  it('borrar un espacio: lo para, borra su base, lo quita de la lista y sus avisos ya NO van al de Jose', async () => {
+    const { manager, runtimes, principal, dropDatabase } = await setup();
+    const runtime = runtimes.get(SOCIO.id);
+    await manager.remove(SOCIO.id);
+    expect(runtime?.close).toHaveBeenCalled();
+    expect(dropDatabase).toHaveBeenCalledWith(SOCIO.id);
+    expect(await manager.list()).toEqual([]);
+    expect(manager.get(SOCIO.id)).toBeUndefined();
+    manager.dispatchWebhook({ entry: [{ id: '1784140000000099', messaging: [] }, { id: 'cuenta-de-jose', changes: [] }] });
+    expect(principal.processed).toEqual([{ entry: [{ id: 'cuenta-de-jose', changes: [] }] }]);
+    expect(runtime?.processed).toEqual([]);
+  });
+
+  it('si no se puede borrar su base, el espacio sigue como estaba (vuelve a arrancar) y avisa del error', async () => {
+    const { manager, runtimes, dropDatabase } = await setup();
+    dropDatabase.mockRejectedValueOnce(new Error('Neon no responde'));
+    await expect(manager.remove(SOCIO.id)).rejects.toThrow('Neon no responde');
+    expect((await manager.list()).map((w) => w.id)).toEqual([SOCIO.id]);
+    manager.dispatchWebhook({ entry: [{ id: '1784140000000099' }] });
+    expect(runtimes.get(SOCIO.id)?.processed).toHaveLength(1);
+  });
+
+  it('tras reiniciar el servidor, los avisos de cuentas de espacios borrados se siguen descartando', async () => {
+    const { manager, principal } = await setup(['1784140000000777']);
+    manager.dispatchWebhook({ entry: [{ id: '1784140000000777' }] });
+    expect(principal.processed).toEqual([]);
+    await expect(manager.remove('ws_no_existe_0000')).rejects.toThrow('no existe');
   });
 });

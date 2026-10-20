@@ -36,12 +36,25 @@ async function setup() {
   const users = createMemoryUserStore();
   const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
   const created: Workspace[] = [];
+  // Cerrojo de envíos de cada espacio: nace puesto (lo pone su arranque).
+  const locks = new Map<string, boolean>();
   const workspaces = {
     list: vi.fn(async () => created),
     create: vi.fn(async (name: string) => {
       const ws = { id: `ws_${name.toLowerCase()}_0001`, name, igUserId: null, igUsername: null, createdAt: new Date() };
       created.push(ws);
+      locks.set(ws.id, true);
       return ws;
+    }),
+    sendsLocked: vi.fn(async (id: string) => locks.get(id) ?? null),
+    setSendsLock: vi.fn(async (id: string, locked: boolean) => {
+      locks.set(id, locked);
+    }),
+    remove: vi.fn(async (id: string) => {
+      created.splice(
+        created.findIndex((ws) => ws.id === id),
+        1,
+      );
     }),
     users,
   };
@@ -72,6 +85,48 @@ describe('API Espacios (Fase 7.5b)', () => {
     // La lista trae a quién lleva cada espacio.
     const list = await (await send('GET', '/api/workspaces', admin)).json();
     expect(list.workspaces).toEqual([expect.objectContaining({ id: 'ws_socio_0001', name: 'Socio', people: [{ name: 'Pedro', email: 'socio@x.com', role: 'admin' }] })]);
+  });
+
+  it('los envíos de un espacio nuevo salen bloqueados y solo Jose (admin del principal) los activa o los vuelve a bloquear', async () => {
+    const { send, admin, workspaces, store } = await setup();
+    await send('POST', '/api/workspaces', admin, { name: 'Socio', adminEmail: 'socio@x.com', adminName: 'Pedro' });
+    const before = await (await send('GET', '/api/workspaces', admin)).json();
+    expect(before.workspaces[0].sendsLocked).toBe(true);
+
+    expect((await send('POST', '/api/workspaces/ws_socio_0001/sends', admin, { locked: false })).status).toBe(200);
+    expect(workspaces.setSendsLock).toHaveBeenCalledWith('ws_socio_0001', false, 'Jose');
+    expect((await (await send('GET', '/api/workspaces', admin)).json()).workspaces[0].sendsLocked).toBe(false);
+    expect(store.events.some((e) => e.kind === 'espacios' && /activ/i.test(e.note) && e.note.includes('Socio'))).toBe(true);
+
+    expect((await send('POST', '/api/workspaces/ws_socio_0001/sends', admin, { locked: true })).status).toBe(200);
+    expect((await send('POST', '/api/workspaces/ws_socio_0001/sends', admin, { locked: 'no' })).status).toBe(400);
+    expect((await send('POST', '/api/workspaces/ws_no_existe_0000/sends', admin, { locked: false })).status).toBe(404);
+  });
+
+  it('borrar un espacio pide escribir su nombre; lo borra todo y quita a sus usuarios (Jose sigue)', async () => {
+    const { send, admin, users, workspaces, store } = await setup();
+    await send('POST', '/api/workspaces', admin, { name: 'Socio', adminEmail: 'socio@x.com', adminName: 'Pedro' });
+    const wrong = await send('POST', '/api/workspaces/ws_socio_0001/delete', admin, { confirm: 'socio' });
+    expect(wrong.status).toBe(400);
+    expect(workspaces.remove).not.toHaveBeenCalled();
+
+    expect((await send('POST', '/api/workspaces/ws_socio_0001/delete', admin, { confirm: 'Socio' })).status).toBe(200);
+    expect(workspaces.remove).toHaveBeenCalledWith('ws_socio_0001');
+    expect(await users.findUserByEmail('socio@x.com')).toBeNull();
+    expect(await users.findUserByEmail('jose@x.com')).not.toBeNull();
+    expect((await (await send('GET', '/api/workspaces', admin)).json()).workspaces).toEqual([]);
+    expect(store.events.some((e) => e.kind === 'espacios' && /borr/i.test(e.note) && e.note.includes('Socio'))).toBe(true);
+    expect((await send('POST', '/api/workspaces/ws_socio_0001/delete', admin, { confirm: 'Socio' })).status).toBe(404);
+  });
+
+  it('si el borrado falla, no se quita a nadie y se dice por qué', async () => {
+    const { send, admin, users, workspaces } = await setup();
+    await send('POST', '/api/workspaces', admin, { name: 'Socio', adminEmail: 'socio@x.com', adminName: 'Pedro' });
+    workspaces.remove.mockRejectedValueOnce(new Error('Neon no responde'));
+    const res = await send('POST', '/api/workspaces/ws_socio_0001/delete', admin, { confirm: 'Socio' });
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toContain('Neon no responde');
+    expect(await users.findUserByEmail('socio@x.com')).not.toBeNull();
   });
 
   it('un correo que ya tiene cuenta se rechaza ANTES de crear nada', async () => {

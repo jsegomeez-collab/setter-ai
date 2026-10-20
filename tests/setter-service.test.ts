@@ -163,12 +163,28 @@ describe('SetterService', () => {
     expect(stranger.store.events.at(-1)?.note).toContain('@desconocida no está en la lista');
   });
 
-  it('modo público: responde a cualquiera sin mirar el username', async () => {
-    const { decide, getUsername, service, flush } = await setup({ mode: 'live', username: null });
+  it('modo público: responde a cualquiera aunque Meta no dé su username', async () => {
+    const { decide, service, flush } = await setup({ mode: 'live', username: null });
     await service.onIncoming(dm('hola', 'm-1'));
     await flush();
     expect(decide).toHaveBeenCalledTimes(1);
-    expect(getUsername).not.toHaveBeenCalled();
+  });
+
+  it('el nombre de quien escribe se guarda con el setter en cualquier modo, también apagado (7.5d: salía sin nombre)', async () => {
+    const { store, getUsername, service } = await setup({ mode: 'off', username: 'cliente_nuevo' });
+    await service.onIncoming(dm('hola', 'm-1'));
+    expect(getUsername).toHaveBeenCalledWith(STRANGER_ID);
+    expect((await store.getContact(STRANGER_ID))?.username).toBe('cliente_nuevo');
+    // Ya lo tiene: no se vuelve a preguntar a Meta en cada mensaje.
+    await service.onIncoming(dm('otra', 'm-2'));
+    expect(getUsername).toHaveBeenCalledTimes(1);
+  });
+
+  it('si Meta falla al dar el nombre, el DM se guarda igual', async () => {
+    const { store, getUsername, service } = await setup({ mode: 'off' });
+    getUsername.mockRejectedValueOnce(new Error('Meta 500'));
+    await service.onIncoming(dm('hola', 'm-1'));
+    expect((await store.listMessages(STRANGER_ID, 5)).map((m) => m.text)).toEqual(['hola']);
   });
 
   it('si la IA está parada en esa conversación, no responde', async () => {

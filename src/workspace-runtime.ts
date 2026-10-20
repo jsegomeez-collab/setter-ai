@@ -12,6 +12,7 @@ import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
 import { processEvent, processInBackground, rescueComments } from './process.js';
 import { Scheduler } from './scheduler.js';
+import { LOCK_REASON, ensureInitialLock } from './sends-lock.js';
 import { Sender } from './sender.js';
 import { ClaudeBrain } from './setter/brain.js';
 import { EchoWatcher } from './setter/echoes.js';
@@ -79,7 +80,12 @@ export interface WorkspaceRuntime {
 
 export async function startWorkspaceRuntime(deps: RuntimeDeps): Promise<WorkspaceRuntime> {
   const { config, store, workspaceId } = deps;
-  const tokens = new TokenManager({ store, envToken: deps.envToken, encryptionKey: config.tokenEncryptionKey });
+  // Un espacio nuevo nace con los envíos bloqueados y solo Jose los activa (decisión de Jose, 20-10). Antes de nada,
+  // para que no salga ningún envío pendiente.
+  if (workspaceId !== null && (await ensureInitialLock(store))) {
+    await store.logEvent('pausado', `Envíos bloqueados: ${LOCK_REASON}`, null);
+  }
+  const tokens =new TokenManager({ store, envToken: deps.envToken, encryptionKey: config.tokenEncryptionKey });
   const hasToken = (await tokens.get()) !== null;
   const client = hasToken ? new InstagramClient(() => tokens.get(), config.igApiVersion) : null;
 

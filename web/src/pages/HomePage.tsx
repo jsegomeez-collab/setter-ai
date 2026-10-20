@@ -10,7 +10,7 @@ import { percent } from '../metrics/types';
 import type { SetterData } from '../setter/types';
 import { navFor } from '../shell/nav';
 import { Skeleton } from '../ui/EmptyState';
-import { Notice, formatDate } from '../ui/kit';
+import { Notice, blockedUntilText, formatDate } from '../ui/kit';
 import { Page, PageHeader } from '../ui/PageHeader';
 
 /**
@@ -82,7 +82,7 @@ export function HomePage() {
         {error && <Notice tone="bad">{error}</Notice>}
         {inbox?.sendsBlocked && (
           <Notice tone="warn">
-            Envíos bloqueados hasta el {formatDate(inbox.sendsBlocked.until)}
+            Envíos bloqueados {blockedUntilText(inbox.sendsBlocked.until)}
             {inbox.sendsBlocked.reason ? ` · ${inbox.sendsBlocked.reason}` : ''}. No sale nada a Instagram hasta entonces.
           </Notice>
         )}

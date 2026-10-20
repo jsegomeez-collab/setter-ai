@@ -1,3 +1,4 @@
+import { LOCK_REASON, isSendsLocked, lockSends, unlockSends } from './sends-lock.js';
 import type { WorkspaceRuntime } from './workspace-runtime.js';
 import { newWorkspaceId, type Workspace, type WorkspaceRegistry } from './workspaces.js';
 
@@ -14,6 +15,8 @@ export interface ManagerDeps {
   readonly start: (workspace: Workspace) => Promise<WorkspaceRuntime>;
   /** Crea la base de datos vacía del espacio. */
   readonly provision: (workspaceId: string) => Promise<void>;
+  /** Borra la base de datos del espacio (DROP DATABASE). */
+  readonly dropDatabase: (workspaceId: string) => Promise<void>;
   readonly log: (message: string) => void;
   /** Suscribe los avisos de Meta de una cuenta con su token (POST me/subscribed_apps). */
   readonly subscribe: (accessToken: string) => Promise<void>;
@@ -38,6 +41,8 @@ export class WorkspaceManager {
   private readonly runtimes = new Map<string, WorkspaceRuntime>();
   /** Cuenta de Instagram → espacio (para repartir los avisos sin preguntar a la base en cada aviso). */
   private readonly byIgUser = new Map<string, string>();
+  /** Cuentas de espacios borrados: sus avisos se descartan (si no, irían al de Jose como si fueran suyos). */
+  private readonly removedIgUsers = new Set<string>();
 
   constructor(private readonly deps: ManagerDeps) {}
 
@@ -47,6 +52,7 @@ export class WorkspaceManager {
 
   /** Arranca todos los espacios guardados. Si uno falla, se apunta y los demás siguen (el de Jose nunca se para). */
   async boot(): Promise<void> {
+    for (const account of await this.deps.registry.removedIgUsers()) this.removedIgUsers.add(account);
     for (const workspace of await this.deps.registry.list()) {
       try {
         await this.launch(workspace);
@@ -79,6 +85,30 @@ export class WorkspaceManager {
     await this.deps.registry.setInstagram(workspaceId, igUserId, igUsername);
     for (const [account, owner] of this.byIgUser) if (owner === workspaceId) this.byIgUser.delete(account);
     this.byIgUser.set(igUserId, workspaceId);
+    this.removedIgUsers.delete(igUserId);
+  }
+
+  /**
+   * Borra un espacio para siempre (decisión de Jose, 20-10): lo para, borra su base de datos y lo quita de la lista.
+   * Su cuenta de Instagram queda como "quitada": sus avisos se descartan. Si la base no se puede borrar, el espacio
+   * vuelve a arrancar tal cual y se avisa del error (nunca queda a medias). Sus usuarios los quita quien llama.
+   */
+  async remove(workspaceId: string): Promise<void> {
+    const workspace = (await this.deps.registry.list()).find((ws) => ws.id === workspaceId);
+    if (!workspace) throw new Error(`El espacio ${workspaceId} no existe`);
+    await this.runtimes.get(workspaceId)?.close();
+    this.runtimes.delete(workspaceId);
+    try {
+      await this.deps.dropDatabase(workspaceId);
+    } catch (error) {
+      await this.launch(workspace);
+      throw error;
+    }
+    await this.deps.registry.remove(workspaceId);
+    if (workspace.igUserId) {
+      this.byIgUser.delete(workspace.igUserId);
+      this.removedIgUsers.add(workspace.igUserId);
+    }
   }
 
   /**
@@ -103,6 +133,20 @@ export class WorkspaceManager {
     });
   }
 
+  /** ¿Envíos del espacio con el cerrojo de Jose? null = ese espacio no está en marcha. */
+  async sendsLocked(workspaceId: string): Promise<boolean | null> {
+    const runtime = this.runtimes.get(workspaceId);
+    return runtime ? isSendsLocked(runtime.store) : null;
+  }
+
+  /** Jose activa (false) o vuelve a bloquear (true) los envíos de un espacio; queda en el registro del espacio. */
+  async setSendsLock(workspaceId: string, locked: boolean, who: string): Promise<void> {
+    const runtime = this.runtimes.get(workspaceId);
+    if (!runtime) throw new Error(`El espacio ${workspaceId} no está en marcha`);
+    await (locked ? lockSends(runtime.store) : unlockSends(runtime.store));
+    await runtime.store.logEvent('pausado', locked ? `Envíos bloqueados por ${who}: ${LOCK_REASON}` : `Envíos activados por ${who}.`, null);
+  }
+
   /** Para y vuelve a arrancar un espacio (p. ej. tras conectar su Instagram: así crea su cliente con el token). */
   private async restart(workspaceId: string): Promise<void> {
     const workspace = (await this.deps.registry.list()).find((ws) => ws.id === workspaceId);
@@ -125,6 +169,8 @@ export class WorkspaceManager {
     for (const entry of payload.entry) {
       const account = isObject(entry) && (typeof entry.id === 'string' || typeof entry.id === 'number') ? String(entry.id) : null;
       const owner = account ? this.byIgUser.get(account) : undefined;
+      // Cuenta de un espacio borrado: su aviso no es de nadie (Meta los sigue mandando mientras la app esté en ella).
+      if (!owner && account && this.removedIgUsers.has(account)) continue;
       const runtime = (owner && this.runtimes.get(owner)) || this.deps.principal;
       groups.set(runtime, [...(groups.get(runtime) ?? []), entry]);
     }

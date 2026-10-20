@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { filterInbox, toInboxItem } from './inbox.js';
 import { requireAdmin, requireUser, type ApiEnv } from './routes-api.js';
+import { isSendsLocked } from './sends-lock.js';
 import type { DiscardResult, DraftResult, ManualResult } from './setter/service.js';
 import { SETTINGS, type Store } from './store.js';
 import type { UserStore } from './users.js';
@@ -61,6 +62,7 @@ export function createConversationsApi(deps: ConversationsApiDeps): Hono<ApiEnv>
   api.post('/sends-block', requireAdmin, async (c) => {
     const parsed = blockSchema.safeParse(await readJson(c));
     if (!parsed.success) return c.json({ error: 'Fecha no válida' }, 400);
+    if (await isSendsLocked(store)) return c.json({ error: 'Los envíos de este espacio los activa Jose: pídeselo a él.' }, 403);
     const { until, reason } = parsed.data;
     await store.setSetting(SETTINGS.sendsBlockedUntil, until);
     await store.setSetting(SETTINGS.sendsBlockedReason, until ? reason : null);

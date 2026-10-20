@@ -106,3 +106,9 @@ export function SecondaryButton({ children, onClick, disabled, type = 'button' }
 
 export const formatDate = (iso: string): string =>
   new Date(iso).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/** Año desde el que un bloqueo es el cerrojo de Jose de un espacio nuevo (sin fecha de fin; src/sends-lock.ts). */
+const LOCK_YEAR = 2100;
+
+/** Hasta cuándo están bloqueados los envíos, en palabras: "hasta el 18 nov., 00:00" o "hasta que Jose los active". */
+export const blockedUntilText = (iso: string): string => (new Date(iso).getUTCFullYear() >= LOCK_YEAR ? 'hasta que Jose los active' : `hasta el ${formatDate(iso)}`);

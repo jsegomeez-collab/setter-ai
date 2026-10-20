@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { EmptyState, Loading } from '../ui/EmptyState';
-import { Notice, Tabs, formatDate } from '../ui/kit';
+import { Notice, Tabs, blockedUntilText, formatDate } from '../ui/kit';
 import { Page, PageHeader } from '../ui/PageHeader';
 import { ChatEntryPanel } from './ChatEntryPanel';
 import { TRIGGER_LABEL, triggerSummary, type Flow, type FlowsResponse } from './types';
@@ -73,7 +73,7 @@ export function FlowsPage() {
       ) : (
         <div className="mt-5 space-y-4">
           {creatorOpen && <Creator onCreate={create} />}
-          {data?.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados hasta el {formatDate(data.sendsBlockedUntil)} (bloqueo de Meta): ningún flujo manda mensajes hasta entonces.</Notice>}
+          {data?.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados {blockedUntilText(data.sendsBlockedUntil)}: ningún flujo manda mensajes hasta entonces.</Notice>}
           {error && <Notice tone="bad">{error}</Notice>}
           {!data && !error && <Loading />}
           {data && <FlowList flows={data.flows} />}

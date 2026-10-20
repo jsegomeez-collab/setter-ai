@@ -16,6 +16,12 @@ import type { Workspace } from './workspaces.js';
 export interface WorkspacesAdmin {
   list(): Promise<Workspace[]>;
   create(name: string): Promise<Workspace>;
+  /** ¿Envíos con el cerrojo de Jose? null = ese espacio no está en marcha. */
+  sendsLocked(id: string): Promise<boolean | null>;
+  /** Jose activa (false) o vuelve a bloquear (true) los envíos de un espacio. */
+  setSendsLock(id: string, locked: boolean, who: string): Promise<void>;
+  /** Borra el espacio para siempre: lo para, borra su base y lo quita de la lista (workspace-manager.ts). */
+  remove(id: string): Promise<void>;
   /** Usuarios de TODOS los espacios: para dar de alta a quien lleva el nuevo y ver quién lleva cada uno. */
   readonly users: UserStore;
 }
@@ -33,6 +39,7 @@ const createSchema = z.object({
   adminEmail: z.email(),
   adminName: z.string().trim().min(1).max(MAX_NAME),
 });
+const sendsSchema = z.object({ locked: z.boolean() });
 
 async function readJson(c: Context): Promise<unknown> {
   try {
@@ -52,12 +59,53 @@ export function createWorkspacesApi(deps: WorkspacesApiDeps): Hono<ApiEnv> {
 
   api.get('/', async (c) => {
     const [workspaces, everyone] = await Promise.all([admin.list(), admin.users.listUsers()]);
+    const locks = await Promise.all(workspaces.map((ws) => admin.sendsLocked(ws.id)));
     return c.json({
-      workspaces: workspaces.map((ws) => ({
+      workspaces: workspaces.map((ws, i) => ({
         ...ws,
+        sendsLocked: locks[i] ?? null,
         people: everyone.filter((user) => user.workspaceId === ws.id).map((user) => ({ name: user.name, email: user.email, role: user.role })),
       })),
     });
+  });
+
+  // Envíos de un espacio: nacen bloqueados y solo Jose los activa o los vuelve a bloquear (decisión de Jose, 20-10).
+  api.post('/:id/sends', async (c) => {
+    const parsed = sendsSchema.safeParse(await readJson(c));
+    if (!parsed.success) return c.json({ error: 'Indica si los envíos quedan bloqueados (sí o no).' }, 400);
+    const workspace = (await admin.list()).find((ws) => ws.id === c.req.param('id'));
+    if (!workspace) return c.json({ error: 'Ese espacio no existe' }, 404);
+    const who = c.get('user').name;
+    try {
+      await admin.setSendsLock(workspace.id, parsed.data.locked, who);
+    } catch (error) {
+      return c.json({ error: `No se pudo cambiar: ${errorText(error)}` }, 500);
+    }
+    await store.logEvent('espacios', `${who} ${parsed.data.locked ? 'bloqueó' : 'activó'} los envíos del espacio "${workspace.name}".`, { workspaceId: workspace.id, locked: parsed.data.locked });
+    return c.json({ ok: true });
+  });
+
+  // Borrar un espacio para siempre (decisión de Jose, 20-10): hay que escribir su nombre tal cual. Primero se borra
+  // el espacio (base incluida); solo si sale bien se quita a sus usuarios, para no dejar un espacio sin nadie.
+  api.post('/:id/delete', async (c) => {
+    const workspace = (await admin.list()).find((ws) => ws.id === c.req.param('id'));
+    if (!workspace) return c.json({ error: 'Ese espacio no existe' }, 404);
+    const confirm = ((await readJson(c)) as { confirm?: unknown } | null)?.confirm;
+    if (confirm !== workspace.name) return c.json({ error: `Para borrarlo, escribe su nombre tal cual: ${workspace.name}` }, 400);
+    const who = c.get('user').name;
+    try {
+      await admin.remove(workspace.id);
+    } catch (error) {
+      await store.logEvent('espacios', `${who} intentó borrar el espacio "${workspace.name}" y falló.`, { workspaceId: workspace.id, error: errorText(error) });
+      return c.json({ error: `No se pudo borrar: ${errorText(error)}` }, 500);
+    }
+    const people = (await admin.users.listUsers()).filter((user) => user.workspaceId === workspace.id);
+    for (const person of people) await admin.users.deleteUser(person.id);
+    await store.logEvent('espacios', `${who} borró el espacio "${workspace.name}" (su base de datos y ${people.length} usuario(s)).`, {
+      workspaceId: workspace.id,
+      igUsername: workspace.igUsername,
+    });
+    return c.json({ ok: true });
   });
 
   api.post('/', async (c) => {

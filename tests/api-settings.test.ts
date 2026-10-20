@@ -5,6 +5,7 @@ import type { Config } from '../src/config.js';
 import { InstagramConnect } from '../src/instagram-connect.js';
 import type { InstagramClient } from '../src/meta/client.js';
 import { TokenManager } from '../src/meta/token.js';
+import { LOCKED_UNTIL, lockSends } from '../src/sends-lock.js';
 import { SETTINGS } from '../src/store.js';
 import { TEST_SETTER_CONFIG, createMemoryStore, followFlow } from './helpers.js';
 import { createMemoryUserStore } from './users-memory.js';
@@ -70,11 +71,20 @@ describe('API Configuración · Instagram y envíos (Fase 6.7b)', () => {
       token: { source: 'variable de entorno' },
       pause: { until, reason: 'Meta 368' },
       block: null,
+      sendsLocked: false,
       sends: { privateReplies: 0, publicReplies: 0, followUps: 0 },
       limits: { privateReplies: 700, publicReplies: 700, followUps: 3000 },
       flows: { active: 1, total: 2 },
       setterKey: false,
     });
+  });
+
+  it('con el cerrojo de Jose, el estado lo dice (la web no ofrece quitar el bloqueo)', async () => {
+    const { store, send, admin } = await setup();
+    await lockSends(store);
+    const status = await (await send('GET', '/api/settings/status', admin)).json();
+    expect(status.sendsLocked).toBe(true);
+    expect(status.block).toMatchObject({ until: LOCKED_UNTIL });
   });
 
   it('sin token: lo dice en vez de fallar; suscribir avisos da 503', async () => {

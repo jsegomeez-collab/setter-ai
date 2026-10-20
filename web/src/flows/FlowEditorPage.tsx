@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError, api } from '../lib/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
-import { Notice, SecondaryButton, formatDate } from '../ui/kit';
+import { Notice, SecondaryButton, blockedUntilText, formatDate } from '../ui/kit';
 import { FlowCanvas } from './FlowCanvas';
 import { liveWarnings } from './graph';
 import { FlowSettings } from './FlowSettings';
@@ -155,7 +155,7 @@ export function FlowEditorPage() {
       {dirty && <p className="mt-1 text-right text-xs text-smoke">Guarda antes de activar o duplicar.</p>}
 
       <div className="mt-4 space-y-3">
-        {meta.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados hasta el {formatDate(meta.sendsBlockedUntil)} (bloqueo de Meta): aunque actives un flujo, no saldrá ningún mensaje hasta entonces.</Notice>}
+        {meta.sendsBlockedUntil && <Notice tone="warn">Envíos bloqueados {blockedUntilText(meta.sendsBlockedUntil)}: aunque actives un flujo, no saldrá ningún mensaje hasta entonces.</Notice>}
         {errors.length === 0 && warnings.length > 0 && (
           <div role="status" className="rounded-lg border border-warn/30 bg-warn/[0.07] px-3 py-2 text-[13px] text-warn">
             <p className="font-semibold">Falta para poder guardar ({warnings.length}):</p>
@@ -199,7 +199,7 @@ export function FlowEditorPage() {
             Al activarlo, responderá por DM a personas reales. Empieza con: <strong className="text-fog">{triggerSummary(saved.trigger)}</strong>.
           </p>
           {saved.testUsernames.length > 0 && <p>Modo prueba: solo a {saved.testUsernames.map((u) => `@${u}`).join(', ')}.</p>}
-          {meta.sendsBlockedUntil && <p className="text-warn">Ahora mismo los envíos están bloqueados por Meta: no saldrá nada hasta el {formatDate(meta.sendsBlockedUntil)}.</p>}
+          {meta.sendsBlockedUntil && <p className="text-warn">Ahora mismo los envíos están bloqueados: no saldrá nada {blockedUntilText(meta.sendsBlockedUntil)}.</p>}
         </ConfirmDialog>
       )}
       {dialog === 'delete' && (

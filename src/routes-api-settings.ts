@@ -4,6 +4,7 @@ import type { InstagramConnect } from './instagram-connect.js';
 import { MetaApiError, type Account, type InstagramClient } from './meta/client.js';
 import type { TokenManager } from './meta/token.js';
 import { requireAdmin, requireUser, type ApiEnv } from './routes-api.js';
+import { isSendsLocked } from './sends-lock.js';
 import { SETTINGS, type Store } from './store.js';
 import type { UserStore } from './users.js';
 
@@ -86,6 +87,8 @@ export function createSettingsApi(deps: SettingsApiDeps): Hono<ApiEnv> {
       token,
       pause: pause ? { until: pause, reason: pauseReason } : null,
       block: block ? { until: block, reason: blockedReason } : null,
+      // Cerrojo de Jose en un espacio nuevo: ese bloqueo solo lo quita él (sends-lock.ts).
+      sendsLocked: await isSendsLocked(store),
       sends: { privateReplies, publicReplies, followUps },
       limits: config.limits,
       flows: { active: flows.filter((flow) => flow.enabled).length, total: flows.length },

@@ -25,6 +25,10 @@ export interface WorkspaceRegistry {
   /** Falla si esa cuenta de Instagram ya está en otro espacio. */
   setInstagram(id: string, igUserId: string, igUsername: string | null): Promise<void>;
   findByIgUser(igUserId: string): Promise<Workspace | null>;
+  /** Quita el espacio de la lista; su cuenta de Instagram queda como "quitada" (sus avisos se descartan). */
+  remove(id: string): Promise<void>;
+  /** Cuentas de Instagram de espacios borrados: sus avisos no deben ir al de Jose. */
+  removedIgUsers(): Promise<string[]>;
 }
 
 /** Solo así se llaman las bases de los espacios: el nombre va dentro de un CREATE DATABASE. */
@@ -64,6 +68,16 @@ export async function provisionDatabase(sql: { unsafe(query: string): Promise<un
   await sql.unsafe(createDatabaseSql(workspaceId));
 }
 
+/** Borrar la base de un espacio: solo ids de espacio (nunca la principal). FORCE cierra las conexiones que queden. */
+export function dropDatabaseSql(workspaceId: string): string {
+  if (!WORKSPACE_ID.test(workspaceId)) throw new Error(`Id de espacio no válido: ${workspaceId}`);
+  return `DROP DATABASE IF EXISTS "${workspaceId}" WITH (FORCE)`;
+}
+
+export async function dropDatabase(sql: { unsafe(query: string): Promise<unknown> }, workspaceId: string): Promise<void> {
+  await sql.unsafe(dropDatabaseSql(workspaceId));
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS workspaces (
   id text PRIMARY KEY,
@@ -71,6 +85,10 @@ CREATE TABLE IF NOT EXISTS workspaces (
   ig_user_id text UNIQUE,
   ig_username text,
   created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS removed_ig_accounts (
+  ig_user_id text PRIMARY KEY,
+  removed_at timestamptz NOT NULL DEFAULT now()
 );
 `;
 
@@ -93,7 +111,7 @@ const toWorkspace = (row: WorkspaceRow): Workspace => ({
 export async function createPostgresWorkspaceRegistry(
   databaseUrl: string,
   options: StoreOptions = {},
-): Promise<WorkspaceRegistry & { provision(workspaceId: string): Promise<void>; close(): Promise<void> }> {
+): Promise<WorkspaceRegistry & { provision(workspaceId: string): Promise<void>; dropDatabase(workspaceId: string): Promise<void>; close(): Promise<void> }> {
   const sql = postgres(databaseUrl, { ssl: options.ssl === false ? false : 'require', max: options.maxConnections ?? 1, onnotice: () => undefined });
   await sql.unsafe(SCHEMA);
   return {
@@ -107,12 +125,24 @@ export async function createPostgresWorkspaceRegistry(
     },
     async setInstagram(id, igUserId, igUsername) {
       await sql`UPDATE workspaces SET ig_user_id = ${igUserId}, ig_username = ${igUsername} WHERE id = ${id}`;
+      // Vuelve a estar en un espacio: sus avisos cuentan otra vez.
+      await sql`DELETE FROM removed_ig_accounts WHERE ig_user_id = ${igUserId}`;
     },
     async findByIgUser(igUserId) {
       const [row] = await sql<WorkspaceRow[]>`SELECT * FROM workspaces WHERE ig_user_id = ${igUserId}`;
       return row ? toWorkspace(row) : null;
     },
+    async remove(id) {
+      await sql.begin(async (tx) => {
+        const [row] = await tx<WorkspaceRow[]>`DELETE FROM workspaces WHERE id = ${id} RETURNING *`;
+        if (row?.ig_user_id) await tx`INSERT INTO removed_ig_accounts (ig_user_id) VALUES (${row.ig_user_id}) ON CONFLICT DO NOTHING`;
+      });
+    },
+    async removedIgUsers() {
+      return (await sql<{ ig_user_id: string }[]>`SELECT ig_user_id FROM removed_ig_accounts ORDER BY removed_at`).map((row) => row.ig_user_id);
+    },
     provision: (workspaceId) => provisionDatabase(sql, workspaceId),
+    dropDatabase: (workspaceId) => dropDatabase(sql, workspaceId),
     async close() {
       await sql.end();
     },

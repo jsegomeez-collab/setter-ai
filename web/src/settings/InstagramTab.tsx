@@ -21,6 +21,8 @@ interface Status {
   readonly token: { readonly source: string; readonly refreshedAt: string | null; readonly expiresAt: string | null; readonly lastError: string | null; readonly encryptionConfigured: boolean };
   readonly pause: { readonly until: string; readonly reason: string | null } | null;
   readonly block: { readonly until: string; readonly reason: string | null } | null;
+  /** Cerrojo de Jose (espacio nuevo): el bloqueo solo lo quita él. */
+  readonly sendsLocked: boolean;
   readonly sends: { readonly privateReplies: number; readonly publicReplies: number; readonly followUps: number };
   readonly limits: { readonly privateReplies: number; readonly publicReplies: number; readonly followUps: number };
   readonly flows: { readonly active: number; readonly total: number };
@@ -119,7 +121,10 @@ export function InstagramTab() {
 
       <Section label="Envíos" description="Los límites por hora se cambian en Render (variables de entorno); aquí solo se ven.">
         <div className="space-y-3">
-          {status.block ? (
+          {status.sendsLocked ? (
+            // Espacio nuevo: el bloqueo lo puso Jose y solo él lo quita (desde su Configuración → Espacios).
+            <StateRow tone="warn" icon={<Ban size={16} />} text={<>Envíos <strong>bloqueados</strong> hasta que Jose los active. Pídeselo cuando todo esté listo.</>} />
+          ) : status.block ? (
             <StateRow tone="warn" icon={<Ban size={16} />} text={<>Envíos <strong>bloqueados</strong> hasta el {formatDate(status.block.until)}{status.block.reason ? ` · ${status.block.reason}` : ''}</>} action={<SecondaryButton onClick={() => setDialog('unblock')}>Quitar el bloqueo</SecondaryButton>} />
           ) : (
             <StateRow tone="ok" icon={<CheckCircle2 size={16} />} text="Sin bloqueo largo de envíos." action={<SecondaryButton onClick={() => setDialog('block')}>Bloquear envíos…</SecondaryButton>} />
