@@ -15,6 +15,8 @@ export interface ContactItem {
   readonly aiPaused: boolean;
   /** Campos propios (Fase 7.3a/7.4): los guarda el paso "Guardar un dato" o se ponen a mano. */
   readonly fields: Readonly<Record<string, string>>;
+  /** Foto de perfil (Fase 8.1); null = sin foto. */
+  readonly picture: string | null;
 }
 
 export interface ContactFilters {
@@ -39,6 +41,7 @@ export function toContactItem(row: ContactRow): ContactItem {
     stage: typeof step === 'string' ? step : null,
     aiPaused: row.aiPaused ?? false,
     fields: row.fields ?? {},
+    picture: row.picture ?? null,
   };
 }
 

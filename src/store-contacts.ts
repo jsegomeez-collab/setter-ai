@@ -18,6 +18,8 @@ type ContactDbRow = {
   ai_paused_reason: string | null;
   lead: unknown;
   fields: Record<string, string> | null;
+  picture: string | null;
+  picture_at: Date | null;
 };
 
 const toContact = (r: ContactDbRow): ContactRow => ({
@@ -32,6 +34,8 @@ const toContact = (r: ContactDbRow): ContactRow => ({
   aiPausedReason: r.ai_paused_reason,
   lead: r.lead,
   fields: r.fields ?? {},
+  picture: r.picture,
+  pictureAt: r.picture_at,
 });
 
 export function contactMethods(sql: Sql) {
@@ -44,6 +48,11 @@ export function contactMethods(sql: Sql) {
           source_media_id = COALESCE(contacts.source_media_id, EXCLUDED.source_media_id),
           last_media_id = COALESCE(EXCLUDED.last_media_id, contacts.last_media_id),
           last_seen = now()`;
+    },
+    async setContactPicture(igId: string, url: string | null): Promise<void> {
+      await sql`
+        INSERT INTO contacts (ig_id, picture, picture_at) VALUES (${igId}, ${url}, now())
+        ON CONFLICT (ig_id) DO UPDATE SET picture = EXCLUDED.picture, picture_at = now()`;
     },
     async getContact(igId: string): Promise<ContactRow | null> {
       const rows = await sql<ContactDbRow[]>`SELECT * FROM contacts WHERE ig_id = ${igId}`;

@@ -71,7 +71,7 @@ describe('API Conversaciones (Fase 6.2)', () => {
   it('el detalle trae los mensajes, la ficha, su historial y si se puede responder', async () => {
     const { send, team } = await setup();
     const data = await (await send('GET', `/api/conversations/${STRANGER_ID}`, team)).json();
-    expect(data.contact).toMatchObject({ username: 'ana_ventas', aiPaused: false, fields: {} });
+    expect(data.contact).toMatchObject({ username: 'ana_ventas', aiPaused: false, fields: {}, picture: null });
     expect(data.messages).toEqual([expect.objectContaining({ direction: 'in', text: 'hola, quiero info' })]);
     expect(data.canReply).toEqual({ ok: true, reason: null });
     expect((await send('GET', '/api/conversations/no-existe', team)).status).toBe(404);

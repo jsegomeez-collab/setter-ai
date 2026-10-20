@@ -31,7 +31,13 @@ export function createMetricsApi(deps: MetricsApiDeps): Hono<ApiEnv> {
       period,
       funnel: {
         total: funnel.total,
-        byReel: funnel.byReel.map((reel) => ({ ...reel, label: reelLabel(byId.get(reel.key), reel.key), permalink: byId.get(reel.key)?.permalink ?? null })),
+        byReel: funnel.byReel.map((reel) => ({
+          ...reel,
+          label: reelLabel(byId.get(reel.key), reel.key),
+          permalink: byId.get(reel.key)?.permalink ?? null,
+          // Portada (Fase 8.1).
+          cover: byId.get(reel.key)?.cover ?? null,
+        })),
         byDay: fillDays(funnel.byDay),
       },
       setter,

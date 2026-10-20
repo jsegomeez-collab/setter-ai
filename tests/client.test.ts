@@ -38,7 +38,7 @@ describe('InstagramClient', () => {
     await new InstagramClient('tok', 'v25.0', fetchFn).replyToComment('c-1', 'gracias');
     expect(lastCall(fetchFn)[0]).toBe('https://graph.instagram.com/v25.0/c-1/replies');
     const media = await new InstagramClient('t', 'v25.0', fetchReturning(200, { data: [{ id: '1', caption: 'c' }, { caption: 'sin id' }] })).listMedia();
-    expect(media).toEqual([{ id: '1', caption: 'c', permalink: null, timestamp: null, mediaProductType: null }]);
+    expect(media).toEqual([{ id: '1', caption: 'c', permalink: null, timestamp: null, mediaProductType: null, cover: null }]);
     const sub = fetchReturning(200, { success: true });
     await new InstagramClient('t', 'v25.0', sub).subscribe();
     expect(lastCall(sub)[0]).toContain('subscribed_fields=comments,messages');
@@ -46,12 +46,39 @@ describe('InstagramClient', () => {
 
   it('lee un reel suelto por su id (para los que no están entre los últimos); si Meta dice que no existe → null', async () => {
     const fetchFn = fetchReturning(200, { id: '77', caption: 'Reel viejo', permalink: 'https://instagram.com/reel/x', timestamp: '2026-09-01T10:00:00+0000', media_product_type: 'REELS' });
-    expect(await new InstagramClient('t', 'v25.0', fetchFn).getMedia('77')).toEqual({ id: '77', caption: 'Reel viejo', permalink: 'https://instagram.com/reel/x', timestamp: '2026-09-01T10:00:00+0000', mediaProductType: 'REELS' });
+    expect(await new InstagramClient('t', 'v25.0', fetchFn).getMedia('77')).toEqual({ id: '77', caption: 'Reel viejo', permalink: 'https://instagram.com/reel/x', timestamp: '2026-09-01T10:00:00+0000', mediaProductType: 'REELS', cover: null });
     expect(lastCall(fetchFn)[0]).toBe('https://graph.instagram.com/v25.0/77?fields=id,caption,permalink,timestamp,media_product_type');
     const missing = fetchReturning(400, { error: { message: 'Unsupported get request. Object with ID does not exist', code: 100 } });
     expect(await new InstagramClient('t', 'v25.0', missing).getMedia('88')).toBeNull();
     // Otros fallos (token, caída de Meta) no se esconden: se lanza el error.
     await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'caído' } })).getMedia('99')).rejects.toThrow('caído');
+  });
+
+  it('Fase 8.1 · portadas de reels solo si se piden (la lista de siempre no cambia): vídeo → thumbnail_url, foto → media_url', async () => {
+    const plain = fetchReturning(200, { data: [] });
+    await new InstagramClient('t', 'v25.0', plain).listMedia(5);
+    expect(lastCall(plain)[0]).toBe('https://graph.instagram.com/v25.0/me/media?fields=id,caption,permalink,timestamp,media_product_type&limit=5');
+    const covers = fetchReturning(200, {
+      data: [
+        { id: '1', media_type: 'VIDEO', thumbnail_url: 'https://cdn/v.jpg', media_url: 'https://cdn/v.mp4' },
+        { id: '2', media_type: 'IMAGE', media_url: 'https://cdn/i.jpg' },
+        { id: '3', media_type: 'CAROUSEL_ALBUM' },
+      ],
+    });
+    const media = await new InstagramClient('t', 'v25.0', covers).listMedia(5, { covers: true });
+    expect(lastCall(covers)[0]).toContain('fields=id,caption,permalink,timestamp,media_product_type,media_type,media_url,thumbnail_url');
+    expect(media.map((m) => m.cover)).toEqual(['https://cdn/v.jpg', 'https://cdn/i.jpg', null]);
+    const one = fetchReturning(200, { id: '77', media_type: 'VIDEO', thumbnail_url: 'https://cdn/77.jpg' });
+    expect((await new InstagramClient('t', 'v25.0', one).getMedia('77', { covers: true }))?.cover).toBe('https://cdn/77.jpg');
+  });
+
+  it('Fase 8.1 · foto de perfil de quien escribió (User Profile API, profile_pic); si Meta no la da → null', async () => {
+    const ok = fetchReturning(200, { profile_pic: 'https://cdn/ana.jpg', id: '9' });
+    expect(await new InstagramClient('t', 'v25.0', ok).getProfilePicture('9')).toBe('https://cdn/ana.jpg');
+    expect(lastCall(ok)[0]).toBe('https://graph.instagram.com/v25.0/9?fields=profile_pic');
+    expect(await new InstagramClient('t', 'v25.0', fetchReturning(200, { id: '9' })).getProfilePicture('9')).toBeNull();
+    expect(await new InstagramClient('t', 'v25.0', fetchReturning(400, { error: { message: 'sin permiso', code: 100 } })).getProfilePicture('9')).toBeNull();
+    await expect(new InstagramClient('t', 'v25.0', fetchReturning(500, { error: { message: 'caído' } })).getProfilePicture('9')).rejects.toThrow('caído');
   });
 
   it('lee los comentarios principales de un reel con su autor (doc: /<media>/comments, más nuevos primero, máx. 50)', async () => {

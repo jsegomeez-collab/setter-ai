@@ -39,6 +39,7 @@ async function setup(options: SetupOptions = {}) {
   });
   const getUsername = vi.fn().mockResolvedValue(options.username === undefined ? 'josegomezlife' : options.username);
   const showTyping = vi.fn().mockResolvedValue(undefined);
+  const getPicture = vi.fn().mockResolvedValue('https://cdn.example/foto.jpg');
   const sleep = vi.fn().mockResolvedValue(undefined);
   const timers: (() => void)[] = [];
   const service = new SetterService({
@@ -47,6 +48,7 @@ async function setup(options: SetupOptions = {}) {
     links: options.links ?? TEST_SETTER_LINKS,
     enqueue,
     getUsername,
+    getPicture,
     showTyping,
     sleep,
     random: () => 0,
@@ -60,7 +62,7 @@ async function setup(options: SetupOptions = {}) {
     timers.splice(0).forEach((fn) => fn());
     await service.idle();
   };
-  return { store, decide, enqueue, getUsername, showTyping, sleep, service, flush };
+  return { store, decide, enqueue, getUsername, getPicture, showTyping, sleep, service, flush };
 }
 
 describe('SetterService · responder a mano (Fase 6.2)', () => {
@@ -178,6 +180,26 @@ describe('SetterService', () => {
     // Ya lo tiene: no se vuelve a preguntar a Meta en cada mensaje.
     await service.onIncoming(dm('otra', 'm-2'));
     expect(getUsername).toHaveBeenCalledTimes(1);
+  });
+
+  it('Fase 8.1 · guarda la foto de quien escribe; no la vuelve a pedir hasta que tenga más de 3 días', async () => {
+    const { store, service, getPicture } = await setup({ mode: 'off' });
+    await service.onIncoming(dm('hola', 'm-1'));
+    expect((await store.getContact(STRANGER_ID))?.picture).toBe('https://cdn.example/foto.jpg');
+    await service.onIncoming(dm('otra', 'm-2'));
+    expect(getPicture).toHaveBeenCalledTimes(1);
+    // Foto vieja (los enlaces de Instagram caducan): se renueva con el siguiente mensaje.
+    store.contacts.set(STRANGER_ID, { ...(store.contacts.get(STRANGER_ID) as NonNullable<ReturnType<typeof store.contacts.get>>), pictureAt: new Date(Date.now() - 4 * 86_400_000) });
+    await service.onIncoming(dm('y otra', 'm-3'));
+    expect(getPicture).toHaveBeenCalledTimes(2);
+  });
+
+  it('Fase 8.1 · si Meta falla con la foto, el DM y el nombre se guardan igual', async () => {
+    const { store, service, getPicture } = await setup({ mode: 'off', username: 'cliente_nuevo' });
+    getPicture.mockRejectedValueOnce(new Error('Meta 500'));
+    await service.onIncoming(dm('hola', 'm-1'));
+    expect((await store.getContact(STRANGER_ID))?.username).toBe('cliente_nuevo');
+    expect((await store.listMessages(STRANGER_ID, 5)).map((m) => m.text)).toEqual(['hola']);
   });
 
   it('si Meta falla al dar el nombre, el DM se guarda igual', async () => {

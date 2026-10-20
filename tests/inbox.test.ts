@@ -14,6 +14,7 @@ const row = (over: Partial<ConversationRow> = {}): ConversationRow => ({
   lastStatus: 'sent',
   lastNote: null,
   aiPaused: false,
+  picture: null,
   lead: { siguiente_paso: 'agendar_llamada', nivel: 'nivel_2' },
   ...over,
 });
@@ -23,6 +24,8 @@ describe('bandeja (Fase 6.2)', () => {
     expect(toInboxItem(row())).toMatchObject({ igId: '111', username: 'ana_ventas', stage: 'agendar_llamada', level: 'nivel_2', unanswered: true, hasDraft: false });
     expect(toInboxItem(row({ lastDirection: 'out', lead: null }))).toMatchObject({ stage: null, level: null, unanswered: false });
     expect(toInboxItem(row({ lead: { siguiente_paso: 42 } }))).toMatchObject({ stage: null });
+    // Fase 8.1: la foto de perfil viaja a la bandeja.
+    expect(toInboxItem(row({ picture: 'https://cdn.example/a.jpg' })).picture).toBe('https://cdn.example/a.jpg');
   });
 
   it('marca el borrador pendiente (último mensaje retenido en modo borrador)', () => {

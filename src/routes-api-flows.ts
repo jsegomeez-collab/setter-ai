@@ -71,8 +71,17 @@ export function createFlowsApi(deps: FlowsApiDeps): Hono<ApiEnv> {
       (deps.account?.() ?? Promise.resolve(null)).catch(() => null),
     ]);
     return c.json({
-      flows: flows.map((flow) => ({ id: flow.id, name: flow.name, enabled: flow.enabled, steps: flow.nodes.length, trigger: flow.trigger, testUsernames: flow.testUsernames })),
-      reels: media.map((m) => ({ mediaId: m.id, label: reelLabel(m) })),
+      flows: flows.map((flow) => ({
+        id: flow.id,
+        name: flow.name,
+        enabled: flow.enabled,
+        steps: flow.nodes.length,
+        // Tipos de paso en orden (Fase 8.7): la web dibuja la cadena de iconos de cada flujo.
+        stepTypes: flow.nodes.map((node) => node.type),
+        trigger: flow.trigger,
+        testUsernames: flow.testUsernames,
+      })),
+      reels: media.map((m) => ({ mediaId: m.id, label: reelLabel(m), cover: m.cover ?? null })),
       sendsBlockedUntil: blockedUntil && Date.parse(blockedUntil) > Date.now() ? blockedUntil : null,
       account,
     });

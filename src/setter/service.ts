@@ -28,6 +28,8 @@ export const FLOW_HANDLED_NOTE = 'Lo contestó el flujo';
 export const DRAFT_NOTE = 'Modo borrador: pendiente de aprobar';
 /** Meta solo deja escribir dentro de las 24 h desde el último mensaje de la persona (doc, Fase 2). */
 const META_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Fase 8.1: la foto de perfil se renueva si tiene más de 3 días (los enlaces de Instagram caducan). */
+const PICTURE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 export type DraftResult = { readonly ok: true; readonly sent: number } | { readonly ok: false; readonly reason: string };
 export type OpenResult = { readonly sent: boolean } | { readonly skipped: string };
@@ -57,6 +59,8 @@ export interface SetterServiceOptions {
   /** Sender.enqueue: se cumple cuando el envío terminó (bien o mal). */
   readonly enqueue: (actions: readonly Action[]) => Promise<void>;
   readonly getUsername: (igId: string) => Promise<string | null>;
+  /** Foto de perfil de quien escribe (Fase 8.1; InstagramClient.getProfilePicture). Sin él, no se piden fotos. */
+  readonly getPicture?: (igId: string) => Promise<string | null>;
   /** Muestra "escribiendo…" (InstagramClient.sendTypingOn). Sin él, solo se espera. */
   readonly showTyping?: (igId: string) => Promise<void>;
   readonly debounceMs?: number;
@@ -344,11 +348,28 @@ export class SetterService {
    * está guardado y se vuelve a intentar en el siguiente mensaje.
    */
   private async rememberUsername(igId: string): Promise<void> {
-    if ((await this.options.store.getContact(igId))?.username) return;
+    const contact = await this.options.store.getContact(igId);
+    if (!contact?.username) {
+      try {
+        await this.lookupUsername(igId);
+      } catch {
+        // Sin nombre esta vez: no frena nada.
+      }
+    }
+    await this.rememberPicture(igId, contact?.pictureAt ?? null);
+  }
+
+  /**
+   * Foto de perfil para la web (Fase 8.1): se pide la primera vez y otra vez si tiene más de 3 días (los enlaces de
+   * Instagram caducan). Si Meta falla, no frena nada: se vuelve a intentar con el siguiente mensaje.
+   */
+  private async rememberPicture(igId: string, pictureAt: Date | null): Promise<void> {
+    const { getPicture, store } = this.options;
+    if (!getPicture || (pictureAt && Date.now() - pictureAt.getTime() < PICTURE_MAX_AGE_MS)) return;
     try {
-      await this.lookupUsername(igId);
+      await store.setContactPicture(igId, await getPicture(igId));
     } catch {
-      // Sin nombre esta vez: no frena nada.
+      // Sin foto esta vez: la web pone sus iniciales.
     }
   }
 

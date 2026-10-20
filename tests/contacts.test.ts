@@ -40,7 +40,7 @@ describe('contactos (Fase 6.3)', () => {
   });
 
   it('el título del reel: fecha y el principio del texto; sin datos, el id', () => {
-    expect(reelLabel({ id: 'r1', caption: 'Claude te puede hacer cosas increíbles con IA y más texto', permalink: null, timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS' })).toBe(
+    expect(reelLabel({ id: 'r1', caption: 'Claude te puede hacer cosas increíbles con IA y más texto', permalink: null, timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS', cover: null })).toBe(
       '2026-10-16 · Claude te puede hacer cosas increíbles con IA',
     );
     expect(reelLabel(undefined, 'r9')).toBe('r9');

@@ -43,23 +43,26 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
   const api = new Hono<ApiEnv>();
   api.use('*', requireUser(deps.users));
 
-  const titles = async (ids: readonly (string | null | undefined)[]): Promise<{ label: (id: string) => string; media: Media[] }> => {
+  const titles = async (
+    ids: readonly (string | null | undefined)[],
+  ): Promise<{ label: (id: string) => string; cover: (id: string | null) => string | null; media: Media[] }> => {
     const media = await deps.media(ids.filter((id): id is string => Boolean(id)));
     const byId = new Map(media.map((m) => [m.id, m]));
-    return { media, label: (id: string) => reelLabel(byId.get(id), id) };
+    // Portada del reel (Fase 8.1); null si Meta no la dio.
+    return { media, label: (id: string) => reelLabel(byId.get(id), id), cover: (id) => (id ? (byId.get(id)?.cover ?? null) : null) };
   };
 
   api.get('/', async (c) => {
     const all = (await store.listContacts(CONTACTS_LIMIT)).map(toContactItem);
     const sources = new Set(all.map((item) => item.sourceMediaId).filter((id): id is string => id !== null));
-    const { media, label } = await titles([...sources]);
+    const { media, label, cover } = await titles([...sources]);
     const items = filterContacts(all, filtersOf(c));
     const counts = all.flatMap((item) => item.tags).reduce((map, tag) => map.set(tag, (map.get(tag) ?? 0) + 1), new Map<string, number>());
     return c.json({
-      items: items.slice(0, LIST_SHOWN).map((item) => ({ ...item, sourceLabel: item.sourceMediaId ? label(item.sourceMediaId) : null })),
+      items: items.slice(0, LIST_SHOWN).map((item) => ({ ...item, sourceLabel: item.sourceMediaId ? label(item.sourceMediaId) : null, sourceCover: cover(item.sourceMediaId) })),
       total: items.length,
       tags: [...counts.entries()].map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n),
-      reels: media.filter((m) => sources.has(m.id)).map((m) => ({ mediaId: m.id, label: reelLabel(m) })),
+      reels: media.filter((m) => sources.has(m.id)).map((m) => ({ mediaId: m.id, label: reelLabel(m), cover: m.cover ?? null })),
     });
   });
 
@@ -80,7 +83,12 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
     const media = await deps.media(stats.map((s) => s.mediaId));
     const byId = new Map(media.map((m) => [m.id, m]));
     return c.json({
-      reels: stats.map((s) => ({ ...s, label: reelLabel(byId.get(s.mediaId), s.mediaId), permalink: byId.get(s.mediaId)?.permalink ?? null })),
+      reels: stats.map((s) => ({
+        ...s,
+        label: reelLabel(byId.get(s.mediaId), s.mediaId),
+        permalink: byId.get(s.mediaId)?.permalink ?? null,
+        cover: byId.get(s.mediaId)?.cover ?? null,
+      })),
     });
   });
 
@@ -94,10 +102,17 @@ export function createContactsApi(deps: ContactsApiDeps): Hono<ApiEnv> {
     ]);
     if (!contact) return c.json({ error: 'Ese contacto no existe' }, 404);
     const item = toContactItem(contact);
-    const { label } = await titles([item.sourceMediaId, item.lastMediaId, ...comments.map((comment) => comment.mediaId)]);
+    const { label, cover } = await titles([item.sourceMediaId, item.lastMediaId, ...comments.map((comment) => comment.mediaId)]);
     return c.json({
-      contact: { ...item, lead: contact.lead ?? null, sourceLabel: item.sourceMediaId ? label(item.sourceMediaId) : null, lastLabel: item.lastMediaId ? label(item.lastMediaId) : null },
-      comments: comments.map((comment) => ({ ...comment, reelLabel: comment.mediaId ? label(comment.mediaId) : null })),
+      contact: {
+        ...item,
+        lead: contact.lead ?? null,
+        sourceLabel: item.sourceMediaId ? label(item.sourceMediaId) : null,
+        lastLabel: item.lastMediaId ? label(item.lastMediaId) : null,
+        sourceCover: cover(item.sourceMediaId),
+        lastCover: cover(item.lastMediaId),
+      },
+      comments: comments.map((comment) => ({ ...comment, reelLabel: comment.mediaId ? label(comment.mediaId) : null, reelCover: cover(comment.mediaId) })),
       leadHistory,
       hasConversation: messages.length > 0,
     });

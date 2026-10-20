@@ -98,6 +98,8 @@ export function createConversationsApi(deps: ConversationsApiDeps): Hono<ApiEnv>
         lead: contact?.lead ?? null,
         fields: contact?.fields ?? {},
         firstSeen: contact?.firstSeen ?? null,
+        // Foto de perfil (Fase 8.1).
+        picture: contact?.picture ?? null,
       },
       messages: messages.map((m) => ({ id: m.id, direction: m.direction, source: m.source, text: m.text, status: m.status, note: m.note ?? null, createdAt: m.createdAt })),
       leadHistory,

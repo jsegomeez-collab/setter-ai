@@ -4,7 +4,7 @@ import type { InstagramClient, Media } from '../src/meta/client.js';
 
 /** Títulos de reels (arreglo tras la 6.4): los últimos 50 en una llamada; los que falten, uno a uno por su id, y se recuerdan. */
 
-const reel = (id: string, caption = `Reel ${id}`): Media => ({ id, caption, permalink: null, timestamp: '2026-10-01T10:00:00+0000', mediaProductType: 'REELS' });
+const reel = (id: string, caption = `Reel ${id}`): Media => ({ id, caption, permalink: null, timestamp: '2026-10-01T10:00:00+0000', mediaProductType: 'REELS', cover: null });
 
 function fakeClient(recent: Media[], byId: Record<string, Media | null | Error>) {
   return {
@@ -23,7 +23,7 @@ describe('createMediaLoader', () => {
     const load = createMediaLoader(client as unknown as InstagramClient, 50);
     expect((await load()).map((m) => m.id)).toEqual(['a']);
     expect((await load(['a', 'viejo', 'viejo'])).map((m) => m.id)).toEqual(['a', 'viejo']);
-    expect(client.listMedia).toHaveBeenCalledWith(50);
+    expect(client.listMedia).toHaveBeenCalledWith(50, { covers: true });
     expect(client.getMedia).toHaveBeenCalledTimes(1);
   });
 
@@ -32,7 +32,8 @@ describe('createMediaLoader', () => {
     const load = createMediaLoader(client as unknown as InstagramClient, 50);
     expect((await load(['bueno', 'borrado', 'fallo'])).map((m) => m.id)).toEqual(['bueno']);
     await load(['bueno', 'borrado', 'fallo']);
-    expect(client.getMedia.mock.calls.map(([id]) => id)).toEqual(['bueno', 'borrado', 'fallo', 'fallo']);
+    // Cuenta las peticiones con portada (un error de Meta se reintenta además sin ella).
+    expect(client.getMedia.mock.calls.filter(([, options]) => options?.covers).map(([id]) => id)).toEqual(['bueno', 'borrado', 'fallo', 'fallo']);
   });
 
   it('pregunta como mucho 40 reels por vez (el resto, en la siguiente carga)', async () => {
@@ -48,5 +49,19 @@ describe('createMediaLoader', () => {
     const client = fakeClient([], {});
     client.listMedia.mockRejectedValue(new Error('caído'));
     expect(await createMediaLoader(client as unknown as InstagramClient, 50)()).toEqual([]);
+  });
+
+  it('Fase 8.1 · si Meta falla al pedir las portadas, vuelve a pedir sin ellas (los títulos nunca se pierden)', async () => {
+    const client = fakeClient([], {});
+    client.listMedia.mockImplementation(async (_limit: number, options?: { covers?: boolean }) => {
+      if (options?.covers) throw new Error('campo no válido');
+      return [reel('a')];
+    });
+    client.getMedia.mockImplementation(async (id: string, options?: { covers?: boolean }) => {
+      if (options?.covers) throw new Error('campo no válido');
+      return reel(id, 'Reel antiguo');
+    });
+    const load = createMediaLoader(client as unknown as InstagramClient, 50);
+    expect((await load(['viejo'])).map((m) => m.caption)).toEqual(['Reel a', 'Reel antiguo']);
   });
 });

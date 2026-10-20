@@ -34,7 +34,7 @@ async function setup() {
   await store.recordComment({ commentId: 'c1', igId: STRANGER_ID, username: 'ana_ventas', mediaId: 'reel-1', text: 'Bolsa' });
   await store.addMessage({ igId: STRANGER_ID, direction: 'in', source: 'user', text: 'hola', mid: 'm1', status: 'sent', dedupKey: null });
   const client: { listMedia: ReturnType<typeof vi.fn>; getMedia: ReturnType<typeof vi.fn> } = {
-    listMedia: vi.fn().mockResolvedValue([{ id: 'reel-1', caption: 'Mi reel de prueba', permalink: 'https://instagram.com/p/x', timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS' }]),
+    listMedia: vi.fn().mockResolvedValue([{ id: 'reel-1', caption: 'Mi reel de prueba', permalink: 'https://instagram.com/p/x', timestamp: '2026-10-16T09:00:00+0000', mediaProductType: 'REELS', cover: 'https://cdn.example/reel-1.jpg' }]),
     getMedia: vi.fn().mockResolvedValue(null),
   };
   const tokens = new TokenManager({ store, envToken: null, encryptionKey: null });
@@ -61,8 +61,20 @@ describe('API Contactos (Fase 6.3)', () => {
     expect(data.items).toEqual([expect.objectContaining({ igId: STRANGER_ID, username: 'ana_ventas', tags: ['biblioteca'] })]);
     expect(data.total).toBe(1);
     expect(data.tags).toEqual([{ tag: 'biblioteca', n: 1 }]);
-    expect(data.reels).toEqual([{ mediaId: 'reel-1', label: '2026-10-16 · Mi reel de prueba' }]);
+    expect(data.reels).toEqual([{ mediaId: 'reel-1', label: '2026-10-16 · Mi reel de prueba', cover: 'https://cdn.example/reel-1.jpg' }]);
     expect((await (await send('GET', '/api/contacts?tag=otra', team)).json()).items).toEqual([]);
+  });
+
+  it('Fase 8.1 · la foto y las portadas llegan a la lista, a la ficha y a "Por reel"', async () => {
+    const { send, team, store } = await setup();
+    await store.setContactPicture(STRANGER_ID, 'https://cdn.example/ana.jpg');
+    const list = await (await send('GET', '/api/contacts', team)).json();
+    expect(list.items[0]).toMatchObject({ picture: 'https://cdn.example/ana.jpg', sourceCover: 'https://cdn.example/reel-1.jpg' });
+    const one = await (await send('GET', `/api/contacts/${STRANGER_ID}`, team)).json();
+    expect(one.contact).toMatchObject({ picture: 'https://cdn.example/ana.jpg', sourceCover: 'https://cdn.example/reel-1.jpg' });
+    expect(one.comments[0]).toMatchObject({ reelCover: 'https://cdn.example/reel-1.jpg' });
+    const reels = await (await send('GET', '/api/contacts/reels', team)).json();
+    expect(reels.reels[0]).toMatchObject({ mediaId: 'reel-1', cover: 'https://cdn.example/reel-1.jpg' });
   });
 
   it('la ficha trae sus comentarios con el reel, el historial y si tiene conversación', async () => {
@@ -116,7 +128,7 @@ describe('API Contactos (Fase 6.3)', () => {
     await store.recordComment({ commentId: 'c9', igId: STRANGER_ID, username: 'ana_ventas', mediaId: 'reel-viejo', text: 'Info' });
     const data = await (await send('GET', '/api/contacts/reels', team)).json();
     expect(data.reels.map((r: { label: string }) => r.label)).toContain('2026-09-01 · Reel de septiembre');
-    expect(client.getMedia).toHaveBeenCalledWith('reel-viejo');
+    expect(client.getMedia).toHaveBeenCalledWith('reel-viejo', { covers: true });
   });
 });
 

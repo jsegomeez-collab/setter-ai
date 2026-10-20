@@ -21,6 +21,8 @@ export interface Store {
   pendingActions(): Promise<unknown[]>;
   /** Contactos: alta o actualización (username, última vez visto y, si viene de un comentario, el reel). */
   touchContact(igId: string, username: string | null, mediaId?: string | null): Promise<void>;
+  /** Guarda la foto de perfil (Fase 8.1) con la fecha de ahora; crea el contacto si no existe. */
+  setContactPicture(igId: string, url: string | null): Promise<void>;
   /** Conversaciones (Fase 3). */
   addMessage(message: NewMessage): Promise<void>;
   setMessageStatus(dedupKey: string, status: MessageStatus, mid?: string | null): Promise<void>;
@@ -136,6 +138,9 @@ export interface ContactRow {
   readonly lead?: unknown;
   /** Campos propios (Fase 7.3a): nombre en minúsculas → valor. */
   readonly fields?: Readonly<Record<string, string>>;
+  /** Foto de perfil (Fase 8.1; enlace de Instagram que caduca) y cuándo se pidió. */
+  readonly picture?: string | null;
+  readonly pictureAt?: Date | null;
 }
 
 export type MessageDirection = 'in' | 'out';
@@ -170,6 +175,8 @@ export interface ConversationRow {
   readonly lastNote: string | null;
   readonly aiPaused: boolean;
   readonly lead: unknown;
+  /** Foto de perfil (Fase 8.1). */
+  readonly picture: string | null;
 }
 
 export interface LeadHistoryRow {
@@ -315,6 +322,8 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ai_paused_reason TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead JSONB;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead_updated_at TIMESTAMPTZ;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS fields JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS picture TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS picture_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS messages (
   id BIGSERIAL PRIMARY KEY,
   ig_id TEXT NOT NULL,
@@ -457,8 +466,8 @@ export async function createPostgresStore(
     },
     async listConversations(limit) {
       const rows = await sql<
-        { ig_id: string; username: string | null; text: string; created_at: Date; direction: MessageDirection; status: MessageStatus; note: string | null; ai_paused: boolean | null; lead: unknown }[]
-      >`SELECT last.ig_id, c.username, last.text, last.created_at, last.direction, last.status, last.note, c.ai_paused, c.lead
+        { ig_id: string; username: string | null; text: string; created_at: Date; direction: MessageDirection; status: MessageStatus; note: string | null; ai_paused: boolean | null; lead: unknown; picture: string | null }[]
+      >`SELECT last.ig_id, c.username, last.text, last.created_at, last.direction, last.status, last.note, c.ai_paused, c.lead, c.picture
         FROM (
           SELECT DISTINCT ON (ig_id) ig_id, id, text, created_at, direction, status, note FROM messages ORDER BY ig_id, id DESC
         ) last
@@ -474,6 +483,7 @@ export async function createPostgresStore(
         lastNote: r.note,
         aiPaused: r.ai_paused ?? false,
         lead: r.lead,
+        picture: r.picture,
       }));
     },
     async listLeadHistory(igId, limit) {

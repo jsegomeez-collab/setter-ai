@@ -202,6 +202,7 @@ export function createMemoryStore(): Store & {
             lastNote: m.note ?? null,
             aiPaused: contact?.aiPaused ?? false,
             lead: contact?.lead ?? null,
+            picture: contact?.picture ?? null,
           };
         })
         .sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime())
@@ -267,6 +268,9 @@ export function createMemoryStore(): Store & {
     async deleteKnowledgeDoc(slug) {
       docs.delete(slug);
       docVersions.delete(`doc:${slug}`);
+    },
+    async setContactPicture(igId, url) {
+      contacts.set(igId, { ...(contacts.get(igId) ?? blankContact(igId)), picture: url, pictureAt: new Date() });
     },
     async touchContact(igId, username, mediaId = null) {
       const now = new Date();

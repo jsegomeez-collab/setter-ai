@@ -61,7 +61,7 @@ describe('API Métricas (Fase 6.4)', () => {
     expect(data.period).toBe(30);
     expect(data.funnel.total).toMatchObject({ commented: 3 });
     expect(data.funnel.byReel).toEqual([
-      expect.objectContaining({ key: 'reel-1', commented: 2, label: '2026-10-16 · Mi reel' }),
+      expect.objectContaining({ key: 'reel-1', commented: 2, label: '2026-10-16 · Mi reel', cover: null }),
       expect.objectContaining({ key: 'reel-viejo', commented: 1, label: '2026-09-01 · Reel de septiembre' }),
     ]);
     expect(data.funnel.byDay).toEqual([expect.objectContaining({ commented: 3 })]);

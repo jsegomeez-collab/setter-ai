@@ -377,6 +377,20 @@ Plan (en orden, cada paso probado, desplegado y enseñado a Jose):
 
 **Proveedor de tecnología ante Meta (pregunta de Jose 2026-10-19):** sirve para que la app atienda a empresas **sin darles un rol** (registro libre, sin límite de 500). Exige verificación del negocio + verificación de acceso + revisión de la app con vídeos de cada permiso ([create an app](https://developers.facebook.com/docs/instagram-platform/create-an-instagram-app/), [business verification](https://developers.facebook.com/docs/development/release/business-verification/), [screen recordings](https://developers.facebook.com/docs/app-review/submission-guide/screen-recordings/)). Meta no publica cuánto tarda (un hilo del foro habla de 60+ días atascado en la verificación; dato no oficial). Es gratis. Recomendación: **hacerlo cuando haya ~decenas de clientes o se quiera registro libre**, no antes; la 7.5 deja todo listo para pedirlo.
 
+### Fase 8 — App mucho más visual ⏳ (pedida por Jose 2026-10-20)
+
+Jose: "mejora mucho más el visual de la app… mucho más intuitiva y muchísimo más visual", "sobre todo que las funciones en sí sean mucho más visuales". Eligió: **fotos y portadas · colores por etapa · Inicio y gráficos grandes · tablero de leads**. "Hazlo todo de golpe… haz y luego reviso yo" (no quiere una pantalla primero). Referencia: ninguna → se mantiene el oscuro + dorado de la 7.1 (`design-system/setter-ia/MASTER.md`; regla: nada decorativo que no ayude a decidir).
+
+- [ ] **8.1 Fotos y portadas desde Meta** (servidor, TDD): foto de perfil de quien escribe por DM (User Profile API, campo `profile_pic`; se pide aparte del nombre para que, si Meta no la da, no se pierda el nombre) guardada en su contacto y renovada si tiene más de 3 días; portada de cada reel (`thumbnail_url`) en el catálogo de reels. Sin foto → iniciales con color.
+- [ ] **8.2 Piezas comunes** (web): avatar, portada de reel, chip de etapa con color e icono (Nuevo · Calificando · Agendar · Membresía · Pasar a Jose · Descartado), barra de etapas del lead.
+- [ ] **8.3 Inicio:** estado del setter bien visible, embudo grande, leads por etapa, gráfico por día de verdad y actividad reciente con fotos.
+- [ ] **8.4 Tablero de leads** (pantalla nueva "Leads"): columnas por etapa con tarjetas (foto, @, último mensaje, avisos); al pulsar, la conversación. Solo mirar (la etapa la pone la IA).
+- [ ] **8.5 Conversaciones:** fotos en la bandeja y la cabecera, etapa con color, ficha visual (en qué etapa va, nivel, si puede invertir).
+- [ ] **8.6 Contactos:** fotos, portada del reel de origen, etapa con color; "Por reel" como cuadrícula de portadas.
+- [ ] **8.7 Flujos:** cada flujo con las portadas de sus reels y su cadena de pasos en iconos (qué hace, de un vistazo).
+- [ ] **8.8 Setter y Métricas:** estado del setter grande con icono y color; ranking de reels con portada.
+- [ ] **8.9 Comprobar:** pruebas, accesibilidad (`audit.ts`), capturas en ordenador y móvil, desplegar y mirar en producción.
+
 ---
 
 ## Reglas de Meta (verificadas en la doc oficial)

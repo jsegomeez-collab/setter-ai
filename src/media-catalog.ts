@@ -12,6 +12,18 @@ const NOT_FOUND_TTL_MS = 60 * 60 * 1000;
 
 export type MediaLoader = (ids?: readonly string[]) => Promise<Media[]>;
 
+/** Portadas para la web (Fase 8.1). */
+const COVERS = { covers: true } as const;
+
+/** Con portadas; si Meta falla al pedirlas, otra vez sin ellas: los títulos nunca se pierden por la portada. */
+async function withCovers<T>(withThem: () => Promise<T>, without: () => Promise<T>): Promise<T> {
+  try {
+    return await withThem();
+  } catch {
+    return without();
+  }
+}
+
 export function createMediaLoader(client: InstagramClient | null, recentLimit: number, now: () => number = Date.now): MediaLoader {
   const found = new Map<string, Media>();
   const notFoundAt = new Map<string, number>();
@@ -23,7 +35,7 @@ export function createMediaLoader(client: InstagramClient | null, recentLimit: n
       await Promise.all(
         ids.slice(i, i + PARALLEL_LOOKUPS).map(async (id) => {
           try {
-            const media = await client?.getMedia(id);
+            const media = client ? await withCovers(() => client.getMedia(id, COVERS), () => client.getMedia(id)) : null;
             if (media) found.set(id, media);
             else notFoundAt.set(id, now());
           } catch {
@@ -38,7 +50,7 @@ export function createMediaLoader(client: InstagramClient | null, recentLimit: n
     if (!client) return [];
     let recent: Media[];
     try {
-      recent = await client.listMedia(recentLimit);
+      recent = await withCovers(() => client.listMedia(recentLimit, COVERS), () => client.listMedia(recentLimit));
     } catch {
       return [];
     }

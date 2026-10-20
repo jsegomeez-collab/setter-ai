@@ -130,6 +130,7 @@ export async function startWorkspaceRuntime(deps: RuntimeDeps): Promise<Workspac
     links: async () => (await readSetterLinks(store, defaultLinks)).links,
     enqueue: (actions) => activeSender.enqueue(actions),
     getUsername: async (igId) => (client ? client.getUsername(igId) : null),
+    getPicture: client ? (igId) => client.getProfilePicture(igId) : undefined,
     showTyping: client ? (igId) => client.sendTypingOn(igId) : undefined,
   });
   setterRef = setter;

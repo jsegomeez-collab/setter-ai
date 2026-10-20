@@ -34,6 +34,8 @@ export interface Media {
   readonly permalink: string | null;
   readonly timestamp: string | null;
   readonly mediaProductType: string | null;
+  /** Portada (Fase 8.1): solo si se pidió con `covers`; enlace de Instagram que caduca. */
+  readonly cover: string | null;
 }
 
 /** Comentario leído de /<media>/comments (doc: más nuevos primero, máx. 50, sin respuestas salvo que se pidan). */
@@ -125,6 +127,18 @@ function asString(value: unknown): string | null {
 }
 
 const MEDIA_FIELDS = 'id,caption,permalink,timestamp,media_product_type';
+/** Portada (doc IG Media: thumbnail_url solo en vídeos; en fotos, media_url). */
+const COVER_FIELDS = 'media_type,media_url,thumbnail_url';
+
+export interface MediaOptions {
+  readonly covers?: boolean;
+}
+
+const mediaFields = (options: MediaOptions): string => (options.covers ? `${MEDIA_FIELDS},${COVER_FIELDS}` : MEDIA_FIELDS);
+
+function coverOf(item: Json): string | null {
+  return asString(item.thumbnail_url) ?? (asString(item.media_type) === 'IMAGE' ? asString(item.media_url) : null);
+}
 /** Graph API: "Object with ID does not exist, cannot be loaded due to missing permissions…". */
 const OBJECT_NOT_FOUND_CODE = 100;
 
@@ -135,6 +149,7 @@ function toMedia(item: Json): Media {
     permalink: asString(item.permalink),
     timestamp: asString(item.timestamp),
     mediaProductType: asString(item.media_product_type),
+    cover: coverOf(item),
   };
 }
 
@@ -195,16 +210,17 @@ export class InstagramClient {
     return { userId, username: asString(data.username) ?? '' };
   }
 
-  async listMedia(limit = 12): Promise<Media[]> {
-    const data = await this.call('GET', `me/media?fields=${MEDIA_FIELDS}&limit=${limit}`);
+  /** `covers` (Fase 8.1): pide además la portada; solo para la web, la recuperación de comentarios no la usa. */
+  async listMedia(limit = 12, options: MediaOptions = {}): Promise<Media[]> {
+    const data = await this.call('GET', `me/media?fields=${mediaFields(options)}&limit=${limit}`);
     const items = Array.isArray(data.data) ? (data.data as Json[]) : [];
     return items.map(toMedia).filter((item) => item.id !== '');
   }
 
   /** Un reel por su id (los que ya no están entre los últimos). null si Meta dice que no existe o no se puede ver (código 100). */
-  async getMedia(mediaId: string): Promise<Media | null> {
+  async getMedia(mediaId: string, options: MediaOptions = {}): Promise<Media | null> {
     try {
-      const media = toMedia(await this.call('GET', `${encodeURIComponent(mediaId)}?fields=${MEDIA_FIELDS}`));
+      const media = toMedia(await this.call('GET', `${encodeURIComponent(mediaId)}?fields=${mediaFields(options)}`));
       return media.id === '' ? null : media;
     } catch (error) {
       if (error instanceof MetaApiError && error.code === OBJECT_NOT_FOUND_CODE) return null;
@@ -313,6 +329,20 @@ export class InstagramClient {
     try {
       const data = await this.call('GET', `${encodeURIComponent(igsid)}?fields=username`);
       return asString(data.username);
+    } catch (error) {
+      if (error instanceof MetaApiError && error.status >= 400 && error.status < 500) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Foto de perfil de quien ya escribió por DM (Fase 8.1; doc: User Profile API, campo profile_pic). Va aparte del
+   * nombre: si Meta no la da, no se pierde el nombre. null si Meta no la da o no lo permite (4xx).
+   */
+  async getProfilePicture(igsid: string): Promise<string | null> {
+    try {
+      const data = await this.call('GET', `${encodeURIComponent(igsid)}?fields=profile_pic`);
+      return asString(data.profile_pic);
     } catch (error) {
       if (error instanceof MetaApiError && error.status >= 400 && error.status < 500) return null;
       throw error;

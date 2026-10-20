@@ -16,6 +16,8 @@ export interface InboxItem {
   /** Lo último lo escribió la persona. */
   readonly unanswered: boolean;
   readonly hasDraft: boolean;
+  /** Foto de perfil (Fase 8.1); null = sin foto (la web pone sus iniciales). */
+  readonly picture: string | null;
 }
 
 function leadField(lead: unknown, key: string): string | null {
@@ -35,6 +37,7 @@ export function toInboxItem(row: ConversationRow): InboxItem {
     level: leadField(row.lead, 'nivel'),
     unanswered: row.lastDirection === 'in',
     hasDraft: row.lastDirection === 'out' && row.lastStatus === 'held' && row.lastNote === DRAFT_NOTE,
+    picture: row.picture,
   };
 }
 

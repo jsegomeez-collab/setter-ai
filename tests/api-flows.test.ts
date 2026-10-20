@@ -59,8 +59,8 @@ describe('API Flujos (Fase 6.5a)', () => {
     expect((await send('GET', '/api/flows', '')).status).toBe(401);
     expect((await send('GET', '/api/flows', team)).status).toBe(403);
     const data = await (await send('GET', '/api/flows', admin)).json();
-    expect(data.flows).toEqual([expect.objectContaining({ id: 'manychat', name: 'Réplica ManyChat', enabled: false, steps: 4 })]);
-    expect(data.reels).toEqual([{ mediaId: '18000000000000001', label: '2026-10-16 · Mi reel' }]);
+    expect(data.flows).toEqual([expect.objectContaining({ id: 'manychat', name: 'Réplica ManyChat', enabled: false, steps: 4, stepTypes: expect.arrayContaining(['message']) })]);
+    expect(data.reels).toEqual([{ mediaId: '18000000000000001', label: '2026-10-16 · Mi reel', cover: null }]);
     expect((await (await send('GET', '/api/flows/manychat', admin)).json()).flow).toMatchObject({ id: 'manychat', nodes: expect.any(Array) });
     expect((await send('GET', '/api/flows/no-existe', admin)).status).toBe(404);
   });

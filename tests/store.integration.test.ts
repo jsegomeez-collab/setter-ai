@@ -428,6 +428,21 @@ describe('createPostgresStore (Postgres real)', () => {
     expect(notices.every((e) => e.kind === 'aviso')).toBe(true);
   });
 
+  it('Fase 8.1 · foto de perfil: se guarda con su fecha, sale en el contacto, en la lista y en la bandeja', async () => {
+    await store.touchContact('f81', 'con_foto');
+    expect((await store.getContact('f81'))?.picture ?? null).toBeNull();
+    await store.setContactPicture('f81', 'https://cdn.example/foto.jpg');
+    const contact = await store.getContact('f81');
+    expect(contact?.picture).toBe('https://cdn.example/foto.jpg');
+    expect(contact?.pictureAt).toBeInstanceOf(Date);
+    expect((await store.listContacts(500)).find((c) => c.igId === 'f81')?.picture).toBe('https://cdn.example/foto.jpg');
+    await store.addMessage({ igId: 'f81', direction: 'in', source: 'user', text: 'hola', mid: 'm-f81', status: 'sent', dedupKey: null });
+    expect((await store.listConversations(500)).find((c) => c.igId === 'f81')?.picture).toBe('https://cdn.example/foto.jpg');
+    // Alguien que aún no existe también se puede guardar (crea el contacto).
+    await store.setContactPicture('f81-nuevo', 'https://cdn.example/otra.jpg');
+    expect((await store.getContact('f81-nuevo'))?.picture).toBe('https://cdn.example/otra.jpg');
+  });
+
   it('Fase 6.3 · contactos: quitar una etiqueta, ver los comentarios de una persona y la ficha en la lista', async () => {
     await store.touchContact('c63', 'contacto63', '6300001');
     await store.addContactTags('c63', ['cliente', 'EMPRESA DFY']);
