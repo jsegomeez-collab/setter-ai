@@ -40,6 +40,16 @@ export interface SetterData {
   readonly openers: readonly OpenerStep[];
   readonly scenarios: readonly ScenarioInfo[];
   readonly simulator: { readonly available: boolean; readonly reason: string | null };
+  /** Enlaces del setter de este espacio (Fase 7.5c). */
+  readonly links: SetterLinks;
+}
+
+export interface SetterLinks {
+  readonly agenda: string;
+  readonly membership: string;
+  readonly contactEmail: string;
+  /** 'saved' = puestos en la web; 'default' = los de reserva. */
+  readonly source: 'saved' | 'default';
 }
 
 export interface SimTurn {

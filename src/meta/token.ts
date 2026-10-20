@@ -73,6 +73,21 @@ export class TokenManager {
     return envToken;
   }
 
+  /**
+   * Guarda (cifrado) un token conseguido con "Conectar Instagram" (Fase 7.5c) y lo usa desde ya.
+   * Sin TOKEN_ENCRYPTION_KEY no se guarda: nunca en claro.
+   */
+  async save(token: string, expiresInSeconds: number | null): Promise<void> {
+    const { store, encryptionKey } = this.options;
+    if (!encryptionKey) throw new Error('Falta TOKEN_ENCRYPTION_KEY: no se puede guardar el token.');
+    const now = this.now();
+    await store.setSetting(SETTINGS.igToken, encrypt(token, encryptionKey));
+    await store.setSetting(SETTINGS.igTokenRefreshedAt, now.toISOString());
+    await store.setSetting(SETTINGS.igTokenExpiresAt, expiresInSeconds ? new Date(now.getTime() + expiresInSeconds * 1000).toISOString() : null);
+    await store.setSetting(SETTINGS.igTokenLastError, null);
+    this.cached = token;
+  }
+
   /** Renueva si toca. Devuelve un texto con lo que hizo (para el registro). */
   async refreshIfDue(force = false): Promise<string> {
     const { store, encryptionKey } = this.options;

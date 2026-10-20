@@ -20,6 +20,8 @@ import { parseUsernames, readSetterMode } from './setter/service.js';
 import { estimateCostUsd, runSimulation, verdict, type LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type KnowledgeKind, type Store } from './store.js';
 import { loadKnowledge } from './setter/knowledge-source.js';
+import { readSetterLinks, saveSetterLinks, setterLinksSchema } from './setter/links.js';
+import type { SetterLinks } from './setter/prompt.js';
 import type { UserStore } from './users.js';
 
 /** API del módulo Setter IA del frontend (Fase 6.1). Solo admin (decisión de Jose). */
@@ -29,6 +31,8 @@ export interface SetterApiDeps {
   readonly users: UserStore;
   readonly config: Config;
   readonly simulator: { readonly brain: SetterBrain; readonly lead: LeadPlayer } | null;
+  /** Enlaces de reserva de este espacio (7.5c): Jose, los de Render; un espacio nuevo, ninguno. Por defecto, los de Render. */
+  readonly defaultLinks?: SetterLinks;
 }
 
 const MAX_PERSONA_CHARS = 2000;
@@ -61,6 +65,7 @@ const BAD_REQUEST = { error: 'Datos no válidos' };
 
 export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
   const { store, config } = deps;
+  const fallbackLinks = deps.defaultLinks ?? config.setter.links;
   const api = new Hono<ApiEnv>();
   api.use('*', requireUser(deps.users), requireAdmin);
 
@@ -70,7 +75,7 @@ export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
   };
 
   api.get('/', async (c) => {
-    const [mode, draft, usernames, knowledge, knowledgeVersions, frame, frameVersions, flows, problem] = await Promise.all([
+    const [mode, draft, usernames, knowledge, knowledgeVersions, frame, frameVersions, flows, problem, resolved] = await Promise.all([
       readSetterMode(store),
       store.getSetting(SETTINGS.setterDraft),
       store.getSetting(SETTINGS.setterTestUsernames),
@@ -80,6 +85,7 @@ export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
       store.listKnowledgeVersions(VERSIONS_LIMIT, 'frame'),
       store.listFlows(),
       simulatorProblem(),
+      readSetterLinks(store, fallbackLinks),
     ]);
     return c.json({
       mode,
@@ -93,6 +99,7 @@ export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
       openers: findOpeners(flows),
       scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, title: s.title, persona: s.persona, check: s.check, opener: s.opener ?? null })),
       simulator: { available: problem === null, reason: problem },
+      links: { ...resolved.links, source: resolved.source },
     });
   });
 
@@ -109,6 +116,15 @@ export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
   api.post('/frame', saveText('frame'));
   api.post('/frame/reset', async (c) => reply(c, await resetFrame(store)));
   api.post('/frame/:id/restore', restore('frame'));
+
+  /** Enlaces del setter de este espacio (7.5c): agenda, membresía y correo. Se validan (web y correo de verdad). */
+  api.post('/links', async (c) => {
+    const parsed = setterLinksSchema.safeParse(await readJson(c));
+    if (!parsed.success) return c.json({ error: 'Revisa los enlaces: la agenda y la membresía tienen que ser direcciones web (https://…) y el correo, un correo.' }, 400);
+    await saveSetterLinks(store, parsed.data);
+    await store.logEvent('setter', `${c.get('user').name} cambió los enlaces del setter.`, parsed.data);
+    return c.json({ links: { ...parsed.data, source: 'saved' } });
+  });
 
   api.post('/settings', async (c) => {
     const parsed = settingsSchema.safeParse(await readJson(c));
@@ -133,7 +149,8 @@ export function createSetterApi(deps: SetterApiDeps): Hono<ApiEnv> {
     const [knowledge, frame] = await Promise.all([loadKnowledge(store), store.getKnowledge('frame')]);
     if (problem || !deps.simulator || !knowledge) return c.json({ error: problem ?? 'El simulador no está disponible.' }, 409);
     try {
-      const result = await runSimulation({ ...deps.simulator, knowledge: knowledge.text, links: config.setter.links, frame: frame?.text ?? null }, scenario);
+      const { links } = await readSetterLinks(store, fallbackLinks);
+      const result = await runSimulation({ ...deps.simulator, knowledge: knowledge.text, links, frame: frame?.text ?? null }, scenario);
       const setterCost = estimateCostUsd(result.usage, config.setter.model);
       const leadCost = result.leadUsage ? estimateCostUsd(result.leadUsage) : 0;
       await store.logEvent('simulacion', `Simulación "${scenario.title}": ${result.endReason}.`, { scenario: scenario.id, turns: result.turns.length, usage: result.usage });

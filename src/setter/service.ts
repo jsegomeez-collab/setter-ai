@@ -5,6 +5,7 @@ import type { InstagramEvent } from '../meta/parse.js';
 import { SETTINGS, type MessageRow, type MessageSource, type Store } from '../store.js';
 import type { SetterBrain } from './brain.js';
 import { loadKnowledge } from './knowledge-source.js';
+import { linksComplete } from './links.js';
 import { decideChecked, type CheckedReply } from './reply.js';
 import { AGENDA_BUTTON_TITLE } from './rules.js';
 import { NO_TEXT_PLACEHOLDER, buildSystemPrompt, toClaudeTurns, type SetterLinks } from './prompt.js';
@@ -51,7 +52,8 @@ export interface SetterServiceOptions {
   readonly store: Store;
   /** null = falta ANTHROPIC_API_KEY: se guardan los mensajes pero no se responde. */
   readonly brain: SetterBrain | null;
-  readonly links: SetterLinks;
+  /** Enlaces del espacio, o cómo leerlos en cada respuesta (Fase 7.5c: se cambian desde la web sin reiniciar). */
+  readonly links: SetterLinks | (() => Promise<SetterLinks>);
   /** Sender.enqueue: se cumple cuando el envío terminó (bien o mal). */
   readonly enqueue: (actions: readonly Action[]) => Promise<void>;
   readonly getUsername: (igId: string) => Promise<string | null>;
@@ -287,10 +289,13 @@ export class SetterService {
   }
 
   private async reply(igId: string): Promise<void> {
-    const { store, brain, links } = this.options;
+    const { store, brain } = this.options;
     if (!brain) return this.log('Setter sin ANTHROPIC_API_KEY: el mensaje se guarda pero no se responde.', { igId });
     const blocked = await this.blockedReason(igId);
     if (blocked) return blocked === 'off' ? undefined : this.log(blocked, { igId });
+    const links = await this.currentLinks();
+    // Espacio sin sus enlaces (7.5c): no se responde, para no mandar una agenda vacía (ni la de otro espacio).
+    if (!linksComplete(links)) return this.log('Faltan los enlaces del setter (agenda, membresía y correo): ponlos en Setter IA → Modo. No se responde.', { igId });
     // Documento único o documentos por tema, según lo que haya elegido Jose (Fase 7.2).
     const knowledge = await loadKnowledge(store);
     if (!knowledge) return this.log('No hay documento del setter cargado (ni documentos por tema activos): no se responde.', { igId });
@@ -311,6 +316,11 @@ export class SetterService {
     // Dueño de negocio que quiere implementación (DFY): etiqueta para que Jose lo identifique (decisión 2026-10-17).
     if (result.output.lead.tipo_lead === 'empresa_dfy') await store.addContactTags(igId, ['EMPRESA DFY']);
     await this.deliver(igId, dedupKey, result);
+  }
+
+  private async currentLinks(): Promise<SetterLinks> {
+    const { links } = this.options;
+    return typeof links === 'function' ? links() : links;
   }
 
   /** Motivo por el que NO se responde (null = se puede). 'off' = apagado, sin registrar nada. */
@@ -385,7 +395,7 @@ export class SetterService {
    */
   private async send(igId: string, dedupKey: string, original: string, saved = false, source: MessageSource = 'ai'): Promise<boolean> {
     const { store } = this.options;
-    const out = withLinkButtons(original, this.options.links);
+    const out = withLinkButtons(original, await this.currentLinks());
     if (saved) await store.setMessageStatus(dedupKey, 'queued');
     else await store.addMessage({ igId, direction: 'out', source, text: out.stored, mid: null, status: 'queued', dedupKey });
     const action: Action = {

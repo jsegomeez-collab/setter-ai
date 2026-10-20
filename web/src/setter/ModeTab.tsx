@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { modelLabel } from '../lib/labels';
 import { Notice, Section, Segmented, type SegmentOption } from '../ui/kit';
+import { LinksSection } from './LinksSection';
 import type { SetterData, SetterMode } from './types';
 
 const MODES: readonly SegmentOption<SetterMode>[] = [
@@ -43,6 +44,8 @@ export function ModeTab({ data, onSaved }: Props) {
           </div>
         )}
       </Section>
+
+      <LinksSection links={data.links} onSaved={() => onSaved('Enlaces guardados.')} />
 
       <Section label="Usuarios de prueba" description="En modo Prueba solo les responde a ellos. Separa los nombres con comas.">
         <input aria-label="Usuarios de prueba" className="field" value={usernames} onChange={(e) => setUsernames(e.target.value)} placeholder="josegomezlife, otra_cuenta" />

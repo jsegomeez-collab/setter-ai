@@ -15,7 +15,21 @@ export interface ManagerDeps {
   /** Crea la base de datos vacía del espacio. */
   readonly provision: (workspaceId: string) => Promise<void>;
   readonly log: (message: string) => void;
+  /** Suscribe los avisos de Meta de una cuenta con su token (POST me/subscribed_apps). */
+  readonly subscribe: (accessToken: string) => Promise<void>;
+  /** Cuenta de Instagram del espacio principal (la de Jose), para no dejar conectarla en otro espacio. */
+  readonly principalAccountId: () => Promise<string | null>;
 }
+
+/** Lo que devuelve "Conectar Instagram" (instagram-connect.ts) y hace falta para conectar un espacio. */
+export interface InstagramConnection {
+  readonly accessToken: string;
+  readonly expiresInDays: number | null;
+  readonly userId: string;
+  readonly username: string;
+}
+
+const DAY_SECONDS = 24 * 60 * 60;
 
 type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -65,6 +79,37 @@ export class WorkspaceManager {
     await this.deps.registry.setInstagram(workspaceId, igUserId, igUsername);
     for (const [account, owner] of this.byIgUser) if (owner === workspaceId) this.byIgUser.delete(account);
     this.byIgUser.set(igUserId, workspaceId);
+  }
+
+  /**
+   * Conecta de verdad el Instagram de un espacio (Fase 7.5c): guarda su token (cifrado, en su base), suscribe sus
+   * avisos de Meta, apunta la cuenta (sus avisos le llegarán a él) y reinicia el espacio para que use el token.
+   * Nunca la cuenta de Jose: se llevaría todos sus avisos.
+   */
+  async connectInstagram(workspaceId: string, connection: InstagramConnection): Promise<void> {
+    const runtime = this.runtimes.get(workspaceId);
+    if (!runtime) throw new Error(`El espacio ${workspaceId} no está en marcha`);
+    if (connection.userId === (await this.deps.principalAccountId())) {
+      throw new Error('Esa es la cuenta principal (la de Jose): no se puede conectar a otro espacio.');
+    }
+    await runtime.saveToken(connection.accessToken, connection.expiresInDays === null ? null : connection.expiresInDays * DAY_SECONDS);
+    await this.deps.subscribe(connection.accessToken);
+    await this.setInstagram(workspaceId, connection.userId, connection.username);
+    await this.restart(workspaceId);
+    await this.runtimes.get(workspaceId)?.store.logEvent('instagram-conectar', `Instagram conectado: @${connection.username} (avisos suscritos).`, {
+      userId: connection.userId,
+      username: connection.username,
+      expiresInDays: connection.expiresInDays,
+    });
+  }
+
+  /** Para y vuelve a arrancar un espacio (p. ej. tras conectar su Instagram: así crea su cliente con el token). */
+  private async restart(workspaceId: string): Promise<void> {
+    const workspace = (await this.deps.registry.list()).find((ws) => ws.id === workspaceId);
+    if (!workspace) throw new Error(`El espacio ${workspaceId} no existe`);
+    await this.runtimes.get(workspaceId)?.close();
+    this.runtimes.delete(workspaceId);
+    await this.launch(workspace);
   }
 
   /**

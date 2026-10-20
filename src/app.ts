@@ -17,6 +17,8 @@ import { registerSetter } from './routes-setter.js';
 import type { SetterBrain } from './setter/brain.js';
 import type { DiscardResult, DraftResult, ManualResult } from './setter/service.js';
 import type { LeadPlayer } from './setter/simulator.js';
+import type { SetterLinks } from './setter/prompt.js';
+import type { InstagramConnection } from './workspace-manager.js';
 import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
 import { createWorkspacesApi, type WorkspacesAdmin } from './routes-api-workspaces.js';
@@ -97,6 +99,10 @@ export interface AppDeps {
   readonly workspace?: { readonly id: string; readonly name: string } | null;
   /** Crear espacios e invitar (Fase 7.5b): solo lo recibe el principal. */
   readonly workspaces?: WorkspacesAdmin;
+  /** Enlaces de reserva del setter (7.5c): ausente = los de Render (Jose); un espacio nuevo, ninguno. */
+  readonly setterDefaultLinks?: SetterLinks;
+  /** Conectar de verdad el Instagram de otro espacio (7.5c): solo lo recibe el principal (donde vuelve Instagram). */
+  readonly connectWorkspace?: (workspaceId: string, connection: InstagramConnection) => Promise<void>;
 }
 
 function errorMessage(error: unknown): string {
@@ -334,7 +340,8 @@ function registerInstagramCallback(app: Hono, deps: AppDeps): void {
       await deps.store.logEvent('instagram-conectar', `Prueba de conexión cancelada: ${reason}`, { error: c.req.query('error'), reason: c.req.query('error_reason') ?? null });
       return c.html(page('Conexión cancelada', `<p>Instagram dice: ${escapeHtml(reason)}</p>`), 400);
     }
-    if (!connect.consumeState(c.req.query('state') ?? '')) {
+    const state = connect.takeState(c.req.query('state') ?? '');
+    if (!state.valid) {
       await deps.store.logEvent('instagram-conectar', 'Prueba de conexión: enlace caducado o ya usado (se pidió otra vez).', null);
       return c.html(page('Enlace caducado', '<p>Vuelve a pulsar "Conectar Instagram" (el enlace dura 10 minutos y vale una vez).</p>'), 400);
     }
@@ -344,6 +351,17 @@ function registerInstagramCallback(app: Hono, deps: AppDeps): void {
       return c.html(page('No se pudo conectar', `<p>Instagram respondió: <strong>${escapeHtml(result.error)}</strong></p>`), 400);
     }
     const { username, userId, permissions, expiresInDays, secretIndex } = result;
+    // Fase 7.5c: el enlace salió de otro espacio → se conecta de verdad (token cifrado en SU base). Nunca se enseña.
+    if (state.workspaceId !== null && deps.connectWorkspace) {
+      try {
+        await deps.connectWorkspace(state.workspaceId, { accessToken: result.accessToken, expiresInDays, userId, username });
+      } catch (error) {
+        await deps.store.logEvent('instagram-conectar', `Conexión de @${username} al espacio ${state.workspaceId} FALLIDA: ${errorMessage(error)}`, { workspaceId: state.workspaceId, username });
+        return c.html(page('No se pudo conectar', `<p>${escapeHtml(errorMessage(error))}</p>`), 400);
+      }
+      await deps.store.logEvent('instagram-conectar', `@${username} conectada al espacio ${state.workspaceId}.`, { workspaceId: state.workspaceId, username, userId, permissions });
+      return c.html(page(`Conectado: @${username}`, '<p>Tu cuenta de Instagram ya está conectada y sus avisos (comentarios y mensajes) llegarán a tu espacio.</p>'));
+    }
     await deps.store.logEvent('instagram-conectar', `Prueba de conexión OK: @${username}, permisos: ${permissions.join(', ')} (token de ${expiresInDays ?? '?'} días, no guardado).`, {
       username,
       userId,
@@ -376,7 +394,7 @@ export function createApp(deps: AppDeps): Hono {
     // Espacios (Fase 7.5b): solo en el espacio de Jose.
     if (deps.workspaces) api.route('/workspaces', createWorkspacesApi({ store: deps.store, users: deps.users, admin: deps.workspaces }));
     api.route('/setter/docs', createSetterDocsApi({ store: deps.store, users: deps.users }));
-    api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null }));
+    api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null, defaultLinks: deps.setterDefaultLinks }));
     // Títulos de reels: los últimos 50 + los más antiguos pedidos por id (se recuerdan mientras el servidor esté en marcha).
     const media = createMediaLoader(deps.client, MEDIA_FOR_STATS);
     api.route('/contacts', createContactsApi({ store: deps.store, users: deps.users, media }));
@@ -395,6 +413,7 @@ export function createApp(deps: AppDeps): Hono {
         tokens: deps.tokens,
         linkTracking: deps.linkSecret !== null,
         connect: deps.instagramConnect ?? null,
+        workspaceId: deps.workspace?.id ?? null,
       }),
     );
     api.route('/intelligence', createIntelligenceApi({ store: deps.store, users: deps.users, media, analyzer: deps.analyzer ?? null }));

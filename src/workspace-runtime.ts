@@ -6,6 +6,7 @@ import type { Config } from './config.js';
 import { rescuePendingDms } from './flows/dm-rescue.js';
 import type { InstagramConnect } from './instagram-connect.js';
 import type { WorkspacesAdmin } from './routes-api-workspaces.js';
+import type { InstagramConnection } from './workspace-manager.js';
 import { ClaudeAnalyzer } from './intelligence/analyzer.js';
 import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
@@ -14,6 +15,7 @@ import { Scheduler } from './scheduler.js';
 import { Sender } from './sender.js';
 import { ClaudeBrain } from './setter/brain.js';
 import { EchoWatcher } from './setter/echoes.js';
+import { readSetterLinks } from './setter/links.js';
 import { SetterService } from './setter/service.js';
 import { ClaudeLeadPlayer, LEAD_MODEL } from './setter/simulator.js';
 import type { Store } from './store.js';
@@ -58,6 +60,8 @@ export interface RuntimeDeps {
   readonly workspace?: { readonly id: string; readonly name: string } | null;
   /** Crear espacios e invitar (Fase 7.5b): solo el principal. */
   readonly workspaces?: WorkspacesAdmin;
+  /** Conectar de verdad el Instagram de otro espacio (7.5c): solo el principal, donde vuelve Instagram. */
+  readonly connectWorkspace?: (workspaceId: string, connection: InstagramConnection) => Promise<void>;
 }
 
 export interface WorkspaceRuntime {
@@ -66,6 +70,10 @@ export interface WorkspaceRuntime {
   readonly app: Hono;
   /** Procesa un aviso de Meta de este espacio (en segundo plano). */
   process(payload: unknown): void;
+  /** Guarda el token de "Conectar Instagram" (cifrado, en su base). Para usarlo, el espacio se reinicia. */
+  saveToken(token: string, expiresInSeconds: number | null): Promise<void>;
+  /** Id de su cuenta de Instagram (null si no tiene token o Meta no responde). */
+  accountId(): Promise<string | null>;
   close(): Promise<void>;
 }
 
@@ -104,13 +112,16 @@ export async function startWorkspaceRuntime(deps: RuntimeDeps): Promise<Workspac
 
   // Setter IA. Sin clave de Anthropic los DMs se guardan pero no se responde. Arranca apagado (modo en /setter).
   const { anthropic } = deps;
+  // Enlaces de reserva: Jose, los de Render (como siempre); un espacio nuevo, ninguno hasta que ponga los suyos.
+  const defaultLinks = workspaceId === null ? config.setter.links : NO_LINKS;
   const brain = anthropic ? new ClaudeBrain(anthropic, config.setter.model) : null;
   // Simulador del panel: el lead lo hace siempre Haiku (barato y justo para comparar modelos del setter).
   const simulator = anthropic && brain ? { brain, lead: new ClaudeLeadPlayer(anthropic, LEAD_MODEL) } : null;
   const setter = new SetterService({
     store,
     brain,
-    links: workspaceId === null ? config.setter.links : NO_LINKS,
+    // Los del espacio (puestos en la web) o los de reserva; se leen en cada respuesta (7.5c).
+    links: async () => (await readSetterLinks(store, defaultLinks)).links,
     enqueue: (actions) => activeSender.enqueue(actions),
     getUsername: async (igId) => (client ? client.getUsername(igId) : null),
     showTyping: client ? (igId) => client.sendTypingOn(igId) : undefined,
@@ -157,6 +168,8 @@ export async function startWorkspaceRuntime(deps: RuntimeDeps): Promise<Workspac
     instagramConnect: deps.instagramConnect ?? null,
     workspace: deps.workspace ?? null,
     workspaces: deps.workspaces,
+    setterDefaultLinks: defaultLinks,
+    connectWorkspace: deps.connectWorkspace,
   });
 
   const checkToken = () => {
@@ -173,6 +186,15 @@ export async function startWorkspaceRuntime(deps: RuntimeDeps): Promise<Workspac
     store,
     app,
     process,
+    saveToken: (token, expiresInSeconds) => tokens.save(token, expiresInSeconds),
+    async accountId() {
+      if (!client) return null;
+      try {
+        return (await client.getAccount()).userId;
+      } catch {
+        return null;
+      }
+    },
     async close() {
       clearTimeout(firstCheck);
       if (catchUp) clearTimeout(catchUp);

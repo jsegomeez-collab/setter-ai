@@ -20,6 +20,8 @@ interface SetupOptions {
   readonly brain?: SetterBrain | null;
   readonly sendOk?: boolean;
   readonly username?: string | null;
+  /** Enlaces del espacio (Fase 7.5c): por defecto, los de prueba. */
+  readonly links?: () => Promise<{ agenda: string; membership: string; contactEmail: string }>;
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -42,7 +44,7 @@ async function setup(options: SetupOptions = {}) {
   const service = new SetterService({
     store,
     brain: options.brain === undefined ? { decide } : options.brain,
-    links: TEST_SETTER_LINKS,
+    links: options.links ?? TEST_SETTER_LINKS,
     enqueue,
     getUsername,
     showTyping,
@@ -459,5 +461,25 @@ describe('parseUsernames', () => {
   it('acepta comas, espacios, @ y mayúsculas', () => {
     expect(parseUsernames(' @JoseGomezLife, otra_cuenta ,, ')).toEqual(['josegomezlife', 'otra_cuenta']);
     expect(parseUsernames(null)).toEqual([]);
+  });
+});
+
+describe('SetterService · enlaces del espacio (Fase 7.5c)', () => {
+  it('sin los tres enlaces puestos no responde (y lo apunta en el registro)', async () => {
+    const { store, decide, service, flush } = await setup({ links: async () => ({ agenda: '', membership: '', contactEmail: '' }) });
+    await service.onIncoming(dm('hola', 'm-sin-enlaces'));
+    await flush();
+    expect(decide).not.toHaveBeenCalled();
+    expect(store.events.some((e) => e.note.includes('Faltan los enlaces'))).toBe(true);
+  });
+
+  it('usa los enlaces que hay en ese momento (los puestos en la web, no los del arranque)', async () => {
+    let agenda = 'https://cal.com/antes';
+    const { decide, service, flush } = await setup({ links: async () => ({ agenda, membership: 'https://m.com', contactEmail: 'a@b.com' }) });
+    agenda = 'https://cal.com/ahora';
+    await service.onIncoming(dm('hola', 'm-enlaces'));
+    await flush();
+    const [system] = decide.mock.calls[0] ?? [];
+    expect(String(system)).toContain('https://cal.com/ahora');
   });
 });

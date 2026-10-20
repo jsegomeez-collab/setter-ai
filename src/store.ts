@@ -245,6 +245,8 @@ export const SETTINGS = {
   /** Fase 7.3c: borrador de rompehielos y menú fijo (JSON) y lo último publicado en Instagram (JSON: at, by, entry). */
   chatEntry: 'chat_entry',
   chatEntryPublished: 'chat_entry_published',
+  /** Fase 7.5c: enlaces del setter de este espacio (JSON: agenda, membership, contactEmail). Sin él, los de reserva. */
+  setterLinks: 'setter_links',
 } as const;
 
 /** Tipos de acción que cuentan como envío a Instagram (para el límite por hora). */

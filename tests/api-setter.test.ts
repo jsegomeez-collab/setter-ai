@@ -171,3 +171,15 @@ describe('API Setter IA (Fase 6.1)', () => {
     expect(data.simulator.available).toBe(false);
   });
 });
+
+describe('API Setter IA · enlaces del espacio (Fase 7.5c)', () => {
+  it('sin guardar, enseña los de reserva; se pueden guardar los suyos (validados) y desde entonces mandan', async () => {
+    const { send, admin } = await setup();
+    const before = await (await send('GET', '/api/setter', admin)).json();
+    expect(before.links).toEqual({ ...config.setter.links, source: 'default' });
+    const mine = { agenda: 'https://cal.com/pedro', membership: 'https://pedro.com/m', contactEmail: 'pedro@x.com' };
+    expect((await send('POST', '/api/setter/links', admin, mine)).status).toBe(200);
+    expect((await (await send('GET', '/api/setter', admin)).json()).links).toEqual({ ...mine, source: 'saved' });
+    expect((await send('POST', '/api/setter/links', admin, { ...mine, agenda: 'no-es-un-enlace' })).status).toBe(400);
+  });
+});

@@ -143,3 +143,53 @@ describe('API Configuración · Instagram y envíos (Fase 6.7b)', () => {
     expect(only.events.map((e: { kind: string; note: string }) => [e.kind, e.note])).toEqual([['comment', 'Comentario recibido']]);
   });
 });
+
+describe('Conectar Instagram de verdad en un espacio (Fase 7.5c)', () => {
+  it('el enlace sale del espacio; la vuelta (en la app principal) guarda la conexión en ese espacio y nunca enseña el token', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'corto', user_id: 1, permissions: ['instagram_business_basic'] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'TOKEN-SECRETO-60D', expires_in: 5_184_000 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user_id: '1784', username: 'socio_ig' })));
+    const instagramConnect = new InstagramConnect({ appId: '1117985297673013', appSecrets: ['s'], redirectUri: `${HOST}/oauth/instagram/callback`, apiVersion: 'v25.0', fetchFn });
+    const users = createMemoryUserStore();
+    const make = (extra: Record<string, unknown>) => {
+      const store = createMemoryStore();
+      return { store, app: createApp({ config, store, client: null, tokens: new TokenManager({ store, envToken: null, encryptionKey: null }), processPayload: vi.fn(), linkSecret: null, users, instagramConnect, ...extra }) };
+    };
+    const connectWorkspace = vi.fn().mockResolvedValue(undefined);
+    const principal = make({ connectWorkspace });
+    const espacio = make({ workspace: { id: 'ws_socio_a1b2', name: 'Socio' } });
+    const send = (app: ReturnType<typeof make>['app'], path: string, cookie = '', method: 'GET' | 'POST' = 'GET', body?: unknown) =>
+      app.request(`${HOST}${path}`, { method, headers: { cookie, origin: HOST, 'content-type': 'application/json', 'x-forwarded-for': '1.2.3.5' }, body: body ? JSON.stringify(body) : undefined });
+    await send(principal.app, '/api/setup', '', 'POST', { setupKey: SETUP_KEY, email: 'jose@x.com', name: 'Jose', password: 'una-clave-muy-larga' });
+    await users.createUser({ email: 'socio@x.com', name: 'Socio', role: 'admin', passwordHash: await hashPassword('clave-del-socio-1'), workspaceId: 'ws_socio_a1b2' });
+    const socio = (await send(espacio.app, '/api/login', '', 'POST', { email: 'socio@x.com', password: 'clave-del-socio-1' })).headers.get('set-cookie')?.split(';')[0] ?? '';
+
+    const { url } = await (await send(espacio.app, '/api/settings/instagram/connect-url', socio)).json();
+    const state = new URL(url).searchParams.get('state') ?? '';
+    const res = await send(principal.app, `/oauth/instagram/callback?code=abc&state=${state}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('@socio_ig');
+    expect(html).not.toContain('TOKEN-SECRETO-60D');
+    expect(connectWorkspace).toHaveBeenCalledWith('ws_socio_a1b2', { accessToken: 'TOKEN-SECRETO-60D', expiresInDays: 60, userId: '1784', username: 'socio_ig' });
+    expect(JSON.stringify(await principal.store.recentEvents(10))).not.toContain('TOKEN-SECRETO-60D');
+  });
+
+  it('si no se puede conectar (p. ej. es la cuenta de Jose), lo dice y no se guarda nada', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'corto', user_id: 1, permissions: [] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'TOKEN-X', expires_in: 5_184_000 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user_id: '99', username: 'josenews.ai' })));
+    const instagramConnect = new InstagramConnect({ appId: '1117985297673013', appSecrets: ['s'], redirectUri: `${HOST}/oauth/instagram/callback`, apiVersion: 'v25.0', fetchFn });
+    const store = createMemoryStore();
+    const connectWorkspace = vi.fn().mockRejectedValue(new Error('Esa es la cuenta principal (la de Jose): no se puede conectar a otro espacio.'));
+    const app = createApp({ config, store, client: null, tokens: new TokenManager({ store, envToken: null, encryptionKey: null }), processPayload: vi.fn(), linkSecret: null, users: createMemoryUserStore(), instagramConnect, connectWorkspace });
+    const state = new URL(instagramConnect.authorizeUrl('ws_socio_a1b2')).searchParams.get('state') ?? '';
+    const res = await app.request(`${HOST}/oauth/instagram/callback?code=abc&state=${state}`);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain('cuenta principal');
+  });
+});

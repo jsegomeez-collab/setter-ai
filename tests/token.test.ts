@@ -67,3 +67,20 @@ describe('TokenManager', () => {
     expect(store.settings.get(SETTINGS.igTokenLastError)).toContain('descifrar');
   });
 });
+
+describe('TokenManager · token conectado desde la web (Fase 7.5c)', () => {
+  it('guarda el token cifrado con su caducidad y desde ese momento lo usa', async () => {
+    const store = createMemoryStore();
+    const tokens = new TokenManager({ store, envToken: null, encryptionKey: KEY, now: () => NOW });
+    await tokens.save('token-del-espacio', 60 * 24 * 60 * 60);
+    expect(store.settings.get(SETTINGS.igToken)).not.toContain('token-del-espacio');
+    expect(await tokens.get()).toBe('token-del-espacio');
+    expect(await new TokenManager({ store, envToken: null, encryptionKey: KEY }).get()).toBe('token-del-espacio');
+    expect(store.settings.get(SETTINGS.igTokenExpiresAt)).toBe('2026-12-15T12:00:00.000Z');
+  });
+
+  it('sin clave de cifrado no se guarda (nunca en claro)', async () => {
+    const tokens = new TokenManager({ store: createMemoryStore(), envToken: null, encryptionKey: null });
+    await expect(tokens.save('token', null)).rejects.toThrow('TOKEN_ENCRYPTION_KEY');
+  });
+});

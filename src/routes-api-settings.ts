@@ -22,6 +22,8 @@ export interface SettingsApiDeps {
   readonly linkTracking: boolean;
   /** Prueba de "Conectar Instagram" (antes de la 7.5). null si no hay dirección pública del servidor. */
   readonly connect?: InstagramConnect | null;
+  /** Espacio de esta app (7.5c): va dentro del enlace de Conectar Instagram. null = el principal (solo prueba). */
+  readonly workspaceId?: string | null;
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -115,7 +117,9 @@ export function createSettingsApi(deps: SettingsApiDeps): Hono<ApiEnv> {
     }
   });
 
-  api.get('/instagram/connect-url', (c) => (deps.connect ? c.json({ url: deps.connect.authorizeUrl() }) : c.json({ error: 'Falta la dirección pública del servidor.' }, 503)));
+  api.get('/instagram/connect-url', (c) =>
+    deps.connect ? c.json({ url: deps.connect.authorizeUrl(deps.workspaceId ?? null) }) : c.json({ error: 'Falta la dirección pública del servidor.' }, 503),
+  );
 
   api.get('/events', async (c) => {
     const kind = c.req.query('kind') || null;

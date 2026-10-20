@@ -61,7 +61,7 @@ const metaError = (body: Json): string => {
 const isSecretError = (body: Json): boolean => /client[ _]secret/i.test(metaError(body));
 
 export class InstagramConnect {
-  private readonly states = new Map<string, number>();
+  private readonly states = new Map<string, { readonly at: number; readonly workspaceId: string | null }>();
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
 
@@ -71,10 +71,11 @@ export class InstagramConnect {
   }
 
   /** Enlace oficial de autorización, con un `state` de un solo uso (protege de que alguien cuele su propia vuelta). */
-  authorizeUrl(): string {
-    for (const [state, at] of this.states) if (this.now() - at > STATE_TTL_MS) this.states.delete(state);
+  authorizeUrl(workspaceId: string | null = null): string {
+    for (const [state, entry] of this.states) if (this.now() - entry.at > STATE_TTL_MS) this.states.delete(state);
     const state = randomBytes(STATE_BYTES).toString('base64url');
-    this.states.set(state, this.now());
+    // El espacio va guardado aquí (no en el enlace): al volver de Instagram se sabe a cuál conectar la cuenta.
+    this.states.set(state, { at: this.now(), workspaceId });
     const params = new URLSearchParams({
       client_id: this.options.appId,
       redirect_uri: this.options.redirectUri,
@@ -88,9 +89,15 @@ export class InstagramConnect {
   }
 
   consumeState(state: string): boolean {
-    const at = this.states.get(state);
+    return this.takeState(state).valid;
+  }
+
+  /** Como consumeState, y además dice de qué espacio salió el enlace (Fase 7.5c; null = el de Jose). */
+  takeState(state: string): { valid: boolean; workspaceId: string | null } {
+    const entry = this.states.get(state);
     this.states.delete(state);
-    return at !== undefined && this.now() - at <= STATE_TTL_MS;
+    const valid = entry !== undefined && this.now() - entry.at <= STATE_TTL_MS;
+    return { valid, workspaceId: valid ? (entry?.workspaceId ?? null) : null };
   }
 
   async exchange(rawCode: string): Promise<ConnectResult> {

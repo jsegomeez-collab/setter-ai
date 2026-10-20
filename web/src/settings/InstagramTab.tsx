@@ -1,5 +1,6 @@
 import { Ban, CheckCircle2, PlayCircle, RefreshCw, Radio, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useSession } from '../auth/SessionContext';
 import { api } from '../lib/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
@@ -29,6 +30,8 @@ type Dialog = 'resume' | 'unblock' | 'block' | null;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function InstagramTab() {
+  // En otro espacio (7.5c) el botón conecta de verdad; en el de Jose sigue siendo una prueba (no toca su token).
+  const { workspace } = useSession();
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
@@ -66,6 +69,13 @@ export function InstagramTab() {
       {error && <Notice tone="bad">{error}</Notice>}
 
       <Section label="Cuenta de Instagram">
+        {workspace && !status.account && (
+          <ol className="mb-4 list-decimal space-y-1 rounded-lg border border-white/8 bg-white/[0.02] py-3 pl-8 pr-3 text-[13px] text-ash">
+            <li>Pide a Jose que añada tu cuenta de Instagram como «Evaluador de Instagram» en su app.</li>
+            <li>Acepta la invitación en Instagram: Perfil → Configuración → Aplicaciones y sitios web → Invitaciones de evaluador.</li>
+            <li>Pulsa «Conectar Instagram» e inicia sesión con tu cuenta. Al volver, tus comentarios y mensajes llegarán a este espacio.</li>
+          </ol>
+        )}
         <ul className="space-y-2 text-sm">
           <Check ok={status.account !== null}>{status.account ? <>Conectada como <strong className="text-fog">@{status.account.username}</strong></> : `Sin conectar: ${status.accountError}`}</Check>
           <Check ok={status.secretConfigured}>Firma de los avisos de Meta {status.secretConfigured ? 'configurada' : 'SIN configurar'}</Check>
@@ -81,7 +91,7 @@ export function InstagramTab() {
                 .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo abrir'))
             }
           >
-            <Radio size={14} /> Probar "Conectar Instagram"
+            <Radio size={14} /> {workspace ? (status.account ? 'Volver a conectar Instagram' : 'Conectar Instagram') : 'Probar "Conectar Instagram"'}
           </SecondaryButton>
           <SecondaryButton onClick={() => void run(async () => `Avisos de Meta: ${JSON.stringify((await api<{ result: unknown }>('/settings/subscribe', { method: 'POST' })).result)}`)}>
             <Radio size={14} /> Volver a suscribir los avisos de Meta

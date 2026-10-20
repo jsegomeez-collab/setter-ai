@@ -75,3 +75,15 @@ describe('InstagramConnect', () => {
     expect(await connect.exchange('c')).toEqual({ ok: false, error: 'Insufficient developer role' });
   });
 });
+
+describe('enlace por espacio (Fase 7.5c)', () => {
+  it('el enlace recuerda de qué espacio salió (y vale una sola vez)', () => {
+    const { connect } = setup();
+    const state = (url: string) => new URL(url).searchParams.get('state') ?? '';
+    const forSocio = state(connect.authorizeUrl('ws_socio_a1b2'));
+    const forJose = state(connect.authorizeUrl());
+    expect(connect.takeState(forSocio)).toEqual({ valid: true, workspaceId: 'ws_socio_a1b2' });
+    expect(connect.takeState(forSocio)).toEqual({ valid: false, workspaceId: null });
+    expect(connect.takeState(forJose)).toEqual({ valid: true, workspaceId: null });
+  });
+});
