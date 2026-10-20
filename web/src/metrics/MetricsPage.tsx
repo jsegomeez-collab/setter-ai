@@ -8,6 +8,7 @@ import { Page, PageHeader } from '../ui/PageHeader';
 import { DayLines, HBars, type BarRow } from './charts';
 import { DM_FAILURES, MAIN_PATH, SERIES, STEP, percent, type FunnelCounts, type MetricsResponse, type StepKey } from './types';
 import { Loading } from '../ui/EmptyState';
+import { ReelCover } from '../ui/visual';
 
 type PeriodTab = 'all' | '7' | '30';
 const PERIODS: readonly { value: PeriodTab; label: string }[] = [
@@ -124,6 +125,7 @@ function Dashboard({ data }: { data: MetricsResponse }) {
               key: r.key,
               name: r.label,
               link: r.permalink,
+              cover: r.cover,
               cells: [r.commented, withPct(r.reached, r.commented), withPct(r.asked, r.reached), withPct(r.wrote, r.reached), withPct(r.qualified, r.wrote)],
             }))}
           />
@@ -216,6 +218,8 @@ interface TableRow {
   readonly key: string;
   readonly name: string;
   readonly link?: string | null;
+  /** Portada del reel (Fase 8); undefined = la tabla no lleva portadas. */
+  readonly cover?: string | null;
   readonly cells: readonly (number | string)[];
 }
 
@@ -238,6 +242,7 @@ function CountsTable({ first, headers, rows }: { first: string; headers: readonl
             <tr key={row.key} className="hover:bg-white/[0.02]">
               <td className="max-w-[320px] py-2 pr-3 text-mist">
                 <span className="flex items-center gap-2">
+                  {row.cover !== undefined && <ReelCover src={row.cover} size={28} />}
                   <span className="truncate">{row.name}</span>
                   {row.link && (
                     <a href={row.link} target="_blank" rel="noopener noreferrer" aria-label="Abrir el reel en Instagram" className="shrink-0 text-smoke hover:text-ember-400">

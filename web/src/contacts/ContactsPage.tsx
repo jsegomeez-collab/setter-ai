@@ -1,4 +1,4 @@
-import { Download, ExternalLink, Film, Search, Users } from 'lucide-react';
+import { Download, ExternalLink, Film, MessageCircle, Search, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useSession } from '../auth/SessionContext';
@@ -7,12 +7,12 @@ import { api } from '../lib/api';
 import { EmptyState, Skeleton } from '../ui/EmptyState';
 import { Notice, Tabs, formatDate } from '../ui/kit';
 import { Page, PageHeader } from '../ui/PageHeader';
+import { Avatar, ReelCover, StageChip } from '../ui/visual';
 import type { ContactsResponse, ReelRow } from './types';
 
 type TabId = 'personas' | 'reels';
 /** Columnas de cada lista en escritorio (en el móvil cada fila es una tarjeta apilada). */
 const PEOPLE_COLUMNS = 'md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_120px] md:gap-4';
-const REEL_COLUMNS = 'md:grid-cols-[minmax(0,1fr)_100px_90px_minmax(0,1fr)] md:gap-4';
 const TABS: readonly { value: TabId; label: string }[] = [
   { value: 'personas', label: 'Personas' },
   { value: 'reels', label: 'Por reel' },
@@ -95,10 +95,16 @@ function People() {
         {data?.items.map((c) => (
           <li key={c.igId}>
             <Link to={`/contactos/${encodeURIComponent(c.igId)}`} className={`grid gap-1 px-4 py-3 transition-colors hover:bg-white/[0.03] md:items-center ${PEOPLE_COLUMNS}`}>
-              <span className="truncate text-sm font-semibold text-fog">{handle(c.username, c.igId)}</span>
-              <span className="truncate text-xs text-ash">{c.sourceLabel ?? 'Sin reel de origen'}</span>
+              <span className="flex min-w-0 items-center gap-3">
+                <Avatar name={c.username ?? c.igId} picture={c.picture} size={36} />
+                <span className="truncate text-sm font-semibold text-fog">{handle(c.username, c.igId)}</span>
+              </span>
+              <span className="flex min-w-0 items-center gap-2">
+                {c.sourceMediaId && <ReelCover src={c.sourceCover} size={26} />}
+                <span className="truncate text-xs text-ash">{c.sourceLabel ?? 'Sin reel de origen'}</span>
+              </span>
               <span className="flex flex-wrap gap-1">
-                {c.stage && <span className="rounded bg-ember-500/12 px-1.5 py-0.5 text-xs font-semibold text-ember-400">{STAGE_LABEL[c.stage] ?? c.stage}</span>}
+                {c.stage && <StageChip stage={c.stage} />}
                 {c.tags.map((tag) => (
                   <span key={tag} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-xs text-ash">
                     {tag}
@@ -145,39 +151,44 @@ function Reels() {
       </EmptyState>
     );
   }
+  // Fase 8.6: cuadrícula de portadas (antes, una tabla de texto). Ordenados como vienen: más personas primero.
   return (
-    <ul className="card divide-y divide-white/[0.05]">
-      <li aria-hidden className={`hidden px-4 py-2 text-xs font-semibold text-smoke md:grid ${REEL_COLUMNS}`}>
-        <span>Reel</span>
-        <span>Comentarios</span>
-        <span>Personas</span>
-        <span>Etiquetas de quien vino de él</span>
-      </li>
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {reels.map((r) => (
-        <li key={r.mediaId} className={`grid gap-2 px-4 py-3 md:items-center ${REEL_COLUMNS}`}>
-          <span className="flex min-w-0 items-center gap-2 text-sm text-fog">
-            <span className="truncate">{r.label}</span>
-            {r.permalink && (
-              <a href={r.permalink} target="_blank" rel="noopener noreferrer" aria-label="Abrir el reel en Instagram" className="shrink-0 text-smoke hover:text-ember-400">
-                <ExternalLink size={13} />
-              </a>
+        <li key={r.mediaId} className="card flex gap-3 p-3">
+          <ReelCover src={r.cover} size={72} />
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <p className="line-clamp-2 text-sm font-semibold text-fog">{r.label}</p>
+            <p className="flex gap-3 text-xs text-ash">
+              <span className="inline-flex items-center gap-1">
+                <MessageCircle size={13} className="text-ember-400" aria-hidden="true" />
+                <span className="font-semibold tabular-nums text-fog">{r.comments}</span> coment.
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Users size={13} className="text-ember-400" aria-hidden="true" />
+                <span className="font-semibold tabular-nums text-fog">{r.people}</span> personas
+              </span>
+            </p>
+            {Object.keys(r.tagged).length > 0 && (
+              <span className="flex flex-wrap gap-1">
+                {Object.entries(r.tagged).map(([tag, n]) => (
+                  <Link key={tag} to={`/contactos?tag=${encodeURIComponent(tag)}&media=${encodeURIComponent(r.mediaId)}`} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-xs text-ash hover:text-fog">
+                    {tag}: {n}
+                  </Link>
+                ))}
+              </span>
             )}
-          </span>
-          <span className="text-xs text-ash">
-            {r.comments}
-            <span className="md:hidden"> comentarios</span>
-          </span>
-          <span className="text-xs text-ash">
-            {r.people}
-            <span className="md:hidden"> personas</span>
-          </span>
-          <span className="flex flex-wrap gap-1">
-            {Object.entries(r.tagged).map(([tag, n]) => (
-              <Link key={tag} to={`/contactos?tag=${encodeURIComponent(tag)}&media=${encodeURIComponent(r.mediaId)}`} className="rounded bg-white/[0.05] px-1.5 py-0.5 text-xs text-ash hover:text-fog">
-                {tag}: {n}
+            <span className="mt-auto flex flex-wrap gap-3 text-xs">
+              <Link to={`/contactos?media=${encodeURIComponent(r.mediaId)}`} className="font-semibold text-ember-400 hover:text-ember-300">
+                Ver personas
               </Link>
-            ))}
-          </span>
+              {r.permalink && (
+                <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-smoke hover:text-fog">
+                  Abrir en Instagram <ExternalLink size={12} aria-hidden="true" />
+                </a>
+              )}
+            </span>
+          </div>
         </li>
       ))}
     </ul>

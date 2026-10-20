@@ -78,13 +78,15 @@ export interface FlowSummary {
   readonly name: string;
   readonly enabled: boolean;
   readonly steps: number;
+  /** Tipos de paso en orden (Fase 8.7): la cadena de iconos de la tarjeta. */
+  readonly stepTypes: readonly StepType[];
   readonly trigger: Trigger;
   readonly testUsernames: readonly string[];
 }
 
 export interface FlowsResponse {
   readonly flows: readonly FlowSummary[];
-  readonly reels: readonly { readonly mediaId: string; readonly label: string }[];
+  readonly reels: readonly { readonly mediaId: string; readonly label: string; readonly cover: string | null }[];
   /** Bloqueo de envíos vigente (p. ej. el de Meta), o null. */
   readonly sendsBlockedUntil: string | null;
   /** Usuario de Instagram conectado (para el enlace ig.me), o null si no se pudo leer. */

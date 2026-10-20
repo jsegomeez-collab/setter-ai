@@ -2,6 +2,7 @@ import { Search } from 'lucide-react';
 import { NavLink } from 'react-router';
 import { STAGE_LABEL, handle, timeAgo, type InboxItem } from './types';
 import { Loading } from '../ui/EmptyState';
+import { Avatar, StageChip } from '../ui/visual';
 
 /** Estados (una fila de botones) y etapas de la ficha (un desplegable): antes eran 3 filas de botones diminutos. */
 const STATES: readonly { value: string; label: string }[] = [
@@ -68,19 +69,28 @@ export function InboxList({ items, filter, query, onFilter, onQuery }: Props) {
                 ['block border-b border-white/[0.04] px-4 py-3 transition-colors', isActive ? 'bg-ember-500/[0.07]' : 'hover:bg-white/[0.03]'].join(' ')
               }
             >
-              <div className="flex items-center gap-2">
-                <span className={['min-w-0 flex-1 truncate text-sm', item.unanswered ? 'font-semibold text-snow' : 'text-mist'].join(' ')}>{handle(item.username, item.igId)}</span>
-                <span className="shrink-0 text-xs text-smoke">{timeAgo(item.lastAt)}</span>
-              </div>
-              <p className="mt-0.5 truncate text-xs text-ash">
-                {item.lastDirection === 'out' ? 'Tú: ' : ''}
-                {item.lastText}
-              </p>
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {item.unanswered && <Chip tone="ember">Sin responder</Chip>}
-                {item.hasDraft && <Chip tone="info">Borrador</Chip>}
-                {item.aiPaused && <Chip tone="warn">IA parada</Chip>}
-                {item.stage && <Chip tone="plain">{STAGE_LABEL[item.stage] ?? item.stage}</Chip>}
+              <div className="flex gap-3">
+                <span className="relative">
+                  <Avatar name={item.username ?? item.igId} picture={item.picture} size={40} />
+                  {/* Punto dorado: espera respuesta (también lo dice el chip de abajo). */}
+                  {item.unanswered && <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-g1 bg-ember-400" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className={['min-w-0 flex-1 truncate text-sm', item.unanswered ? 'font-semibold text-snow' : 'text-mist'].join(' ')}>{handle(item.username, item.igId)}</span>
+                    <span className="shrink-0 text-xs text-smoke">{timeAgo(item.lastAt)}</span>
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-ash">
+                    {item.lastDirection === 'out' ? 'Tú: ' : ''}
+                    {item.lastText}
+                  </span>
+                  <span className="mt-1.5 flex flex-wrap gap-1">
+                    {item.stage && <StageChip stage={item.stage} />}
+                    {item.unanswered && <Chip tone="ember">Sin responder</Chip>}
+                    {item.hasDraft && <Chip tone="info">Borrador</Chip>}
+                    {item.aiPaused && <Chip tone="warn">IA parada</Chip>}
+                  </span>
+                </span>
               </div>
             </NavLink>
           </li>

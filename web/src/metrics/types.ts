@@ -21,7 +21,7 @@ export interface MetricsResponse {
   readonly period: Period;
   readonly funnel: {
     readonly total: FunnelCounts;
-    readonly byReel: readonly (FunnelCounts & { readonly label: string; readonly permalink: string | null })[];
+    readonly byReel: readonly (FunnelCounts & { readonly label: string; readonly permalink: string | null; readonly cover: string | null })[];
     /** Del más antiguo al más reciente, con 0 en los días sin comentarios. */
     readonly byDay: readonly FunnelCounts[];
   };

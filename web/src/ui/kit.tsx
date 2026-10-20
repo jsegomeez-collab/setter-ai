@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { buttonClass } from './Button';
 
@@ -40,6 +41,8 @@ export interface SegmentOption<T extends string> {
   readonly value: T;
   readonly label: string;
   readonly hint?: string;
+  /** Icono encima del nombre (Fase 8: opciones más visuales). */
+  readonly icon?: LucideIcon;
 }
 
 /** Opciones segmentadas: la elegida en dorado lleno (como "Balance (neto)" en la referencia). */
@@ -60,6 +63,7 @@ export function Segmented<T extends string>({ options, value, onChange, name }: 
               active ? 'border-ember-500 bg-ember-500 text-[#1a1406]' : 'border-white/8 bg-white/[0.03] text-fog hover:border-white/15',
             ].join(' ')}
           >
+            {option.icon && <option.icon size={20} className={['mb-2', active ? 'text-[#1a1406]' : 'text-ember-400'].join(' ')} aria-hidden="true" />}
             <span className="block text-sm font-semibold">{option.label}</span>
             {option.hint && <span className={['mt-0.5 block text-xs', active ? 'text-[#3d2f0d]' : 'text-smoke'].join(' ')}>{option.hint}</span>}
           </button>

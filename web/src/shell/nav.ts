@@ -1,4 +1,4 @@
-import { Bot, BrainCircuit, Contact, LayoutGrid, MessagesSquare, Settings, TrendingUp, Workflow, type LucideIcon } from 'lucide-react';
+import { Bot, BrainCircuit, Columns3, Contact, LayoutGrid, MessagesSquare, Settings, TrendingUp, Workflow, type LucideIcon } from 'lucide-react';
 import type { Role } from '../lib/api';
 
 export interface NavItem {
@@ -21,6 +21,7 @@ export const NAV: readonly NavItem[] = [
   { path: '/', label: 'Inicio', icon: LayoutGrid, roles: ALL, step: null, legacyPath: null, description: 'Resumen y accesos.' },
   { path: '/setter', label: 'Setter IA', icon: Bot, roles: ADMIN, step: null, legacyPath: '/setter', description: 'Documento, marco técnico, textos de inicio, modo y simulador.' },
   { path: '/conversaciones', label: 'Conversaciones', icon: MessagesSquare, roles: ALL, step: null, legacyPath: '/conversaciones', description: 'Bandeja, fichas, pausar la IA, borradores y responder a mano.' },
+  { path: '/tablero', label: 'Tablero', icon: Columns3, roles: ALL, step: null, legacyPath: null, description: 'Cada lead en su etapa, de un vistazo.' },
   { path: '/contactos', label: 'Contactos', icon: Contact, roles: ALL, step: null, legacyPath: '/contactos', description: 'Fichas, etiquetas, reel de origen e historial.' },
   { path: '/metricas', label: 'Métricas', icon: TrendingUp, roles: ALL, step: null, legacyPath: '/metricas', description: 'Embudo por reel y por día, setter y agenda.' },
   { path: '/flujos', label: 'Flujos', icon: Workflow, roles: ADMIN, step: null, legacyPath: '/flujos', description: 'Constructor visual: disparadores, mensajes, botones, condiciones y pausas.' },

@@ -17,7 +17,8 @@ const slug = (text: string) =>
     .replace(/^_+|_+$/g, '')
     .slice(0, 40) || 'enlace';
 
-const TRIGGER_ICON: Readonly<Record<TriggerType, LucideIcon>> = {
+/** Icono de cada disparador (también en la lista de flujos, Fase 8.7). */
+export const TRIGGER_ICON: Readonly<Record<TriggerType, LucideIcon>> = {
   comment: MessageCircle,
   dm_keyword: MessageSquareText,
   story_reply: Repeat,

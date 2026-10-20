@@ -11,6 +11,8 @@ export interface InboxItem {
   readonly level: string | null;
   readonly unanswered: boolean;
   readonly hasDraft: boolean;
+  /** Foto de perfil (Fase 8); null = sus iniciales. */
+  readonly picture: string | null;
 }
 
 export interface SendsBlock {
@@ -44,6 +46,8 @@ export interface ConversationDetail {
     /** Datos propios (Fase 7.4): los guarda el paso "Guardar un dato" o se ponen a mano en Contactos. */
     readonly fields: Readonly<Record<string, string>>;
     readonly firstSeen: string | null;
+    /** Foto de perfil (Fase 8). */
+    readonly picture: string | null;
   };
   readonly messages: readonly ThreadMessage[];
   readonly leadHistory: readonly { readonly lead: Record<string, unknown> | null; readonly createdAt: string }[];
@@ -60,6 +64,12 @@ export const STAGE_LABEL: Record<string, string> = {
 };
 
 export const DRAFT_NOTE = 'Modo borrador: pendiente de aprobar';
+
+/** Etapa (siguiente_paso) de una ficha, o null si no hay ficha (Fase 8: chip de color). */
+export function leadStage(lead: Record<string, unknown> | null | undefined): string | null {
+  const step = lead?.siguiente_paso;
+  return typeof step === 'string' ? step : null;
+}
 
 export const timeAgo = (iso: string): string => {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);

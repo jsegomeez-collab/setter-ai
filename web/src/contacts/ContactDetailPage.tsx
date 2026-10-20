@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Skeleton } from '../ui/EmptyState';
 import { Notice, SecondaryButton, Section, formatDate } from '../ui/kit';
 import { Page, PageHeader } from '../ui/PageHeader';
+import { Avatar, ReelCover, StageChip } from '../ui/visual';
 import { useToast } from '../ui/Toast';
 import type { ContactDetail } from './types';
 
@@ -83,7 +84,13 @@ export function ContactDetailPage() {
         <ArrowLeft size={14} /> Contactos
       </Link>
       <PageHeader
-        title={handle(contact.username, contact.igId)}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            <Avatar name={contact.username ?? contact.igId} picture={contact.picture} size={52} />
+            {handle(contact.username, contact.igId)}
+            <StageChip stage={contact.stage} size="lg" />
+          </span>
+        }
         description={`Desde ${formatDate(contact.firstSeen)} · última vez ${formatDate(contact.lastSeen)}`}
         actions={
           hasConversation && (
@@ -121,8 +128,10 @@ export function ContactDetailPage() {
             <FieldsSection fields={contact.fields} busy={busy} onSet={setField} />
 
             <Section label="Reels" description="De qué reel vino (su primer comentario) y el último en el que comentó.">
-              <p className="text-sm text-mist">Origen: {contact.sourceLabel ?? '—'}</p>
-              <p className="mt-1 text-sm text-mist">Último: {contact.lastLabel ?? '—'}</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ReelLine title="De dónde vino" label={contact.sourceLabel} cover={contact.sourceCover} />
+                <ReelLine title="Último en el que comentó" label={contact.lastLabel} cover={contact.lastCover} />
+              </div>
             </Section>
 
             <Section label={`Comentarios (${comments.length})`}>
@@ -131,12 +140,15 @@ export function ContactDetailPage() {
               ) : (
                 <ul className="space-y-2">
                   {comments.map((c) => (
-                    <li key={c.commentId} className="rounded-lg bg-white/[0.03] px-3 py-2">
-                      <p className="text-sm text-fog">{c.text}</p>
-                      <p className="mt-0.5 text-xs text-smoke">
-                        {formatDate(c.createdAt)}
-                        {c.reelLabel ? ` · ${c.reelLabel}` : ''}
-                      </p>
+                    <li key={c.commentId} className="flex gap-3 rounded-lg bg-white/[0.03] px-3 py-2">
+                      {c.reelLabel && <ReelCover src={c.reelCover} size={30} />}
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm text-fog">{c.text}</span>
+                        <span className="mt-0.5 block text-xs text-smoke">
+                          {formatDate(c.createdAt)}
+                          {c.reelLabel ? ` · ${c.reelLabel}` : ''}
+                        </span>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -219,5 +231,18 @@ function FieldsSection({ fields, busy, onSet }: { fields: Readonly<Record<string
         </SecondaryButton>
       </form>
     </Section>
+  );
+}
+
+/** Un reel de la persona con su portada (Fase 8). */
+function ReelLine({ title, label, cover }: { title: string; label: string | null; cover: string | null }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-2.5">
+      <ReelCover src={label ? cover : null} size={40} />
+      <span className="min-w-0">
+        <span className="block text-xs text-smoke">{title}</span>
+        <span className="line-clamp-2 block text-sm text-fog">{label ?? 'Ninguno'}</span>
+      </span>
+    </div>
   );
 }

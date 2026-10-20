@@ -34,6 +34,16 @@
   --color-warn: #f0b23e;
   --color-info: #5ab0f5;
   --color-violet: #b79cff;
+
+  /*
+   * Etapas del lead (Fase 8). Validado con el validador de la skill dataviz sobre #161618, en el orden de las columnas
+   * del tablero: pasa luminosidad, croma, daltonismo y visión normal entre vecinas; entre todas las parejas falla
+   * aguamarina↔magenta para daltonismo verde → por eso cada etapa va SIEMPRE con icono y texto, nunca solo color.
+   */
+  --color-stage-qualify: #3987e5;
+  --color-stage-book: #199e70;
+  --color-stage-member: #c98500;
+  --color-stage-human: #d55181;
 }
 
 @layer base {

@@ -11,6 +11,7 @@ import { SetterPage } from './setter/SetterPage';
 import { ConversationsPage } from './conversations/ConversationsPage';
 import { ContactDetailPage } from './contacts/ContactDetailPage';
 import { ContactsPage } from './contacts/ContactsPage';
+import { BoardPage } from './leads/BoardPage';
 import { MetricsPage } from './metrics/MetricsPage';
 import { FlowsPage } from './flows/FlowsPage';
 import { IntelligencePage } from './intelligence/IntelligencePage';
@@ -56,6 +57,7 @@ function Screens() {
         {user.role === 'admin' && <Route path="setter" element={<SetterPage />} />}
         <Route path="conversaciones" element={<ConversationsPage />} />
         <Route path="conversaciones/:igId" element={<ConversationsPage />} />
+        <Route path="tablero" element={<BoardPage />} />
         <Route path="contactos" element={<ContactsPage />} />
         <Route path="contactos/:igId" element={<ContactDetailPage />} />
         <Route path="metricas" element={<MetricsPage />} />

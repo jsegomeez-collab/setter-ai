@@ -4,7 +4,8 @@ import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { Notice, SecondaryButton, formatDate } from '../ui/kit';
 import { LeadPanel } from './LeadPanel';
-import { DRAFT_NOTE, handle, type ConversationDetail, type ThreadMessage } from './types';
+import { DRAFT_NOTE, handle, leadStage, type ConversationDetail, type ThreadMessage } from './types';
+import { Avatar, StageChip } from '../ui/visual';
 import { Loading } from '../ui/EmptyState';
 
 const REFRESH_MS = 20_000;
@@ -74,9 +75,16 @@ export function ConversationView({ igId, onChanged }: Props) {
           <Link to="/conversaciones" aria-label="Volver a la bandeja" className="rounded-lg p-1.5 text-ash hover:text-fog lg:hidden">
             <ArrowLeft size={16} />
           </Link>
+          <Avatar name={contact.username ?? igId} picture={contact.picture} size={42} />
           <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-[15px] font-bold text-snow">{handle(contact.username, igId)}</p>
-            <p className={['text-xs', contact.aiPaused ? 'text-warn' : 'text-ok'].join(' ')}>{contact.aiPaused ? `IA parada${contact.aiPausedReason ? ` · ${contact.aiPausedReason}` : ''}` : 'IA activa'}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate font-display text-[15px] font-bold text-snow">{handle(contact.username, igId)}</p>
+              <StageChip stage={leadStage(contact.lead)} />
+            </div>
+            <p className={['flex items-center gap-1 text-xs', contact.aiPaused ? 'text-warn' : 'text-ok'].join(' ')}>
+              <span aria-hidden="true" className={['h-1.5 w-1.5 rounded-full', contact.aiPaused ? 'bg-warn' : 'bg-ok'].join(' ')} />
+              {contact.aiPaused ? `IA parada${contact.aiPausedReason ? ` · ${contact.aiPausedReason}` : ''}` : 'IA activa'}
+            </p>
           </div>
           <span className="xl:hidden">
             <SecondaryButton onClick={() => setShowLead((v) => !v)}>
