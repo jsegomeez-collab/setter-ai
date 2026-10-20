@@ -11,9 +11,16 @@ export interface SessionUser {
   readonly mustChangePassword: boolean;
 }
 
+/** Espacio de la sesión (Fase 7.5). null = el principal (el de Jose). */
+export interface SessionWorkspace {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface SessionInfo {
   readonly needsSetup: boolean;
   readonly user: SessionUser | null;
+  readonly workspace?: SessionWorkspace | null;
 }
 
 export class ApiError extends Error {

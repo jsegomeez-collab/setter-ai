@@ -5,6 +5,7 @@ import { catchUpComments } from './catch-up.js';
 import type { Config } from './config.js';
 import { rescuePendingDms } from './flows/dm-rescue.js';
 import type { InstagramConnect } from './instagram-connect.js';
+import type { WorkspacesAdmin } from './routes-api-workspaces.js';
 import { ClaudeAnalyzer } from './intelligence/analyzer.js';
 import { InstagramClient } from './meta/client.js';
 import { TokenManager } from './meta/token.js';
@@ -53,6 +54,10 @@ export interface RuntimeDeps {
   readonly instagramConnect?: InstagramConnect | null;
   /** Qué hace /webhook. En el principal: repartir los avisos entre espacios. Si falta, se procesan aquí. */
   readonly webhookPayload?: (payload: unknown) => void;
+  /** Nombre del espacio para el menú (los nuevos). */
+  readonly workspace?: { readonly id: string; readonly name: string } | null;
+  /** Crear espacios e invitar (Fase 7.5b): solo el principal. */
+  readonly workspaces?: WorkspacesAdmin;
 }
 
 export interface WorkspaceRuntime {
@@ -150,6 +155,8 @@ export async function startWorkspaceRuntime(deps: RuntimeDeps): Promise<Workspac
     // Inteligencia (Fase 6.6): Sonnet 5.5, solo cuando se pulsa "Analizar".
     analyzer: anthropic ? new ClaudeAnalyzer(anthropic) : null,
     instagramConnect: deps.instagramConnect ?? null,
+    workspace: deps.workspace ?? null,
+    workspaces: deps.workspaces,
   });
 
   const checkToken = () => {

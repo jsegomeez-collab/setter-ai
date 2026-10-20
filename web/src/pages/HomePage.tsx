@@ -136,7 +136,7 @@ export function HomePage() {
                 to="/setter"
                 title="Setter IA"
                 value={admin ? (admin.setter ? (MODE_LABEL[admin.setter.mode] ?? admin.setter.mode) : 'No disponible') : null}
-                hint={admin?.setter ? (admin.setter.mode === 'test' ? `Solo responde a ${admin.setter.testUsernames.map((u) => `@${u}`).join(', ') || 'nadie'}` : admin.setter.draft ? 'Modo borrador: tú apruebas cada respuesta' : 'Responde solo') : undefined}
+                hint={admin?.setter ? setterHint(admin.setter) : undefined}
               />
               <StatusTile
                 icon={Workflow}
@@ -166,6 +166,13 @@ export function HomePage() {
       </div>
     </Page>
   );
+}
+
+/** Una línea de qué hace ahora el setter (antes, apagado decía "Responde solo"). */
+function setterHint(setter: SetterData): string {
+  if (setter.mode === 'off') return 'Guarda los mensajes pero no responde a nadie';
+  if (setter.mode === 'test') return `Solo responde a ${setter.testUsernames.map((u) => `@${u}`).join(', ') || 'nadie'}`;
+  return setter.draft ? 'Modo borrador: tú apruebas cada respuesta' : 'Responde solo';
 }
 
 const pct = (part: number, base: number): string | undefined => {

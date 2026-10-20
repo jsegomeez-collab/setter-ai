@@ -45,7 +45,7 @@ describe('API de acceso (Fase 6.0)', () => {
   it('sin usuarios pide el alta del primer admin', async () => {
     const { app } = setup();
     const res = await app.request(`${HOST}/api/session`);
-    expect(await res.json()).toEqual({ needsSetup: true, user: null });
+    expect(await res.json()).toEqual({ needsSetup: true, user: null, workspace: null });
   });
 
   it('el alta exige la clave actual del panel, crea al admin y deja la sesión abierta (cookie segura)', async () => {

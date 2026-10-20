@@ -38,6 +38,15 @@ async function main(): Promise<void> {
     envToken: config.igAccessToken,
     linkSecret,
     webhookPayload: (payload) => (manager ? manager.dispatchWebhook(payload) : principal.process(payload)),
+    // Crear espacios e invitar (7.5b): solo desde el de Jose. El gestor existe justo después.
+    workspaces: {
+      users,
+      list: () => (manager ? manager.list() : Promise.resolve([])),
+      create: (name) => {
+        if (!manager) throw new Error('Los espacios aún están arrancando');
+        return manager.create(name);
+      },
+    },
     // "Conectar Instagram". El ID de la app de Instagram es público (va en el enlace).
     instagramConnect: config.publicBaseUrl
       ? new InstagramConnect({
@@ -62,6 +71,7 @@ async function main(): Promise<void> {
         anthropic,
         envToken: null,
         linkSecret,
+        workspace: { id: workspace.id, name: workspace.name },
       }),
     log: (message) => {
       process.stderr.write(`[setter-ai] ${message}\n`);

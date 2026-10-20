@@ -157,7 +157,7 @@ function NewUserForm({ onCreated }: { onCreated: (name: string, password: string
 }
 
 /** La clave temporal: se enseña UNA vez (no se guarda en claro en ningún sitio). */
-function TempPassword({ name, password, onClose }: { name: string; password: string; onClose: () => void }) {
+export function TempPassword({ name, password, onClose }: { name: string; password: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {

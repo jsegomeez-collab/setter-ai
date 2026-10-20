@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, type SessionInfo, type SessionUser } from '../lib/api';
+import { api, type SessionInfo, type SessionUser, type SessionWorkspace } from '../lib/api';
 
 interface SetupInput {
   readonly setupKey: string;
@@ -13,6 +13,8 @@ interface SessionValue {
   /** No hay ningún usuario todavía: toca el alta del primer admin. */
   readonly needsSetup: boolean;
   readonly user: SessionUser | null;
+  /** Espacio en el que está (Fase 7.5). null = el principal (el de Jose). */
+  readonly workspace: SessionWorkspace | null;
   /** No se pudo hablar con el servidor al cargar. */
   readonly loadError: string | null;
   login(email: string, password: string): Promise<void>;
@@ -35,8 +37,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { user } = await api<{ user: SessionUser }>('/login', { method: 'POST', body: { email, password } });
-    setInfo({ needsSetup: false, user });
+    await api<{ user: SessionUser }>('/login', { method: 'POST', body: { email, password } });
+    // El inicio de sesión lo atiende el espacio principal: se vuelve a preguntar para saber el espacio de esta persona.
+    setInfo(await api<SessionInfo>('/session'));
   }, []);
 
   const setup = useCallback(async (input: SetupInput) => {
@@ -54,7 +57,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<SessionValue>(
-    () => ({ loading: info === null && loadError === null, needsSetup: info?.needsSetup ?? false, user: info?.user ?? null, loadError, login, setup, logout, passwordChanged }),
+    () => ({ loading: info === null && loadError === null, needsSetup: info?.needsSetup ?? false, user: info?.user ?? null, workspace: info?.workspace ?? null, loadError, login, setup, logout, passwordChanged }),
     [info, loadError, login, setup, logout, passwordChanged],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -1,33 +1,38 @@
 import { useSearchParams } from 'react-router';
+import { useSession } from '../auth/SessionContext';
 import { Tabs } from '../ui/kit';
 import { Page, PageHeader } from '../ui/PageHeader';
 import { EventsTab } from './EventsTab';
 import { InstagramTab } from './InstagramTab';
 import { UsersTab } from './UsersTab';
+import { WorkspacesTab } from './WorkspacesTab';
 
-/** Configuración (Fase 6.7, solo admin). */
+/** Configuración (Fase 6.7, solo admin). "Espacios" (7.5b) solo sale en el espacio de Jose. */
 
-type TabId = 'usuarios' | 'instagram' | 'registro';
-const TABS: readonly { value: TabId; label: string }[] = [
+type TabId = 'usuarios' | 'instagram' | 'registro' | 'espacios';
+const BASE_TABS: readonly { value: TabId; label: string }[] = [
   { value: 'usuarios', label: 'Usuarios' },
   { value: 'instagram', label: 'Instagram y envíos' },
   { value: 'registro', label: 'Registro' },
 ];
 
 export function SettingsPage() {
+  const { workspace } = useSession();
   const [params, setParams] = useSearchParams();
-  const tab: TabId = TABS.some((t) => t.value === params.get('tab')) ? (params.get('tab') as TabId) : 'usuarios';
+  const tabs = workspace ? BASE_TABS : [...BASE_TABS, { value: 'espacios' as const, label: 'Espacios' }];
+  const tab: TabId = tabs.some((t) => t.value === params.get('tab')) ? (params.get('tab') as TabId) : 'usuarios';
   return (
     <Page>
       <PageHeader
         title="Configuración"
-        description="Quién entra y cómo está conectada la cuenta de Instagram."
-        actions={<Tabs tabs={TABS} value={tab} onChange={(value) => setParams({ tab: value })} />}
+        description={workspace ? `Quién entra en «${workspace.name}» y cómo está conectada su cuenta de Instagram.` : 'Quién entra, cómo está conectada la cuenta de Instagram y los espacios de otras personas.'}
+        actions={<Tabs tabs={tabs} value={tab} onChange={(value) => setParams({ tab: value })} />}
       />
       <div className="mt-6">
         {tab === 'usuarios' && <UsersTab />}
         {tab === 'instagram' && <InstagramTab />}
         {tab === 'registro' && <EventsTab />}
+        {tab === 'espacios' && <WorkspacesTab />}
       </div>
     </Page>
   );

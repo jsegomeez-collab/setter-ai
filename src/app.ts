@@ -19,6 +19,7 @@ import type { DiscardResult, DraftResult, ManualResult } from './setter/service.
 import type { LeadPlayer } from './setter/simulator.js';
 import { SETTINGS, type Store } from './store.js';
 import { createApiRoutes } from './routes-api.js';
+import { createWorkspacesApi, type WorkspacesAdmin } from './routes-api-workspaces.js';
 import { createSetterApi } from './routes-api-setter.js';
 import { createSetterDocsApi } from './routes-api-setter-docs.js';
 import { createConversationsApi } from './routes-api-conversations.js';
@@ -92,6 +93,10 @@ export interface AppDeps {
   readonly analyzer?: Analyzer | null;
   /** "Conectar Instagram" (prueba antes de la 7.5). */
   readonly instagramConnect?: InstagramConnect | null;
+  /** Espacio de esta app (Fase 7.5). null o ausente = el principal. */
+  readonly workspace?: { readonly id: string; readonly name: string } | null;
+  /** Crear espacios e invitar (Fase 7.5b): solo lo recibe el principal. */
+  readonly workspaces?: WorkspacesAdmin;
 }
 
 function errorMessage(error: unknown): string {
@@ -367,7 +372,9 @@ export function createApp(deps: AppDeps): Hono {
   registerWebhook(app, deps);
   registerLinks(app, deps);
   if (deps.users) {
-    const api = createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword });
+    const api = createApiRoutes({ users: deps.users, setupKey: deps.config.adminPassword, workspace: deps.workspace ?? null });
+    // Espacios (Fase 7.5b): solo en el espacio de Jose.
+    if (deps.workspaces) api.route('/workspaces', createWorkspacesApi({ store: deps.store, users: deps.users, admin: deps.workspaces }));
     api.route('/setter/docs', createSetterDocsApi({ store: deps.store, users: deps.users }));
     api.route('/setter', createSetterApi({ store: deps.store, users: deps.users, config: deps.config, simulator: deps.simulator ?? null }));
     // Títulos de reels: los últimos 50 + los más antiguos pedidos por id (se recuerdan mientras el servidor esté en marcha).

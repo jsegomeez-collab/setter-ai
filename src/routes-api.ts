@@ -24,6 +24,8 @@ export interface ApiDeps {
   /** Clave que pide el alta del primer admin: la contraseña actual del panel (ADMIN_PASSWORD). */
   readonly setupKey: string;
   readonly limiter?: LoginLimiter;
+  /** Espacio de esta app (Fase 7.5). null o ausente = el principal (Jose). Sale en /api/session para el menú. */
+  readonly workspace?: { readonly id: string; readonly name: string } | null;
 }
 
 export type ApiEnv = { Variables: { user: User } };
@@ -121,7 +123,7 @@ export function createApiRoutes(deps: ApiDeps): Hono<ApiEnv> {
   api.get('/session', async (c) => {
     const user = await currentUser(c, users);
     const needsSetup = user ? false : (await users.countUsers()) === 0;
-    return c.json({ needsSetup, user: user ? publicUser(user) : null });
+    return c.json({ needsSetup, user: user ? publicUser(user) : null, workspace: deps.workspace ?? null });
   });
 
   api.post('/setup', async (c) => {
